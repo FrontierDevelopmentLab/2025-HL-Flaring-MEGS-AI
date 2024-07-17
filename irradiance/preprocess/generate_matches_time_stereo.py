@@ -10,8 +10,8 @@ import pandas as pd
 from sunpy.map import Map
 from astropy import units as u
 from astropy.io.fits import getheader
-from netCDF4 import Dataset
 from tqdm import tqdm
+from astropy.time import Time
 
 
 flare_class_mapping = {'A': 1e-8, 'B': 1e-7, 'C': 1e-6, 'M': 1e-5, 'X': 1e-4}
@@ -116,7 +116,7 @@ def _load_aia_dates(aia_filenames, one_hour_cad=False):
     return aia_iso_dates
 
 
-def load_valid_eve_dates(eve, line_indices=None):
+def load_valid_eve_dates(eve, line_indices=None): 
     """ load all valid dates from EVE
 
     Parameters
@@ -129,12 +129,14 @@ def load_valid_eve_dates(eve, line_indices=None):
     numpy array of all valid EVE dates and corresponding indices
     """
     # load and parse eve dates
-    eve_date_str = eve.variables['isoDate'][:]
+    eve_date_str = eve.index.to_numpy()
+    print(eve_date_str)
     # convert to naive datetime object
     eve_dates = np.array([dt.isoparse(d).replace(tzinfo=None) for d in eve_date_str])
     # get all indices
     eve_indices = np.indices(eve_dates.shape)[0]
     # find invalid eve data points
+    '''
     eve_data = eve.variables['irradiance'][:]
     if line_indices is not None:
         eve_data = eve_data[:, line_indices]
@@ -146,6 +148,7 @@ def load_valid_eve_dates(eve, line_indices=None):
     # filter eve dates and indices
     eve_dates = eve_dates[~np.any(np.isnan(eve_data), 1)]
     eve_indices = eve_indices[~np.any(np.isnan(eve_data), 1)]
+    '''
 
     return eve_dates, eve_indices
 
@@ -250,23 +253,22 @@ if __name__ == "__main__":
     LOG.setLevel(logging.INFO)
 
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument('-instrument', type=str, nargs='+', required=True, help='Instruments.')
-    p.add_argument('-instrument_path', type=str, nargs="+", default="/mnt/disks/observational_data/AIA",
-                   help='path to directory of aia files')
+    p.add_argument('-instrument', type=str, nargs='+', default=['AIA'], help='Instruments.')  #AIA specific 
+    p.add_argument('-instrument_path', type=str, nargs="+", default=["/mnt/disks/data-spi3s-irradiance/AIA"],
+                   help='path to directory of aia files') 
     p.add_argument('-instrument_wl', type=str, nargs="+",
                    default=["94", "131", "171", "193", "211", "304", "335", "1600", "1700"],
-                   help='list of wavelengths that are needed')
+                   help='list of wavelengths that are needed')  #Stays same
     p.add_argument('-instrument_cutoff', type=int, default=600,
-                   help='cutoff for time delta (difference between AIA images in different wavelengths) in seconds')
-    p.add_argument('-eve_path', type=str, default="/mnt/disks/preprocessed_data/EVE/megsa_irradiance.nc",
-                   help='path to cdf file')
-    p.add_argument('-goes_path', type=str, default="/mnt/disks/observational_data/GOES/goes.csv",
-                   help='path to GOES csv file')
-    p.add_argument('-output_path', type=str, default="/mnt/disks/preprocessed_data/AIA",
-                   help='path to store output csv file')
+                   help='cutoff for time delta (difference between AIA images in different wavelengths) in seconds')    #stays same
+    p.add_argument('-eve_path', type=str, default="/mnt/disks/data-spi3s-irradiance/EVE/EVS_MEGS-AB.csv",
+                   help='path to csv file') 
+    p.add_argument('-goes_path', type=str, default="/mnt/disks/data-spi3s-irradiance/GOES/goes.csv",
+                   help='path to GOES csv file')    
+    p.add_argument('-output_path', type=str, default="/mnt/disks/data-spi3s-irradiance/matches/matches.csv",
+                   help='path to store output csv file')  
     p.add_argument('-eve_cutoff', type=int, default=600,
                    help='cutoff for time delta (difference between AIA and EVE file in time) in seconds')
-    p.add_argument('-debug', type=str2bool, default=False, help='Only process a few files (10)')
     p.add_argument('-delay', type=str2bool, default=False, help='Account for time delay between observations.')
 
     args = p.parse_args()
@@ -286,30 +288,34 @@ if __name__ == "__main__":
     # keep in __main__ to use global variables for multithreading --> much faster
 
     # LOADING EVE data --------------
-    eve = Dataset(eve_path, "r", format="NETCDF4")
-    line_indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14])
-    eve_dates, eve_indices = load_valid_eve_dates(eve, line_indices)
-    threshold_eve = datetime.timedelta(seconds=eve_cutoff)  # cutoff time for time match
+    eve = pd.read_csv(eve_path, index_col=0)
+    
+    # Make dataframe from CSV file
+    
+    eve_dates, eve_indices = load_valid_eve_dates(eve) #TODO: modify function to extract dates from full spectrum
+    threshold_eve = datetime.timedelta(seconds=eve_cutoff)  #  cutoff time for time match
 
     # Instruments
-    inst_threshold = datetime.timedelta(seconds=inst_cutoff)
+    inst_threshold = datetime.timedelta(seconds=inst_cutoff)    
     inst_filenames = []
     inst_suffixes = []
     for i, inst in enumerate(instrument):
 
         # Initialize
         inst_path = args.instrument_path[i]
+        print(inst_path)
         available_wavelengths = sorted([d for d in os.listdir(inst_path) if os.path.isdir(inst_path+'/'+d)])
+        print(available_wavelengths)
         intersection_wavelengths = \
             [str(wl) for wl in sorted([int(wl) for wl in list(set(available_wavelengths).intersection(wavelengths))])]
         nb_wavelengths = len(intersection_wavelengths)
         # Matches
         inst_suffixes.extend([f'{inst}{wl}' for wl in intersection_wavelengths])
         filenames = [[f for f in sorted(glob.glob(inst_path + f'/%s/*.fits' % wl))] for wl in intersection_wavelengths]
-        inst_filenames.extend(filenames)
+        inst_filenames.extend(filenames)    
     
-    # Find matches between instruments
-    inst_iso_dates = _load_aia_dates(inst_filenames)
+    # Find matches between images from all EUV imagers 
+    inst_iso_dates = _load_aia_dates(inst_filenames)    
     inst_matches = match_aia_times(inst_iso_dates, inst_filenames, inst_suffixes, dt_round=f'{inst_cutoff}s')
     # filter solar flares
     inst_matches = _remove_flares(inst_matches, goes_path)
@@ -318,6 +324,7 @@ if __name__ == "__main__":
     time_difference = []
     time_new = []
     inst_ref_dates = inst_matches['median_dates'].to_numpy().astype('datetime64[us]').tolist()
+    '''
     for i, filename in enumerate(inst_matches['B/EUVI171']):
         if delay is True and instrument == ['B/EUVI']:
             s_map = Map(filename)
@@ -327,11 +334,14 @@ if __name__ == "__main__":
         time_difference.append(datetime.timedelta(days=-lon / rot_freq))
         time_new.append(inst_ref_dates[i]+datetime.timedelta(days=-lon / rot_freq))
     inst_matches['eve_delay'] = time_difference
+    '''
     
     # looping through AIA filenames to find matching EVE files
     num_workers = os.cpu_count()
     with Pool(num_workers) as p:
-        matches = [result for result in tqdm(p.imap(find_match, zip(inst_ref_dates, time_new)),
+        # inst_ref_dates = EUV imager dates
+        # time_new = EVE dates (with or without delay)
+        matches = [result for result in tqdm(p.imap(find_match, zip(inst_ref_dates, inst_ref_dates)),
                                              total=len(inst_ref_dates)) if result is not None]
 
     # unpack and create result data frame --> save as CSV
@@ -356,5 +366,3 @@ if __name__ == "__main__":
         os.makedirs(output_path[:output_path.rfind("/")], exist_ok=True)
             
     result_matches.to_csv(output_path, index=False)
-
-    eve.close()
