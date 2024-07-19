@@ -6,7 +6,7 @@ from netCDF4 import Dataset
 import os
 import sys
 import inspect
-
+import glob
 # Add 2024-HL-SPI3S/spi3s as a module
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(currentdir))), '2024-HL-SPI3S')
@@ -15,7 +15,7 @@ from spi3s.data.eve_download import datetime_to_eve_format
 from spi3s.data.eve_read import read_fits, read_evs, fits_to_df
 
 
-def create_eve_netcdf(eve_raw_path, netcdf_outpath):
+def create_eve_netcdf(netcdf_outpath, eve_irr, eve_date, eve_wl):
     """_summary_
 
     Args:
@@ -27,53 +27,85 @@ def create_eve_netcdf(eve_raw_path, netcdf_outpath):
     """
     os.makedirs(os.path.split(netcdf_outpath)[0], exist_ok=True)
 
-    eve_date = np.load(eve_raw_path + "/iso.npy",allow_pickle=True)
-    eve_irr = np.load(eve_raw_path + "/irradiance.npy",allow_pickle=True)
-    eve_jd = np.load(eve_raw_path + "/jd.npy",allow_pickle=True)
-    eve_logt = np.load(eve_raw_path + "/logt.npy",allow_pickle=True)
-    eve_name = np.load(eve_raw_path + "/name.npy",allow_pickle=True)
-    eve_wl = np.load(eve_raw_path + "/wavelength.npy",allow_pickle=True)
+    # eve_date = np.load(eve_raw_path + "/iso.npy",allow_pickle=True)
+    # eve_irr = np.load(eve_raw_path + "/irradiance.npy",allow_pickle=True)
+    # eve_jd = np.load(eve_raw_path + "/jd.npy",allow_pickle=True)
+    # eve_logt = np.load(eve_raw_path + "/logt.npy",allow_pickle=True)
+    # eve_name = np.load(eve_raw_path + "/name.npy",allow_pickle=True)
+    # eve_wl = np.load(eve_raw_path + "/wavelength.npy",allow_pickle=True)
 
-    ###################################################################################################################################################
+    ####################################################################################################################
     # CREATE NETCDF4 FILE
-    ###################################################################################################################################################
+    ####################################################################################################################
     netcdfDB = Dataset(netcdf_outpath, "w", format="NETCDF4")
     netcdfDB.title = 'EVE spectral irradiance for specific spectral lines'
 
     # Create dimensions
     isoDate = netcdfDB.createDimension("isoDate", None)
-    name = netcdfDB.createDimension("name", eve_name.shape[0])
+    name = netcdfDB.createDimension("name", eve_wl.shape[0])
+    # name = netcdfDB.createDimension("name", eve_name.shape[0])
 
     # Create variables and atributes
     isoDates = netcdfDB.createVariable('isoDate', 'S2', ('isoDate',))
     isoDates.units = 'string date in ISO format'
 
-    julianDates = netcdfDB.createVariable('julianDate', 'f4', ('isoDate',))
-    julianDates.units = 'days since the beginning of the Julian Period (January 1, 4713 BC)'
+    # julianDates = netcdfDB.createVariable('julianDate', 'f4', ('isoDate',))
+    # julianDates.units = 'days since the beginning of the Julian Period (January 1, 4713 BC)'
 
-    names = netcdfDB.createVariable('name', 'S2', ('name',))
-    names.units = 'strings with the line names'
+    # names = netcdfDB.createVariable('name', 'S2', ('name',))
+    # names.units = 'strings with the line names'
 
     wavelength = netcdfDB.createVariable('wavelength', 'f4', ('name',))
     wavelength.units = 'line wavelength in nm'
 
-    logt = netcdfDB.createVariable('logt', 'f4', ('name',))
-    logt.units = 'log10 of the temperature'
+    # logt = netcdfDB.createVariable('logt', 'f4', ('name',))
+    # logt.units = 'log10 of the temperature'
 
-    irradiance = netcdfDB.createVariable('irradiance', 'f4', ('isoDate','name',))
-    irradiance.units = 'spectal irradiance in the specific line (w/m^2)'
+    irradiance = netcdfDB.createVariable('irradiance', 'f4', ('isoDate', 'name',))
+    irradiance.units = 'spectral irradiance in the specific line (w/m^2)'
 
-    # Intialize variables
+    # Initialize variables
     isoDates[:] = eve_date
-    julianDates[:] = eve_jd 
-    names[:] = eve_name
+    # julianDates[:] = eve_jd
+    # names[:] = eve_name
     wavelength[:] = eve_wl
-    logt[:] = eve_logt
+    # logt[:] = eve_logt
     irradiance[:] = eve_irr
 
     netcdfDB.close()
 
 
+def fits_to_arr(data, wl, wl_start, wl_end, t):
+    """Convert FITS data to pandas dataframe.
+
+    Parameters
+    ----------
+    data: Irradiance data from FITS file.
+    wl: Wavelengths of spectra.
+    wl_start: Start wavelength.
+    wl_end: End wavelength.
+    t: Time of spectra.
+    flags: Binary flags to identify the quality of the data.
+
+    Returns
+    -------
+    df: Pandas dataframe with irradiance data. Rows = Time, Columns = Wavelengths.
+    """
+
+    # Wavelength filtering
+    wl_where = np.where((wl > wl_start) & (wl < wl_end))
+    wl_filtered = wl[wl_where[0]]
+    data_filtered = data[:, wl_where[0]]
+    # flags_filtered = flags[:, wl_where[0]]
+
+    # Time filtering
+    # t_where = np.where(np.sum(flags_filtered, axis=1) == 0)
+    t_where = np.where(np.sum(data_filtered, axis=1) > 0)
+    data_filtered = data_filtered[t_where[0]]
+    t_filtered = t[t_where[0]]
+
+    # Return filtered data
+    return data_filtered, wl_filtered, t_filtered
 
 
 if __name__ == "__main__":
@@ -148,6 +180,10 @@ if __name__ == "__main__":
     # Extract files between start time and end time
     evs_files = [e for e in evs_files if 1000*start_year+start_yday <= int(e.split('_')[2]) <= 1000*end_year+end_yday]
 
+    first_megsa = True
+    first_megsb = True
+    first_megsab = True
+
     for i, evs in tqdm(enumerate(evs_files), total=len(evs_files)):
         # Read EVS file: Wavelengths, Time, Irradiance, and Binary Flags
         wl, irr_t, irr_data, bin_flags = read_evs(evs, verbose=False)
@@ -155,30 +191,124 @@ if __name__ == "__main__":
         nb_wl, nb_t = len(wl), len(irr_t)
 
         # Extract MEGS-A and MEGS-B data as a function of time and wavelengths
-        df_megsa_i = fits_to_df(irr_data, wl, wl_megsa_start, wl_megsa_end, irr_t, bin_flags)
-        df_megsb_i = fits_to_df(irr_data, wl, wl_megsb_start, wl_megsb_end, irr_t, bin_flags)
+        # df_megsa_i = fits_to_df(irr_data, wl, wl_megsa_start, wl_megsa_end, irr_t, bin_flags)
+        # df_megsb_i = fits_to_df(irr_data, wl, wl_megsb_start, wl_megsb_end, irr_t, bin_flags)
+
+        # Extract MEGS-A and MEGS-B data as a function of time and wavelengths
+        irr_megsa_i, wl_megsa, t_megsa_i = fits_to_arr(irr_data, wl, wl_megsa_start, wl_megsa_end, irr_t)
+        irr_megsb_i, wl_megsb, t_megsb_i = fits_to_arr(irr_data, wl, wl_megsb_start, wl_megsb_end, irr_t)
+
+        '''
+        if len(t_megsa_i) > 0:
+            if first_megsa:
+                irr_megsa = irr_megsa_i
+                t_megsa = t_megsa_i
+                wl_megsa = wl_megsa
+                first_megsa = False
+            else:
+                irr_megsa = np.concatenate([irr_megsa, irr_megsa_i], axis=0)
+                t_megsa = np.concatenate([t_megsa, t_megsa_i], axis=0)
+        if len(t_megsb_i) > 0:
+            if first_megsb:
+                irr_megsb = irr_megsb_i
+                t_megsb = t_megsb_i
+                wl_megsb = wl_megsb
+                first_megsb = False
+            else:
+                irr_megsb = np.concatenate([irr_megsb, irr_megsb_i], axis=0)
+                t_megsb = np.concatenate([t_megsb, t_megsb_i], axis=0)
+        '''
+
+        # Identify overlapping time
+        t_megsab_i = np.intersect1d(t_megsa_i, t_megsb_i)
+        # Extract intersection
+        # irr_megsa_i = np.stack([irr_megsa_i[np.where(t_megsa_i == t)[0]] for t in t_megsab_i], axis=0)
+        # irr_megsb_i = np.stack([irr_megsb_i[np.where(t_megsb_i == t)[0]] for t in t_megsab_i], axis=0)
+        # print(irr_megsa_i[np.where(t_megsa_i == t_megsab_i)[0]].shape)
+        # print(irr_megsb_i[np.where(t_megsb_i == t_megsab_i)[0]].shape)
+        # x = np.stack([irr_megsa_i[np.where(t_megsa_i == t)[0]].flatten() for t in t_megsab_i],
+        #                                   axis=0)
+        # y = np.stack([irr_megsb_i[np.where(t_megsb_i == t)[0]].flatten() for t in t_megsab_i],
+        #                                   axis=0)
+        # print(x.shape, y.shape)
+        if len(t_megsab_i) > 0:
+            irr_megsab_i = (
+                np.concatenate([np.stack([irr_megsa_i[np.where(t_megsa_i == t)[0]].flatten() for t in t_megsab_i],
+                                         axis=0),
+                                np.stack([irr_megsb_i[np.where(t_megsb_i == t)[0]].flatten() for t in t_megsab_i],
+                                         axis=0)], axis=1))
+            if first_megsab:
+                irr_megsab = irr_megsab_i
+                t_megsab = t_megsab_i
+                wl_megsab = np.concatenate([wl_megsa, wl_megsb], axis=0)
+                first_megsab = False
+            else:
+                irr_megsab = np.concatenate([irr_megsab, irr_megsab_i], axis=0)
+                t_megsab = np.concatenate([t_megsab, t_megsab_i], axis=0)
+        irr_megsa_i = None
+        irr_megsb_i = None
+        t_megsa_i = None
+        t_megsb_i = None
+
         # Combined MEGS-A & MEGS-B Dataframe
-        df_megsab_i = df_megsa_i.join(df_megsb_i, how='inner')
+        # df_megsab_i = df_megsa_i.join(df_megsb_i, how='inner')
         # Concatenate with previous dataframes
+        '''
         if i == 0:
-            df_megsa = df_megsa_i
-            df_megsb = df_megsb_i
-            df_megsab = df_megsab_i
+            # df_megsa = df_megsa_i
+            # df_megsb = df_megsb_i
+            # df_megsab = df_megsab_i
+            # Irradiance
+            irr_megsa = irr_megsa_i
+            irr_megsb = irr_megsb_i
+            irr_megsab = irr_megsab_i
+            # Time
+            t_megsa = t_megsa_i
+            t_megsb = t_megsb_i
+            t_megsab = t_megsab_i
+            # Wavelengths
+            # wl_megsab = wl_megsa + wl_megsb
+            wl_megsab = np.concatenate([wl_megsa, wl_megsb], axis=0)
         else:
-            df_megsa = pd.concat([df_megsa, df_megsa_i], axis=0)
-            df_megsb = pd.concat([df_megsb, df_megsb_i], axis=0)
-            df_megsab = pd.concat([df_megsab, df_megsab_i], axis=0)
-        print('MEGS-A dataframe: ', df_megsa.shape, ' / MEGS-B dataframe: ', df_megsb.shape, ' / MEGS-AB dataframe: ', df_megsab.shape)
+            # df_megsa = pd.concat([df_megsa, df_megsa_i], axis=0)
+            # df_megsb = pd.concat([df_megsb, df_megsb_i], axis=0)
+            # df_megsab = pd.concat([df_megsab, df_megsab_i], axis=0)
+            # Irradiance
+            irr_megsa = np.concatenate([irr_megsa, irr_megsa_i], axis=0)
+            irr_megsb = np.concatenate([irr_megsb, irr_megsb_i], axis=0)
+            irr_megsab = np.concatenate([irr_megsab, irr_megsab_i], axis=0)
+            # Time
+            # t_megsa = t_megsa + t_megsa_i
+            # t_megsb = t_megsb + t_megsb_i
+            # t_megsab = t_megsab + t_megsab_i
+            t_megsa = np.concatenate([t_megsa, t_megsa_i], axis=0)
+            t_megsb = np.concatenate([t_megsb, t_megsb_i], axis=0)
+            t_megsab = np.concatenate([t_megsab, t_megsab_i], axis=0)
+        # print('MEGS-A dataframe: ', df_megsa.shape, ' / MEGS-B dataframe: ', df_megsb.shape, ' / MEGS-AB dataframe: ', df_megsab.shape)
+        '''
+        
+        #print('MEGS-A dataframe: ', irr_megsa.shape, ' / MEGS-B dataframe: ', irr_megsb.shape,
+        #      ' / MEGS-AB dataframe: ', irr_megsab.shape)
+
+    # Save netcdf
+    megs_a_path = os.path.join(savepath, f'{data_type}_MEGS-A.nc')
+    megs_b_path = os.path.join(savepath, f'{data_type}_MEGS-B.nc')
+    megs_ab_path = os.path.join(savepath, f'{data_type}_MEGS-AB.nc')
+    # Create netcdf file
+    # create_eve_netcdf(megs_a_path, irr_megsa, t_megsa, wl_megsa)
+    # create_eve_netcdf(megs_b_path, irr_megsb, t_megsb, wl_megsb)
+    create_eve_netcdf(megs_ab_path, irr_megsab, t_megsab, wl_megsab)
+
 
     # Save dataframes
-    nb_t_megsa, nb_t_megsb = df_megsa.shape[0], df_megsb.shape[0]
-    if nb_t_megsa > 0:
-        save_megsa = df_megsa.to_csv(os.path.join(savepath, f'{data_type}_MEGS-A.csv'))
-    if nb_t_megsb > 0:
-        save_megsb = df_megsb.to_csv(os.path.join(savepath, f'{data_type}_MEGS-B.csv'))
-    if nb_t_megsa*nb_t_megsb > 0:
-        save_megsab = df_megsab.to_csv(os.path.join(savepath, f'{data_type}_MEGS-AB.csv'))
+    # nb_t_megsa, nb_t_megsb = df_megsa.shape[0], df_megsb.shape[0]
+    # if nb_t_megsa > 0:
+    #     save_megsa = df_megsa.to_csv(os.path.join(savepath, f'{data_type}_MEGS-A.csv'))
+    # if nb_t_megsb > 0:
+    #     save_megsb = df_megsb.to_csv(os.path.join(savepath, f'{data_type}_MEGS-B.csv'))
+    # if nb_t_megsa*nb_t_megsb > 0:
+    #     save_megsab = df_megsab.to_csv(os.path.join(savepath, f'{data_type}_MEGS-AB.csv'))
 
 
     # Create netcdf file
-    create_eve_netcdf(eve_path, output)
+    # create_eve_netcdf(eve_path, output)
