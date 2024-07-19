@@ -27,13 +27,6 @@ def create_eve_netcdf(netcdf_outpath, eve_irr, eve_date, eve_wl):
     """
     os.makedirs(os.path.split(netcdf_outpath)[0], exist_ok=True)
 
-    # eve_date = np.load(eve_raw_path + "/iso.npy",allow_pickle=True)
-    # eve_irr = np.load(eve_raw_path + "/irradiance.npy",allow_pickle=True)
-    # eve_jd = np.load(eve_raw_path + "/jd.npy",allow_pickle=True)
-    # eve_logt = np.load(eve_raw_path + "/logt.npy",allow_pickle=True)
-    # eve_name = np.load(eve_raw_path + "/name.npy",allow_pickle=True)
-    # eve_wl = np.load(eve_raw_path + "/wavelength.npy",allow_pickle=True)
-
     ####################################################################################################################
     # CREATE NETCDF4 FILE
     ####################################################################################################################
@@ -48,9 +41,6 @@ def create_eve_netcdf(netcdf_outpath, eve_irr, eve_date, eve_wl):
     # Create variables and atributes
     isoDates = netcdfDB.createVariable('isoDate', 'S2', ('isoDate',))
     isoDates.units = 'string date in ISO format'
-
-    # julianDates = netcdfDB.createVariable('julianDate', 'f4', ('isoDate',))
-    # julianDates.units = 'days since the beginning of the Julian Period (January 1, 4713 BC)'
 
     # names = netcdfDB.createVariable('name', 'S2', ('name',))
     # names.units = 'strings with the line names'
@@ -221,16 +211,6 @@ if __name__ == "__main__":
 
         # Identify overlapping time
         t_megsab_i = np.intersect1d(t_megsa_i, t_megsb_i)
-        # Extract intersection
-        # irr_megsa_i = np.stack([irr_megsa_i[np.where(t_megsa_i == t)[0]] for t in t_megsab_i], axis=0)
-        # irr_megsb_i = np.stack([irr_megsb_i[np.where(t_megsb_i == t)[0]] for t in t_megsab_i], axis=0)
-        # print(irr_megsa_i[np.where(t_megsa_i == t_megsab_i)[0]].shape)
-        # print(irr_megsb_i[np.where(t_megsb_i == t_megsab_i)[0]].shape)
-        # x = np.stack([irr_megsa_i[np.where(t_megsa_i == t)[0]].flatten() for t in t_megsab_i],
-        #                                   axis=0)
-        # y = np.stack([irr_megsb_i[np.where(t_megsb_i == t)[0]].flatten() for t in t_megsab_i],
-        #                                   axis=0)
-        # print(x.shape, y.shape)
         if len(t_megsab_i) > 0:
             irr_megsab_i = (
                 np.concatenate([np.stack([irr_megsa_i[np.where(t_megsa_i == t)[0]].flatten() for t in t_megsab_i],
@@ -250,65 +230,11 @@ if __name__ == "__main__":
         t_megsa_i = None
         t_megsb_i = None
 
-        # Combined MEGS-A & MEGS-B Dataframe
-        # df_megsab_i = df_megsa_i.join(df_megsb_i, how='inner')
-        # Concatenate with previous dataframes
-        '''
-        if i == 0:
-            # df_megsa = df_megsa_i
-            # df_megsb = df_megsb_i
-            # df_megsab = df_megsab_i
-            # Irradiance
-            irr_megsa = irr_megsa_i
-            irr_megsb = irr_megsb_i
-            irr_megsab = irr_megsab_i
-            # Time
-            t_megsa = t_megsa_i
-            t_megsb = t_megsb_i
-            t_megsab = t_megsab_i
-            # Wavelengths
-            # wl_megsab = wl_megsa + wl_megsb
-            wl_megsab = np.concatenate([wl_megsa, wl_megsb], axis=0)
-        else:
-            # df_megsa = pd.concat([df_megsa, df_megsa_i], axis=0)
-            # df_megsb = pd.concat([df_megsb, df_megsb_i], axis=0)
-            # df_megsab = pd.concat([df_megsab, df_megsab_i], axis=0)
-            # Irradiance
-            irr_megsa = np.concatenate([irr_megsa, irr_megsa_i], axis=0)
-            irr_megsb = np.concatenate([irr_megsb, irr_megsb_i], axis=0)
-            irr_megsab = np.concatenate([irr_megsab, irr_megsab_i], axis=0)
-            # Time
-            # t_megsa = t_megsa + t_megsa_i
-            # t_megsb = t_megsb + t_megsb_i
-            # t_megsab = t_megsab + t_megsab_i
-            t_megsa = np.concatenate([t_megsa, t_megsa_i], axis=0)
-            t_megsb = np.concatenate([t_megsb, t_megsb_i], axis=0)
-            t_megsab = np.concatenate([t_megsab, t_megsab_i], axis=0)
-        # print('MEGS-A dataframe: ', df_megsa.shape, ' / MEGS-B dataframe: ', df_megsb.shape, ' / MEGS-AB dataframe: ', df_megsab.shape)
-        '''
-        
-        #print('MEGS-A dataframe: ', irr_megsa.shape, ' / MEGS-B dataframe: ', irr_megsb.shape,
-        #      ' / MEGS-AB dataframe: ', irr_megsab.shape)
-
     # Save netcdf
-    megs_a_path = os.path.join(savepath, f'{data_type}_MEGS-A.nc')
-    megs_b_path = os.path.join(savepath, f'{data_type}_MEGS-B.nc')
-    megs_ab_path = os.path.join(savepath, f'{data_type}_MEGS-AB.nc')
+    # megs_a_path = os.path.join(savepath, f'{data_type}_MEGS-A.nc')
+    # megs_b_path = os.path.join(savepath, f'{data_type}_MEGS-B.nc')
+    # megs_ab_path = os.path.join(savepath, f'{data_type}_MEGS-AB.nc')
     # Create netcdf file
     # create_eve_netcdf(megs_a_path, irr_megsa, t_megsa, wl_megsa)
     # create_eve_netcdf(megs_b_path, irr_megsb, t_megsb, wl_megsb)
-    create_eve_netcdf(megs_ab_path, irr_megsab, t_megsab, wl_megsab)
-
-
-    # Save dataframes
-    # nb_t_megsa, nb_t_megsb = df_megsa.shape[0], df_megsb.shape[0]
-    # if nb_t_megsa > 0:
-    #     save_megsa = df_megsa.to_csv(os.path.join(savepath, f'{data_type}_MEGS-A.csv'))
-    # if nb_t_megsb > 0:
-    #     save_megsb = df_megsb.to_csv(os.path.join(savepath, f'{data_type}_MEGS-B.csv'))
-    # if nb_t_megsa*nb_t_megsb > 0:
-    #     save_megsab = df_megsab.to_csv(os.path.join(savepath, f'{data_type}_MEGS-AB.csv'))
-
-
-    # Create netcdf file
-    # create_eve_netcdf(eve_path, output)
+    create_eve_netcdf(savepath, irr_megsab, t_megsab, wl_megsab)
