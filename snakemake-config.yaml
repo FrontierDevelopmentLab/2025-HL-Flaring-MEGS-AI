@@ -3,28 +3,21 @@ debug: False
 
 data: 
   # GOES X-ray flux data 
-  goes_path: "/mnt/disks/data-spi3s-irradiance/GOES"  # Location
+  goes_dir: "/mnt/disks/data-spi3s-irradiance/GOES"  # Location
   goes_data: "goes.csv"  # Data file
 
   # EVE data
-  eve_path: "/mnt/disks/data-spi3s-irradiance/EVE"  # Location
+  eve_dir: "/mnt/disks/data-spi3s-irradiance/EVE"  # Location
   eve_cutoff: 600  # Cutoff value
-  eve_datatype: "EVS"
-  eve_data: "megsab_irradiance.nc"  # Data file
-  eve_stats: "megsab_stats.npy"  # Normalization of data # Mean & St. Dev 
-  eve_standardized: "megsab_standardized.npy"  # Converted data file # Ready for training
-
-  # MEGS-A irradiance data
-  # megsa_path: "/mnt/disks/megsai_data/EVE"  # Location
-  # megsa_data: "megsa_irradiance.nc"  # Data file
-  # megsa_norm: "megsa_normalization.npy"  # Normalization of data
-  # megsa_wl: "megsa_wl_names.npy"  # Wavelengths
-  # megsa_ln: ["Fe XVIII", "Fe VIII", "Fe XX", "Fe IX", "Fe X", "Fe XI", "Fe XII", "Fe XIII", "Fe XIV", "He II", "Fe XV", "He II", "Fe XVI", "Mg IX"]
-  # megsa_ln_wl: ["90", "131", "132", "171", "177", "180", "195", "202", "211", "255", "284", "304", "335", "368"]  # Wavelengths
-  # megsa_converted_data: "megsa_converted.npy"  # Converted data file
+  eve_type: "EVS"  # Lines or spectra
+  eve_level: "2B"  # Level of data
+  eve_instrument: "MEGS-AB"  # Instrument: MEGS-A, MEGS-B, MEGS-AB
+  eve_stats: "stats.npy"  # Normalization of data # Mean & St. Dev
+  eve_data: "irradiance.nc"  # Data file
+  eve_standardized: "standardized.npy"  # Converted data file # Ready for training
 
   # AIA data
-  aia_path: "/mnt/disks/data-spi3s-irradiance/AIA"  # Location
+  aia_dir: "/mnt/disks/data-spi3s-irradiance/AIA"  # Location
   aia_mission: "SDO"
   aia_wl: ["94", "131", "171", "193", "211", "304", "335", "1600", "1700"]  # Wavelengths
   aia_cutoff: 600  # Cutoff value
@@ -33,17 +26,18 @@ data:
   aia_stats: "stats.npz"  # Statistics of AIA data # Mean & St. Dev for AIA
 
   # Matches between AIA and EVE
-  matches_path: "/mnt/disks/data-spi3s-irradiance/matches"  # Location of file containing matches b/w AIA and EVE
-  matches_csv: "matches_EVE_AIA.csv"  # Table containing matches
-  matches_aia_path: "AIA_stacks"  # Folder containing the AIA image stacks
-  matches_euvi_path: "/mnt/disks/megsai_data/EUVI"  # Location
+  matches_dir: "/mnt/disks/data-spi3s-irradiance/matches"  # Location of file containing matches b/w AIA and EVE
+  matches_csv: "matches.csv"  # Table containing matches
+  matches_eve_subdir: "EVE"  # Folder containing the AIA image stacks
+  matches_aia_subdir: "AIA"  # Folder containing the AIA image stacks
+  matches_euvi_subdir: "EUVI"  # Location
   matches_euvi_table: "matches_eve_euvi.csv"  # Table containing matches
   matches_euvib_table: "matches_eve_euvib.csv"  # Table containing matches
 
   # EUVI data
-  euvi_path: "/mnt/disks/stereo_data/EUVI"  # Location
-  euvia_path: "/mnt/disks/stereo_data/EUVI/A"  # Location
-  euvib_path: "/mnt/disks/stereo_data/EUVI/B"  # Location
+  euvi_dir: "/mnt/disks/data-spi3s-irradiance/EUVI"  # Location
+  euvia_dir: "/mnt/disks/data-spi3s-irradiance/A"  # Location
+  euvib_dir: "/mnt/disks/data-spi3s-irradiance/B"  # Location
   euvi_mission: "STEREO"
   # euvi_wl: ["171", "195", "284", "304"]  # Wavelengths
   euvi_wl: ["171", "193", "211", "304"]  # Wavelengths (ITI-translated)
@@ -53,27 +47,22 @@ data:
   euvi_stats: "stats.npz"  # Statistics of AIA data
 
   # EUI data
-  eui_path: "/mnt/disks/observational_data/EUI"  # Location
+  eui_dir: "/mnt/disks/data-spi3s-irradiance/EUI"  # Location
   eui_mission: "SolO"
   eui_wl: ["171", "304"]  # Wavelengths
 
   # SUVI data
-  suvi_path: "/mnt/disks/observational_data/SUVI"  # Location
+  suvi_dir: "/mnt/disks/data-spi3s-irradiance/SUVI"  # Location
   suvi_mission: "GOES"
   suvi_wl: ["94", "131", "171", "193", "211", "304"]  # Wavelengths
 
-  # CIRCE data
-  circe_path: "/mnt/disks/observational_data/CIRCE"  # Location
-  circe_mission: "VIGIL"
-  circe_wl: ["131", "193", "304"]  # Wavelengths
-
 # Model parameters
 model:
-  config_file: "/home/benoit_tremblay_23/4piuvsun/megs_ai_config.yaml"  # Path to the config file.
+  config_file: "/home/benoit_tremblay_23/2014-HL-SPI3S-MEGS-AI/megs_ai_config.yaml"  # Path to the config file.
   # Checkpoint(s)
-  checkpoint_path: "/mnt/disks/megsai_data/MEGS_AI"  # Location
+  checkpoint_dir: "/mnt/disks/megsai_data/MEGS_AI"  # Location
   checkpoint_file: "model"  # Filename to load checkpoint.
   # Instruments and corresponding wavelength indices
-  instruments: ["94", "131", "171", "193", "211", "304", "335", "1600", "1700", "AIA", "EUVI", "EUI", "SUVI", "CIRCE"] 
+  instruments: ["94", "131", "171", "193", "211", "304", "335", "1600", "1700", "AIA", "EUVI", "EUI", "SUVI"]
 
 

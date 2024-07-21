@@ -5,7 +5,7 @@ from astropy import units as u
 from astropy.visualization import ImageNormalize, AsinhStretch, LinearStretch
 from iti.data.editor import LoadMapEditor, NormalizeRadiusEditor, AIAPrepEditor
 from sunpy.visualization.colormaps import cm
-from s4pi.maps.utilities.reprojection import transform
+from irradiance.data.reprojection import transform
 
 sdo_img_norm = ImageNormalize(vmin=0, vmax=1, stretch=LinearStretch(), clip=True)
 
@@ -49,7 +49,6 @@ def loadAIAMap(file_path, resolution=1024, map_reproject=False, calibration='aut
         s_map = AIAPrepEditor(calibration=calibration).call(s_map)
     except:
         s_map = AIAPrepEditor(calibration='aiapy').call(s_map)
-
     if map_reproject:
         s_map = transform(s_map, lat=s_map.heliographic_latitude,
                           lon=s_map.heliographic_longitude, distance=1 * u.AU)
