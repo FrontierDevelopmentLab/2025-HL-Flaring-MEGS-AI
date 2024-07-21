@@ -34,6 +34,18 @@ data:
   matches_euvi_table: "matches_eve_euvi.csv"  # Table containing matches
   matches_euvib_table: "matches_eve_euvib.csv"  # Table containing matches
 
+  # Maven
+  maven_dir: "/mnt/disks/data-spi3s-irradiance/MAVEN"  # Location
+  maven_lvl2_dir: "/mnt/disks/data-spi3s-irradiance/MAVEN/level2"  # Location
+  maven_lvl3_dir: "/mnt/disks/data-spi3s-irradiance/MAVEN/level3"  # Location
+  maven_lvl3_data: "mvn_euv_l3_daily.csv" # Data file
+
+  # FISM
+  fismp_dir: "/mnt/disks/data-spi3s-irradiance/FISM-P"  # Location
+  fismp_earth_data: "fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc"  # Data file
+  fismp_mars_data: "fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc"  # Data file
+  fism2_dir: "/mnt/disks/data-spi3s-irradiance/FISM2"  # Location
+
   # EUVI data
   euvi_dir: "/mnt/disks/data-spi3s-irradiance/EUVI"  # Location
   euvia_dir: "/mnt/disks/data-spi3s-irradiance/A"  # Location

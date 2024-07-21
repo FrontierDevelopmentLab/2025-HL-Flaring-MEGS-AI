@@ -57,6 +57,36 @@ rule download_eve_data:
         -save_dir {params.eve_dir} 
         """
 
+rule download_maven_data:
+    output:
+        maven_lvl3_data = f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}"
+    params:
+        maven_dir = config['data']['maven_dir'],
+        maven_lvl2_dir = config['data']['maven_lvl2_dir'],
+        maven_lvl3_dir = config['data']['maven_lvl3_dir']
+    shell:
+        """
+        mkdir -p {params.maven_dir} && 
+        mkdir -p {params.maven_lvl2_dir} &&
+        mkdir -p {params.maven_lvl3_dir} &&
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/MAVEN/maven.csv {output.maven_lvl3_data}
+        """
+
+rule download_fism_data:
+    output:
+        fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
+        fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}"
+    params:
+        fismp_dir = config['data']['fismp_dir'],
+        fism2_dir = config['data']['fism2_dir']
+    shell:
+        """
+        mkdir -p {params.fismp_dir} && 
+        mkdir -p {params.fism2_dir} &&
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_earth_data} && 
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_mars_data} &&
+        """
+
 ## Generate CDF file containing EVE irradiance data
 rule generate_eve_netcdf:
     input:
