@@ -2,8 +2,9 @@
 # MAIN
 #########################################################################################################
 configfile: "snakemake-config.yaml"
+# Draw: snakemake --forceall --dag | dot -Tpng > dag.png
 
-
+# TODO: Maybe remove "data" section from config file to make it simpler
 # General rule to generate all data
 rule megsai_all:
     input:
@@ -23,6 +24,13 @@ rule megsai_all:
         updated_matches_csv= f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
                              f"{config['data']['aia_resolution']}/{config['data']['matches_csv']}"
         
+
+# Draw the DAG of the pipeline
+rule draw_dag:
+    output:
+        png='dag.png'
+    shell:
+        "snakemake --forceall --dag | dot -Tpng > {output.png}"
 
 #########################################################################################################
 # SETUP AND GENERATE TRAINING DATA
