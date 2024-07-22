@@ -4,20 +4,14 @@
 configfile: "snakemake-config.yaml"
 # Draw: snakemake --forceall --dag | dot -Tpng > dag.png
 
-# TODO: Maybe remove "data" section from config file to make it simpler
+# TODO: Maybe remove "data" section from config (config['data']) file to make it simpler to read
 # General rule to generate all data
 rule megsai_all:
     input:
-        goes_csv = f"{config['data']['goes_dir']}/{config['data']['goes_data']}",
+        # checkpoints = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt", instrument=config["model"]["instruments"]),
         maven_lvl3_data= f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
         fismp_earth_data= f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
         fismp_mars_data=f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
-        eve_file= f"{config['data']['eve_dir']}/{config['data']['eve_type']}_L{config['data']['eve_level']}"+
-                  "_2014001_008_01.fit.gz",
-        eve_cdf = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
-                   f"{config['data']['eve_data']}",
-        matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
-                      f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
         eve_standardized = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
                            f"{config['data']['eve_type']}_"+
                            f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
@@ -211,3 +205,31 @@ rule generate_imager_stacks:
 #########################################################################################################
 # TRAIN & TEST MODEL
 #########################################################################################################
+
+#rule megsai_train:
+#    input:
+#        matches_table = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_table"],
+#         eve_converted_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_converted_data"],
+#        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
+#         eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"]
+#     params:
+#         instrument = "{instrument}",
+#         config_file = config["model"]["config_file"],
+#         checkpoint_path = config["model"]["checkpoint_path"]+"/{instrument}",
+#         checkpoint_file = config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]
+#     output: 
+#         checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt"
+#     resources:
+#         nvidia_gpu = 1
+#     shell:
+#         """
+#         mkdir -p {params.checkpoint_path} &&
+#         python -m s4pi.irradiance.train \
+#         -checkpoint {params.checkpoint_file} \
+#         -model {params.config_file} \
+#         -matches_table {input.matches_table} \
+#         -eve_data {input.eve_converted_data} \
+#         -eve_norm {input.eve_norm} \
+#         -eve_wl {input.eve_wl} \
+#         -instrument {params.instrument}
+#         """
