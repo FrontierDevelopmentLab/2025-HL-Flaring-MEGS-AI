@@ -8,6 +8,9 @@ configfile: "snakemake-config.yaml"
 rule megsai_all:
     input:
         goes_csv = f"{config['data']['goes_dir']}/{config['data']['goes_data']}",
+        maven_lvl3_data= f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
+        fismp_earth_data= f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
+        fismp_mars_data=f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
         eve_file= f"{config['data']['eve_dir']}/{config['data']['eve_type']}_L{config['data']['eve_level']}"+
                   "_2014001_008_01.fit.gz",
         eve_cdf = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
@@ -69,7 +72,7 @@ rule download_maven_data:
         mkdir -p {params.maven_dir} && 
         mkdir -p {params.maven_lvl2_dir} &&
         mkdir -p {params.maven_lvl3_dir} &&
-        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/MAVEN/maven.csv {output.maven_lvl3_data}
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/MAVEN/level3/mvn_euv_l3_daily.csv {output.maven_lvl3_data}
         """
 
 rule download_fism_data:
@@ -84,7 +87,7 @@ rule download_fism_data:
         mkdir -p {params.fismp_dir} && 
         mkdir -p {params.fism2_dir} &&
         gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_earth_data} && 
-        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_mars_data} &&
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_mars_data}
         """
 
 ## Generate CDF file containing EVE irradiance data
