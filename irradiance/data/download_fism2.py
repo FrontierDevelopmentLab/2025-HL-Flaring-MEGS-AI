@@ -67,11 +67,9 @@ if __name__ == "__main__":
                         help='Enter start time for data downloading in format YYYY-MM-DDTHH:MM:SS')
     parser.add_argument('-end', type=str, default='2015-01-01T00:00:00',
                         help='Enter end time for data downloading in format YYYY-MM-DDTHH:MM:SS')
-    parser.add_argument('-type', type=str, default='EVS',
-                        help='Specify data type: EVL (lines or bands) and EVS (spectra)')
-    parser.add_argument('-level', type=str, default='2B',
-                        help='Specify data level: 0, 1, 2, 2B, 3, 4')
-    parser.add_argument('-version', type=str, default='008',
+    parser.add_argument('-type', type=str, default='daily_hr_data',
+                        help='Specify data type: daily_hr_data, daily_bands, flare_hr_data, flare_bands')
+    parser.add_argument('-version', type=str, default='v02_01',
                         help='Specify data version')
     parser.add_argument('-url', type=str,
                         default='https://lasp.colorado.edu/eve/data_access/eve_data/products/',
@@ -86,8 +84,9 @@ if __name__ == "__main__":
     end_date = args.end
     data_type = args.type
     data_version = args.version
-    data_url = os.path.join(args.url, f'level{args.level}')
-    data_save_dir = args.save_dir
+    data_url = os.path.join(args.url, data_type)
+    print(data_url)
+    data_save_dir = os.path.join(args.save_dir, data_type)
 
     # Create save_dir if it does not exist
     os.makedirs(data_save_dir, exist_ok=True)
@@ -104,30 +103,17 @@ if __name__ == "__main__":
     # Loop over years
     for year in tqdm(year_query, desc='Years'):
 
-        # Pulling available days for a given year
-        days_query = query_url(os.path.join(data_url, year), f'^{np.arange(0, 4)}')
-        # Constrain query within the start and end years and corresponding days
-        if int(year) == int(start_year):
-            days_query = [d for d in days_query if int(d) >= int(start_yday)]
-        if int(year) == int(end_year):
-            days_query = [d for d in days_query if int(d) <= int(end_yday)]
+        # Pulling available fits files for a given day
+        fits_query = query_url(os.path.join(data_url, year), f'{data_version}.sav$')
+        # Constrain query within the start and end years, and days
+        fits_query = [f for f in fits_query if int(f.split('_')[2]) >= int(f'{start_year}{start_yday:03d}') and 
+                      int(f.split('_')[2]) <= int(f'{end_year}{end_yday:03d}')]
 
-            # Loop over days
-        for day in tqdm(days_query, desc='Days'):
+        # Loop over fits files
+        for data in tqdm(fits_query):
 
-            # Pulling available fits files for a given day
-            fits_query = query_url(os.path.join(data_url, year, day), f'^{data_type}')
-            # Constrain query within the start and end years, days and corresponding hours
-            if int(year) == int(start_year) and int(day) == int(start_yday):
-                fits_query = [f for f in fits_query if int(f.split('_')[3]) >= int(start_hour)]
-            if int(year) == int(end_year) and int(day) == int(end_yday):
-                fits_query = [f for f in fits_query if int(f.split('_')[3]) <= int(end_hour)]
-
-            # Loop over fits files
-            for data in fits_query:
-
-                # Download if file does not exist
-                if os.path.exists(os.path.join(data_save_dir, data)):
-                    print(f'{data} already exists, skipping...')
-                else:
-                    wget.download(os.path.join(data_url, year, day, data), os.path.join(data_save_dir, data))
+            # Download if file does not exist
+            if os.path.exists(os.path.join(data_save_dir, data)):
+                print(f'{data} already exists, skipping...')
+            else:
+                wget.download(os.path.join(data_url, year, data), os.path.join(data_save_dir, data.replace(f"_{data.split('_')[1]}", "")))

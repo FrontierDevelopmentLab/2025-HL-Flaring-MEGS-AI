@@ -45,6 +45,9 @@ data:
   fismp_earth_data: "fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc"  # Data file
   fismp_mars_data: "fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc"  # Data file
   fism2_dir: "/mnt/disks/data-spi3s-irradiance/FISM2"  # Location
+  fism2_type: ["daily_hr_data", "daily_bands", "flare_hr_data", flare_bands]  # Type of data
+  fism2_version: "v02_01" # Version of data
+  fism2_url: "https://lasp.colorado.edu/eve/data_access/eve_data/fism"
 
   # EUVI data
   euvi_dir: "/mnt/disks/data-spi3s-irradiance/EUVI"  # Location

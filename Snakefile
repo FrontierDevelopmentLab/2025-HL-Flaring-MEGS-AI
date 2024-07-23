@@ -9,9 +9,10 @@ configfile: "snakemake-config.yaml"
 rule megsai_all:
     input:
         # checkpoints = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt", instrument=config["model"]["instruments"]),
-        maven_lvl3_data= f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
-        fismp_earth_data= f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
-        fismp_mars_data=f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
+        maven_lvl3_data = f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
+        fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
+        fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
+        fism2_data = expand(f"{config['data']['fism2_dir']}/"+"{fism2_type}"+f"/FISM_2014001_{config['data']['fism2_version']}.sav", fism2_type=config['data']['fism2_type']),
         eve_standardized = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
                            f"{config['data']['eve_type']}_"+
                            f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
@@ -77,19 +78,37 @@ rule download_maven_data:
         gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/MAVEN/level3/mvn_euv_l3_daily.csv {output.maven_lvl3_data}
         """
 
-rule download_fism_data:
+rule download_fismp_data:
     output:
         fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
         fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}"
     params:
-        fismp_dir = config['data']['fismp_dir'],
-        fism2_dir = config['data']['fism2_dir']
+        fismp_dir = config['data']['fismp_dir']
     shell:
         """
         mkdir -p {params.fismp_dir} && 
-        mkdir -p {params.fism2_dir} &&
         gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_earth_data} && 
         gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_mars_data}
+        """
+
+rule download_fism2_data:
+    output:
+        fism2_data = f"{config['data']['fism2_dir']}/"+"{fism2_type}"+f"/FISM_2014001_{config['data']['fism2_version']}.sav"
+    params:
+        fism2_dir = config['data']['fism2_dir'],
+        fism2_type = "{fism2_type}",
+        fism2_version = config['data']['fism2_version'],
+        fism2_url = config['data']['fism2_url']
+    shell:
+        """
+        mkdir -p {params.fism2_dir} &&
+        python -m irradiance.data.download_fism2 \
+        -start 2010-01-01T00:00:00 \
+        -end   2014-05-10T23:59:59 \
+        -type {params.fism2_type} \
+        -version {params.fism2_version} \
+        -url {params.fism2_url} \
+        -save_dir {params.fism2_dir}
         """
 
 ## Generate CDF file containing EVE irradiance data
