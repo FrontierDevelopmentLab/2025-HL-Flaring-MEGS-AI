@@ -151,6 +151,9 @@ dmypy.json
 # pytype static type analyzer
 .pytype/
 
+# Snakemake
+.snakemake
+
 # Cython debug symbols
 cython_debug/
 

@@ -85,6 +85,7 @@ if __name__ == "__main__":
     data_type = args.type
     data_version = args.version
     data_url = os.path.join(args.url, data_type)
+    print(data_url)
     data_save_dir = os.path.join(args.save_dir, data_type)
 
     # Create save_dir if it does not exist
