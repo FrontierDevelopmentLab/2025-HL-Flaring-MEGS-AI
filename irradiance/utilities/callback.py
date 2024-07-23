@@ -81,19 +81,33 @@ class ImagePredictionLogger(Callback):
                 for j in range(ncols):
                     if n_plots < n_aia_wavelengths: 
                         ax = fig.add_subplot(gs[s*nrows+i, j])
-                        ax.imshow(val_imgs[s, i*ncols+j], cmap = plt.get_cmap(cmaps[i*ncols+j]), vmin = 0, vmax = 1)
+                        ax.imshow(val_imgs[s, i*ncols+j], cmap = plt.get_cmap(cmaps[i*ncols+j]), origin='lower', vmin=0, vmax=1)
                         ax.text(0.01, 0.99, cmaps[i*ncols+j], horizontalalignment='left', verticalalignment='top', color = 'w', transform=ax.transAxes)
                         ax.set_axis_off()
                         n_plots += 1
             n_plots = 0
             #eve data
             ax5 = fig.add_subplot(gs[s*nrows, ncols:])
-            ax5.bar(np.arange(0,len(val_eve[s,:])), val_eve[s,:], label='ground truth')
-            ax5.bar(np.arange(0,len(pred_eve[s,:])), pred_eve[s,:], width = 0.5, label='prediction', alpha=0.5)
-            ax5.set_xticks(np.arange(0,len(val_eve[s,:])))
-            ax5.set_xticklabels(self.names,rotation = 45)
+            if self.names is not None:
+                ax5.bar(np.arange(0,len(val_eve[s,:])), val_eve[s,:], label='ground truth')
+                ax5.bar(np.arange(0,len(pred_eve[s,:])), pred_eve[s,:], width = 0.5, label='prediction', alpha=0.5)
+                ax5.set_xticks(np.arange(0,len(val_eve[s,:])))
+                ax5.set_xticklabels(self.names,rotation = 45)
+            else:
+                ax5.plot(np.arange(0,len(val_eve[s,:])), val_eve[s,:], label='ground truth', alpha=0.5, drawstyle='steps-mid')
+                ax5.plot(np.arange(0,len(pred_eve[s,:])), pred_eve[s,:], label='prediction', alpha=0.5, drawstyle='steps-mid')
             ax5.set_yscale('log')
             ax5.legend()
+
+            ax6 = fig.add_subplot(gs[s*nrows+1, ncols:])
+            if self.names is not None:
+                ax6.bar(np.arange(0,len(val_eve[s,:])), np.abs(pred_eve[s,:]-val_eve[s,:])/val_eve[s,:]*100, label='relative error (%)')
+                ax6.set_xticks(np.arange(0,len(val_eve[s,:])))
+                ax6.set_xticklabels(self.names,rotation = 45)
+            else:
+                ax6.plot(np.arange(0,len(val_eve[s,:])), np.abs(pred_eve[s,:]-val_eve[s,:])/val_eve[s,:]*100, label='relative error (%)', alpha=0.5, drawstyle='steps-mid')
+            ax6.set_yscale('log')
+            ax6.legend()            
 
         fig.tight_layout()
         return fig
