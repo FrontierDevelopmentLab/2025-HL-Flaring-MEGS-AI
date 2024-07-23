@@ -8,7 +8,7 @@ from os.path import exists
 import numpy as np
 from tqdm import tqdm
 
-from s4pi.data.utils import loadMapStack, str2bool
+from irradiance.data.utils import loadMapStack, str2bool
 
 # Initialize Python Logger
 logging.basicConfig(format='%(levelname)-4s '
