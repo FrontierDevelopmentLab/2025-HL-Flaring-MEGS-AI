@@ -31,7 +31,7 @@ parser.add_argument('-eve_data', type=str, default="/mnt/disks/preprocessed_data
                     help='Path to converted SDO/EVE data.')
 parser.add_argument('-eve_norm', type=str, default="/mnt/disks/preprocessed_data/EVE/megsa_normalization.npy",
                     help='Path to converted SDO/EVE normalization.')
-parser.add_argument('-eve_wl', type=str, default="/mnt/disks/preprocessed_data/EVE/megsa_wl_names.npy",
+parser.add_argument('-eve_wl', type=str, default=None,
                     help='Path to SDO/EVE wavelength names.')
 parser.add_argument('-instrument', type=str, required=True, 
                     help='Instrument wavelengths to use as input.')
@@ -91,14 +91,14 @@ for parameter_set in combined_parameters:
 
         # Initalize model
         model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
-                                      d_output=1377, 
+                                      d_output=5040, 
                                       eve_norm=eve_norm)
 
         # Initialize logger
         if len(combined_parameters) > 1:
             wb_name = f"{instrument}_{n}"
         else:
-            wb_name = instrument
+            wb_name = os.path.basename(checkpoint)
         wandb_logger = WandbLogger(entity=config_data['wandb']['entity'],
                                 project=config_data['wandb']['project'],                            
                                 #group=config_data['wandb']['group'],
@@ -113,8 +113,9 @@ for parameter_set in combined_parameters:
         plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, total_n_valid // 4)]
         plot_images = torch.stack([image for image, eve in plot_data])
         plot_eve = torch.stack([eve for image, eve in plot_data])
-        #eve_wl = np.load(eve_wl, allow_pickle=True)
-        #image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
+        if eve_wl is not None:
+            eve_wl = np.load(eve_wl, allow_pickle=True)
+        image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
 
         # Checkpoint callback
         checkpoint_path = os.path.split(checkpoint)[0]
@@ -136,8 +137,7 @@ for parameter_set in combined_parameters:
                 accelerator="gpu",
                 devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
                 max_epochs=(run_config['ln_epochs']+run_config['cnn_epochs']),
-                callbacks=[checkpoint_callback, switch_mode_callback],
-                #callbacks=[image_callback, checkpoint_callback, switch_mode_callback],
+                callbacks=[image_callback, checkpoint_callback, switch_mode_callback],
                 logger=wandb_logger,
                 log_every_n_steps=10
                 )
@@ -150,8 +150,7 @@ for parameter_set in combined_parameters:
                 accelerator="gpu",
                 devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
                 max_epochs=run_config['epochs'],
-                callbacks=[checkpoint_callback],
-                #callbacks=[image_callback, checkpoint_callback],
+                callbacks=[image_callback, checkpoint_callback],
                 logger=wandb_logger,
                 log_every_n_steps=10
                 )
