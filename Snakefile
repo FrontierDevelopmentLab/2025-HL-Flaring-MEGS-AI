@@ -104,10 +104,10 @@ rule download_fism2_data:
         mkdir -p {params.fism2_dir} &&
         python -m irradiance.data.download_fism2 \
         -start 2010-01-01T00:00:00 \
-        -end 2014-05-10T23:59:59 \
+        -end   2014-05-10T23:59:59 \
         -type {params.fism2_type} \
         -version {params.fism2_version} \
-        -url {params.fism2_url} \ 
+        -url {params.fism2_url} \
         -save_dir {params.fism2_dir}
         """
 

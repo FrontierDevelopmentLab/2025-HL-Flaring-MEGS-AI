@@ -105,7 +105,7 @@ if __name__ == "__main__":
         # Pulling available fits files for a given day
         fits_query = query_url(os.path.join(data_url, year), f'{data_version}.sav$')
         # Constrain query within the start and end years, and days
-        fits_query = [f.replace(f"_{f.split('_')[1]}", "") for f in fits_query if int(f.split('_')[2]) >= int(f'{start_year}{start_yday:03d}') and 
+        fits_query = [f for f in fits_query if int(f.split('_')[2]) >= int(f'{start_year}{start_yday:03d}') and 
                       int(f.split('_')[2]) <= int(f'{end_year}{end_yday:03d}')]
 
         # Loop over fits files
@@ -115,4 +115,4 @@ if __name__ == "__main__":
             if os.path.exists(os.path.join(data_save_dir, data)):
                 print(f'{data} already exists, skipping...')
             else:
-                wget.download(os.path.join(data_url, year, data), os.path.join(data_save_dir, data))
+                wget.download(os.path.join(data_url, year, data), os.path.join(data_save_dir, data.replace(f"_{data.split('_')[1]}", "")))
