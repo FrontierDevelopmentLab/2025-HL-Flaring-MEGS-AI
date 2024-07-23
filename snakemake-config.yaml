@@ -13,7 +13,7 @@ data:
   eve_level: "2B"  # Level of data
   eve_instrument: "MEGS-A"  # Instrument: MEGS-A, MEGS-B, MEGS-AB
   eve_stats: "stats.npy"  # Normalization of data # Mean & St. Dev
-  eve_data: "irradiane.nc"  # Data file
+  eve_data: "irradiance.nc"  # Data file
   eve_standardized: "standardized.npy"  # Converted data file # Ready for training
 
   # AIA data
@@ -73,11 +73,12 @@ data:
 
 # Model parameters
 model:
-  config_file: "/home/benoit_tremblay_23/2014-HL-SPI3S-MEGS-AI/megs_ai_config.yaml"  # Path to the config file.
+  config_file: "/home/christophschirninger/2024-HL-SPI3S-MEGS-AI/megs_ai_2024_config.yaml"  # Path to the config file.
   # Checkpoint(s)
-  checkpoint_dir: "/mnt/disks/megsai_data/MEGS_AI"  # Location
+  checkpoint_path: "/mnt/disks/megsai_data/MEGS_AI"  # Location
   checkpoint_file: "model"  # Filename to load checkpoint.
   # Instruments and corresponding wavelength indices
-  instruments: ["94", "131", "171", "193", "211", "304", "335", "1600", "1700", "AIA", "EUVI", "EUI", "SUVI"]
+  # instruments: ["94", "131", "171", "193", "211", "304", "335", "1600", "1700", "AIA", "EUVI", "EUI", "SUVI"]
+  instruments: ["AIA"]
 
 
