@@ -3,7 +3,7 @@ from pytorch_lightning import Callback
 import matplotlib.pyplot as plt
 import numpy as np
 
-from s4pi.irradiance.models.model import unnormalize
+from irradiance.models.model import unnormalize
 
 # Custom Callback
 

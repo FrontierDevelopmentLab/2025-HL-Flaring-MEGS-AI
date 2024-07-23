@@ -11,9 +11,9 @@ data:
   eve_cutoff: 600  # Cutoff value
   eve_type: "EVS"  # Lines or spectra
   eve_level: "2B"  # Level of data
-  eve_instrument: "MEGS-AB"  # Instrument: MEGS-A, MEGS-B, MEGS-AB
+  eve_instrument: "MEGS-A"  # Instrument: MEGS-A, MEGS-B, MEGS-AB
   eve_stats: "stats.npy"  # Normalization of data # Mean & St. Dev
-  eve_data: "irradiance.nc"  # Data file
+  eve_data: "irradiane.nc"  # Data file
   eve_standardized: "standardized.npy"  # Converted data file # Ready for training
 
   # AIA data

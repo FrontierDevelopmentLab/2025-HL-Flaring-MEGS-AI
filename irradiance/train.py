@@ -16,9 +16,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 
 from pathlib import Path
 
-from s4pi.irradiance.models.model import IrradianceModel, ChoppedAlexnetBN, LinearIrradianceModel, HybridIrradianceModel
-from s4pi.irradiance.utilities.callback import ImagePredictionLogger
-from s4pi.irradiance.utilities.data_loader import IrradianceDataModule
+from irradiance.models.model import IrradianceModel, ChoppedAlexnetBN, LinearIrradianceModel, HybridIrradianceModel
+from irradiance.utilities.callback import ImagePredictionLogger
+from irradiance.utilities.data_loader import IrradianceDataModule
 
 # Parser
 parser = argparse.ArgumentParser()
@@ -90,13 +90,9 @@ for parameter_set in combined_parameters:
         data_loader.setup()
 
         # Initalize model
-        model = HybridIrradianceModel(d_input=len(run_config[instrument]), 
-                                      d_output=14, 
-                                      eve_norm=eve_norm, 
-                                      cnn_model=run_config['cnn_model'], 
-                                      ln_model=run_config['ln_model'],
-                                      cnn_dp=run_config['cnn_dp'],
-                                      lr=run_config['lr'])
+        model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
+                                      d_output=1377, 
+                                      eve_norm=eve_norm)
 
         # Initialize logger
         if len(combined_parameters) > 1:
@@ -105,7 +101,7 @@ for parameter_set in combined_parameters:
             wb_name = instrument
         wandb_logger = WandbLogger(entity=config_data['wandb']['entity'],
                                 project=config_data['wandb']['project'],                            
-                                group=config_data['wandb']['group'],
+                                #group=config_data['wandb']['group'],
                                 job_type=config_data['wandb']['job_type'],
                                 tags=config_data['wandb']['tags'],
                                 name=wb_name,
@@ -117,8 +113,8 @@ for parameter_set in combined_parameters:
         plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, total_n_valid // 4)]
         plot_images = torch.stack([image for image, eve in plot_data])
         plot_eve = torch.stack([eve for image, eve in plot_data])
-        eve_wl = np.load(eve_wl, allow_pickle=True)
-        image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
+        #eve_wl = np.load(eve_wl, allow_pickle=True)
+        #image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
 
         # Checkpoint callback
         checkpoint_path = os.path.split(checkpoint)[0]
@@ -140,7 +136,8 @@ for parameter_set in combined_parameters:
                 accelerator="gpu",
                 devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
                 max_epochs=(run_config['ln_epochs']+run_config['cnn_epochs']),
-                callbacks=[image_callback, checkpoint_callback, switch_mode_callback],
+                callbacks=[checkpoint_callback, switch_mode_callback],
+                #callbacks=[image_callback, checkpoint_callback, switch_mode_callback],
                 logger=wandb_logger,
                 log_every_n_steps=10
                 )
@@ -153,7 +150,8 @@ for parameter_set in combined_parameters:
                 accelerator="gpu",
                 devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
                 max_epochs=run_config['epochs'],
-                callbacks=[image_callback, checkpoint_callback],
+                callbacks=[checkpoint_callback],
+                #callbacks=[image_callback, checkpoint_callback],
                 logger=wandb_logger,
                 log_every_n_steps=10
                 )

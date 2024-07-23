@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 import torch
 
-from s4pi.data.utils import loadMapStack
+from irradiance.data.utils import loadMapStack
 
 
 class IrradianceDataModule(pl.LightningDataModule):
