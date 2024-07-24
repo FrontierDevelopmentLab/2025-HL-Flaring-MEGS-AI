@@ -88,10 +88,9 @@ for parameter_set in combined_parameters:
                                            test_months=run_config['test_months'],
                                            holdout_months=run_config['holdout_months'])
         data_loader.setup()
-        aia_stack, eve_spectrum = data_loader(0)
         # Initalize model
         model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
-                                      d_output=eve_spectrum.shape[1], 
+                                      d_output=eve_norm.shape[1], 
                                       eve_norm=eve_norm)
 
         # Initialize logger
