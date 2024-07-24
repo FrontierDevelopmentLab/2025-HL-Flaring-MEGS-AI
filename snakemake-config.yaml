@@ -3,21 +3,21 @@ debug: False
 
 data: 
   # GOES X-ray flux data 
-  goes_dir: "/mnt/disks/data-spi3s-irradiance/GOES"  # Location
+  goes_dir: "/mnt/disks/data-spi3s-irradiance/raw/GOES"  # Location
   goes_data: "goes.csv"  # Data file
 
   # EVE data
-  eve_dir: "/mnt/disks/data-spi3s-irradiance/EVE"  # Location
+  eve_dir: "/mnt/disks/data-spi3s-irradiance/raw/EVE"  # Location
   eve_cutoff: 600  # Cutoff value
   eve_type: "EVS"  # Lines or spectra
   eve_level: "2B"  # Level of data
-  eve_instrument: "MEGS-AB"  # Instrument: MEGS-A, MEGS-B, MEGS-AB
+  eve_instrument: "MEGS-A"  # Instrument: MEGS-A, MEGS-B, MEGS-AB
   eve_stats: "stats.npy"  # Normalization of data # Mean & St. Dev
   eve_data: "irradiance.nc"  # Data file
   eve_standardized: "standardized.npy"  # Converted data file # Ready for training
 
   # AIA data
-  aia_dir: "/mnt/disks/data-spi3s-irradiance/AIA"  # Location
+  aia_dir: "/mnt/disks/data-spi3s-irradiance/raw/AIA"  # Location
   aia_mission: "SDO"
   aia_wl: ["94", "131", "171", "193", "211", "304", "335", "1600", "1700"]  # Wavelengths
   aia_cutoff: 600  # Cutoff value
@@ -25,34 +25,37 @@ data:
   aia_reproject: False  # Whether to remove off limb or on not
   aia_stats: "stats.npz"  # Statistics of AIA data # Mean & St. Dev for AIA
 
+  # Preprocessing folders
+  preprocess_dir: "/mnt/disks/data-spi3s-irradiance/preprocessed"  # Location
+  preprocess_eve_subdir: "EVE"  # Folder containing the AIA image stacks
+  preprocess_aia_subdir: "AIA"  # Folder containing the AIA image stacks
+  preprocess_euvi_subdir: "EUVI"  # Location
+  
   # Matches between AIA and EVE
   matches_dir: "/mnt/disks/data-spi3s-irradiance/matches"  # Location of file containing matches b/w AIA and EVE
   matches_csv: "matches.csv"  # Table containing matches
-  matches_eve_subdir: "EVE"  # Folder containing the AIA image stacks
-  matches_aia_subdir: "AIA"  # Folder containing the AIA image stacks
-  matches_euvi_subdir: "EUVI"  # Location
   matches_euvi_table: "matches_eve_euvi.csv"  # Table containing matches
   matches_euvib_table: "matches_eve_euvib.csv"  # Table containing matches
 
   # Maven
-  maven_dir: "/mnt/disks/data-spi3s-irradiance/MAVEN"  # Location
-  maven_lvl2_dir: "/mnt/disks/data-spi3s-irradiance/MAVEN/level2"  # Location
-  maven_lvl3_dir: "/mnt/disks/data-spi3s-irradiance/MAVEN/level3"  # Location
+  maven_dir: "/mnt/disks/data-spi3s-irradiance/raw/MAVEN"  # Location
+  maven_lvl2_dir: "/mnt/disks/data-spi3s-irradiance/raw/MAVEN/level2"  # Location
+  maven_lvl3_dir: "/mnt/disks/data-spi3s-irradiance/raw/MAVEN/level3"  # Location
   maven_lvl3_data: "mvn_euv_l3_daily.csv" # Data file
 
   # FISM
-  fismp_dir: "/mnt/disks/data-spi3s-irradiance/FISM-P"  # Location
+  fismp_dir: "/mnt/disks/data-spi3s-irradiance/raw/FISM-P"  # Location
   fismp_earth_data: "fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc"  # Data file
   fismp_mars_data: "fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc"  # Data file
-  fism2_dir: "/mnt/disks/data-spi3s-irradiance/FISM2"  # Location
+  fism2_dir: "/mnt/disks/data-spi3s-irradiance/raw/FISM2"  # Location
   fism2_type: ["daily_hr_data", "daily_bands", "flare_hr_data", flare_bands]  # Type of data
   fism2_version: "v02_01" # Version of data
   fism2_url: "https://lasp.colorado.edu/eve/data_access/eve_data/fism"
 
   # EUVI data
-  euvi_dir: "/mnt/disks/data-spi3s-irradiance/EUVI"  # Location
-  euvia_dir: "/mnt/disks/data-spi3s-irradiance/A"  # Location
-  euvib_dir: "/mnt/disks/data-spi3s-irradiance/B"  # Location
+  euvi_dir: "/mnt/disks/data-spi3s-irradiance/raw/EUVI"  # Location
+  euvia_dir: "/mnt/disks/data-spi3s-irradiance/raw/EUVI/A"  # Location
+  euvib_dir: "/mnt/disks/data-spi3s-irradiance/raw/EUVI/B"  # Location
   euvi_mission: "STEREO"
   # euvi_wl: ["171", "195", "284", "304"]  # Wavelengths
   euvi_wl: ["171", "193", "211", "304"]  # Wavelengths (ITI-translated)
@@ -62,12 +65,12 @@ data:
   euvi_stats: "stats.npz"  # Statistics of AIA data
 
   # EUI data
-  eui_dir: "/mnt/disks/data-spi3s-irradiance/EUI"  # Location
+  eui_dir: "/mnt/disks/data-spi3s-irradiance/raw/EUI"  # Location
   eui_mission: "SolO"
   eui_wl: ["171", "304"]  # Wavelengths
 
   # SUVI data
-  suvi_dir: "/mnt/disks/data-spi3s-irradiance/SUVI"  # Location
+  suvi_dir: "/mnt/disks/data-spi3s-irradiance/raw/SUVI"  # Location
   suvi_mission: "GOES"
   suvi_wl: ["94", "131", "171", "193", "211", "304"]  # Wavelengths
 
@@ -75,7 +78,7 @@ data:
 model:
   config_file: "/home/christophschirninger/2024-HL-SPI3S-MEGS-AI/megs_ai_2024_config.yaml"  # Path to the config file.
   # Checkpoint(s)
-  checkpoint_path: "/mnt/disks/megsai_data/MEGS_AI"  # Location
+  checkpoint_path: "/mnt/disks/data-spi3s-irradiance/checkpoints/MEGS_AI"  # Location
   checkpoint_file: "model"  # Filename to load checkpoint.
   # Instruments and corresponding wavelength indices
   # instruments: ["94", "131", "171", "193", "211", "304", "335", "1600", "1700", "AIA", "EUVI", "EUI", "SUVI"]

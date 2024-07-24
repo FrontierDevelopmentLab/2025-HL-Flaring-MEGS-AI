@@ -14,11 +14,11 @@ rule megsai_all:
         fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
         fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
         fism2_data = expand(f"{config['data']['fism2_dir']}/"+"{fism2_type}"+f"/FISM_2014001_{config['data']['fism2_version']}.sav", fism2_type=config['data']['fism2_type']),
-        eve_standardized = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
+        eve_standardized = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
                            f"{config['data']['eve_type']}_"+
                            f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
-        updated_matches_csv= f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                             f"{config['data']['aia_resolution']}/{config['data']['eve_type']}_"+
+        updated_matches_csv= f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                             f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
                              f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
         
 
@@ -120,7 +120,7 @@ rule generate_eve_netcdf:
         eve_file = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_L{config['data']['eve_level']}"+
                    "_2014001_008_01.fit.gz"
     output:
-        eve_data = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
                    f"{config['data']['eve_data']}"
     params:
         eve_type = config['data']['eve_type'],
@@ -143,9 +143,9 @@ rule generate_eve_netcdf:
 rule generate_matches_time:
     input:
         goes_data = config['data']['goes_dir']+"/"+config['data']['goes_data'],
-        eve_data = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
                    f"{config['data']['eve_data']}",
-        imager_dir= config['data']['aia_dir']
+        imager_dir = config['data']['aia_dir']
     output:
         matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
                       f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
@@ -170,19 +170,19 @@ rule generate_matches_time:
 ## Standardizes EVE data (for which matches were found) and generates statistics
 rule generate_eve_standardized:
     input:
-        eve_data = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
                    f"{config['data']['eve_data']}",
         matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
                       f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
     output:
-        eve_standardized = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
+        eve_standardized = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
                            f"{config['data']['eve_type']}_"+
                            f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
-        eve_stats = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
-                           f"{config['data']['eve_type']}_"+
-                           f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
+        eve_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                    f"{config['data']['eve_type']}_"+
+                    f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
     params:
-        matches_eve_dir = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}"
+        matches_eve_dir = f"{config['data']['matches_dir']}"
     shell:
         """
             mkdir -p {params.matches_eve_dir} &&
@@ -202,15 +202,14 @@ rule generate_imager_stacks:
     params:
         imager_resolution = config['data']['aia_resolution'],
         imager_reproject = config['data']['aia_reproject'],
-        matches_imager_dir = f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                             f"{config['data']['aia_resolution']}"
+        matches_imager_dir = f"{config['data']['matches_dir']}"
     output:
-        matches_csv = f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                      f"{config['data']['aia_resolution']}/{config['data']['eve_type']}_"+
+        matches_csv = f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                      f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
                       f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
-        imager_stats = f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                       f"{config['data']['aia_resolution']}/{config['data']['eve_type']}_"+
-                       f"{config['data']['eve_instrument']}_{config['data']['aia_stats']}"
+        imager_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                       f"{config['data']['aia_resolution']}_{config['data']['eve_type']}_"+
+                       f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
     shell:
         """
         mkdir -p {params.matches_imager_dir} &&
@@ -231,15 +230,15 @@ rule generate_imager_stacks:
 
 rule megsai_train:
     input:
-        matches_table = f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                        f"{config['data']['aia_resolution']}/{config['data']['eve_type']}_"+
+        matches_table = f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                        f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
                         f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
-        eve_converted_data = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
-                           f"{config['data']['eve_type']}_"+
-                           f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
-        eve_norm = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
-                   f"{config['data']['eve_type']}_"+
-                   f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
+        eve_converted_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                             f"{config['data']['eve_type']}_"+
+                             f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
+        eve_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                    f"{config['data']['eve_type']}_"+
+                    f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
     params:
         instrument = "{instrument}",
         config_file = config["model"]["config_file"],
@@ -257,6 +256,6 @@ rule megsai_train:
         -model {params.config_file} \
         -matches_table {input.matches_table} \
         -eve_data {input.eve_converted_data} \
-        -eve_norm {input.eve_norm} \
+        -eve_norm {input.eve_stats} \
         -instrument {params.instrument}
         """
