@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Irradiance train",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "${command:extension.commandvariable.file.relativeFileDotsNoExtension}",
+            "console": "integratedTerminal",
+            "cwd":"${workspaceFolder}",
+            "justMyCode": false,
+            "args": [
+              "-checkpoint", "/mnt/disks/debug_megsai.ckpt",
+              "-model", "/home/christophschirninger/2024-HL-SPI3S-MEGS-AI/megs_ai_2024_config.yaml",
+              "-matches_table", "/mnt/disks/data-spi3s-irradiance/matches/AIA_256/EVS_MEGS-A_matches.csv",
+              "-eve_data", "/mnt/disks/data-spi3s-irradiance/matches/EVE/EVS_MEGS-A_standardized.npy",
+              "-eve_norm", "/mnt/disks/data-spi3s-irradiance/matches/EVE/EVS_MEGS-A_stats.npy",
+              "-instrument", "AIA",
+            ]
+        }
+    ]
+}
