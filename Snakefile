@@ -9,7 +9,7 @@ configfile: "snakemake-config.yaml"
 rule megsai_all:
     input:
         # checkpoints = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt", instrument=config["model"]["instruments"]),
-        checkpoint = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]+".ckpt", instrument=config["model"]["instruments"]),
+        checkpoint = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"], instrument=config["model"]["instruments"]),
         maven_lvl3_data = f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
         fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
         fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
