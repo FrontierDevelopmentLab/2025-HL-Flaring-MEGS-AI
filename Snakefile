@@ -246,7 +246,7 @@ rule megsai_train:
         checkpoint_path = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}"
         #  checkpoint_file = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]
     output: 
-        checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]+".ckpt"
+        checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]
     resources:
         nvidia_gpu = 1
     shell:
