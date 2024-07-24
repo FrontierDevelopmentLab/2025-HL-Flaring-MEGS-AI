@@ -27,7 +27,7 @@ def standardize_stack(data_zip):
     stack_mean = np.mean(stack, axis=(1, 2))
     stack_std = np.std(stack, axis=(1, 2))
 
-    if (stack_mean - mean) < 2*stack_std:
+    if (np.abs(stack_mean - mean) < 2*stack_std).all():
         np.save(stack_file, stack)
         return stack_file
     else:
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     bad_matches =  matches[bad_stacks, :]
     matches = matches[good_stacks, :]
     matches = matches.reset_index()
-
+å
     print('Bad stacks: ', bad_stacks)
 
     matches.to_csv(matches_output, index=False)
