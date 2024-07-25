@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     # Stacks
     print('Saving stacks')
-    data = np.stack(process_map(load_map_stack, imager_files, max_workers=8, chunksize=5,
+    data = np.stack(process_map(load_map_stack, imager_files, chunksize=5,
                                 total=len(imager_files)))
     imager_min = np.min(data, axis=(0, 2, 3), keepdims=False)
     imager_max = np.max(data, axis=(0, 2, 3), keepdims=False)
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
     standardization_output = process_map(standardize_stack, zip(converted_file_paths,
                                        [imager_mean[:, None, None]] * len(converted_file_paths),
-                                       [imager_std[:, None, None]] * len(converted_file_paths)), max_workers=8, chunksize=5)
+                                       [imager_std[:, None, None]] * len(converted_file_paths)), chunksize=5)
 
     good_stacks = [file for file in standardization_output if 'problem' not in file]
     bad_stacks = [file for file in standardization_output if 'problem' in file]
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     bad_matches =  matches[bad_stacks, :]
     matches = matches[good_stacks, :]
     matches = matches.reset_index()
-å
+
     print('Bad stacks: ', bad_stacks)
 
     matches.to_csv(matches_output, index=False)
