@@ -7,39 +7,7 @@ from datetime import datetime
 import numpy as np
 import wget
 from tqdm import tqdm
-
-
-def datetime_to_eve_format(date_str):
-    """Convert datetime object to EVE filename format.
-
-    Parameters
-    ----------
-    date_str: str. Date in format YYYY-MM-DDTHH:MM:SS to convert
-              to datetime object and then to EVE filename format.
-
-    Returns
-    -------
-    tuple. Year, day of year, hour, minute.
-    """
-    dt = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S')
-    return dt.year, dt.timetuple().tm_yday, dt.hour, dt.minute
-
-
-def query_url(url, pattern):
-    """Query a URL and return the HTML content. Parse text for data.
-
-    Parameters
-    ----------
-    url: str. URL to query.
-
-    Returns
-    -------
-    List. Relevant content of the URL.
-    """
-    result = requests.get(url)
-    soup = BeautifulSoup(result.text, 'html.parser')
-    query = [a.get('href').replace('/', '') for a in soup.find_all(href=re.compile(pattern))]
-    return query
+from irradiance.data.download_eve import datetime_to_eve_format, query_url
 
 
 if __name__ == "__main__":
