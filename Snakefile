@@ -201,7 +201,7 @@ rule generate_imager_stacks:
     params:
         imager_resolution = config['data']['aia_resolution'],
         imager_reproject = config['data']['aia_reproject'],
-        matches_imager_dir = f"{config['data']['matches_dir']}"
+        matches_imager_dir = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_aia_subdir']}_{config['data']['aia_resolution']}"
     output:
         matches_csv = f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
                       f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+

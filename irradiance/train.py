@@ -112,6 +112,7 @@ for parameter_set in combined_parameters:
             wb_name = f"{instrument}_{n}"
         else:
             wb_name = os.path.basename(checkpoint)
+        wb_name = 'linear_baseline'
         wandb_logger = WandbLogger(entity=config_data['wandb']['entity'],
                                 project=config_data['wandb']['project'],                            
                                 #group=config_data['wandb']['group'],
