@@ -1,13 +1,9 @@
 import torch
-import torchvision
 from torch import nn
 from torch.nn import HuberLoss
-from irradiance.models.base_model import c
 from irradiance.models.base_model import BaseModel
 from irradiance.models.efficientnet import EfficientnetIrradiance
-from irradiance.models.model import ChoppedAlexnetBN
-
-
+from irradiance.models.chopped_alexnet import ChoppedAlexnet
 class LinearIrradianceModel(BaseModel):
 
     def __init__(self, d_input, d_output, eve_norm, loss_func= HuberLoss()):
@@ -50,7 +46,7 @@ class HybridIrradianceModel(BaseModel):
         self.cnn_model = None
         self.cnn_lambda = 1.
         if cnn_model == 'resnet':
-            self.cnn_model = ChoppedAlexnetBN(d_input, d_output, eve_norm)
+            self.cnn_model = ChoppedAlexnet(d_input, d_output, eve_norm)
         elif cnn_model in efficientnets:
             self.cnn_model = EfficientnetIrradiance(d_input, d_output, eve_norm, model=cnn_model, dp=cnn_dp)
 

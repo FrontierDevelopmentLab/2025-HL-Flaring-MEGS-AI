@@ -9,6 +9,7 @@ import albumentations as A
 import argparse
 import numpy as np
 import torch
+import torch.nn.functional as F
 from albumentations.pytorch import ToTensorV2
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
@@ -16,7 +17,10 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 
 from pathlib import Path
 
-from irradiance.models.model import IrradianceModel, ChoppedAlexnetBN, LinearIrradianceModel, HybridIrradianceModel
+from irradiance.models.efficientnet import EfficientnetIrradiance
+from irradiance.models.chopped_alexnet import ChoppedAlexnet
+from irradiance.models.kan_success import FastKANIrradiance
+from irradiance.models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from irradiance.utilities.callback import ImagePredictionLogger
 from irradiance.utilities.data_loader import IrradianceDataModule
 
@@ -89,10 +93,20 @@ for parameter_set in combined_parameters:
                                            holdout_months=run_config['holdout_months'])
         data_loader.setup()
         # Initalize model
-        model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
-                                      d_output=eve_norm.shape[1], 
-                                      eve_norm=eve_norm)
+        #model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
+        #                              d_output=eve_norm.shape[1], 
+        #                              eve_norm=eve_norm)
 
+        model = FastKANIrradiance(eve_norm=eve_norm, 
+                                    layers_hidden=[len(run_config[instrument]), 128, 64, eve_norm.shape[1]],
+                                    grid_min = -2.,
+                                    grid_max = 2.,
+                                    num_grids = 8,
+                                    use_base_updat = True,
+                                    base_activation = F.silu,
+                                    spline_weight_init_scale = 0.1, 
+                                  )
+        
         # Initialize logger
         if len(combined_parameters) > 1:
             wb_name = f"{instrument}_{n}"
