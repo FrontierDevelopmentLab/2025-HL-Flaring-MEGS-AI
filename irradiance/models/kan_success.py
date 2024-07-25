@@ -14,14 +14,11 @@
 
 
 import torch
-import sys
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 from typing import *
-from pytorch_lightning import LightningModule
 from torch.nn import HuberLoss
-from irradiance.models.model import unnormalize
+from irradiance.models.base_model import BaseModel
 
 
 class SplineLinear(nn.Linear):
@@ -121,9 +118,10 @@ class FastKANLayer(nn.Module):
         return x, y
 
 
-class FastKAN(nn.Module):
+class FastKANIrradiance(BaseModel):
     def __init__(
         self,
+        eve_norm,
         layers_hidden: List[int],
         grid_min: float = -2.,
         grid_max: float = 2.,
@@ -131,8 +129,8 @@ class FastKAN(nn.Module):
         use_base_update: bool = True,
         base_activation = F.silu,
         spline_weight_init_scale: float = 0.1,
+        loss_func = HuberLoss(),
     ) -> None:
-        super().__init__()
         self.layers = nn.ModuleList([
             FastKANLayer(
                 in_dim, out_dim,
@@ -144,6 +142,7 @@ class FastKAN(nn.Module):
                 spline_weight_init_scale=spline_weight_init_scale,
             ) for in_dim, out_dim in zip(layers_hidden[:-1], layers_hidden[1:])
         ])
+        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func)
 
     def forward(self, x):
         for layer in self.layers:
@@ -206,97 +205,3 @@ class AttentionWithFastKANTransform(nn.Module):
         # merge heads
         o = self.linear_o(o)
         return o
-
-
-
-class KanIrradianceModel(LightningModule):
-
-    def __init__(self, d_input, d_output, eve_norm):
-        super().__init__()
-        self.eve_norm = eve_norm
-        self.n_channels = d_input
-        self.outSize = d_output        
-
-        self.model = nn.Linear(2*self.n_channels, self.outSize) #TODO: insert KAN model
-        self.loss_func = HuberLoss() # consider MSE
-
-    def forward(self, x):
-        mean_irradiance = torch.torch.mean(x, dim=(2,3))
-        std_irradiance = torch.torch.std(x, dim=(2,3))
-        x = self.model(torch.cat((mean_irradiance, std_irradiance), dim=1))
-        return x
-
-    def forward_unnormalize(self, x):
-        mean_irradiance = torch.torch.mean(x, dim=(2,3))
-        std_irradiance = torch.torch.std(x, dim=(2,3))
-        x = self.model(torch.cat((mean_irradiance, std_irradiance), dim=1))
-        return unnormalize(x, self.eve_norm)
-        
-    def training_step(self, batch, batch_nb):
-        x, y = batch
-        y_pred = self(x)
-        loss = self.loss_func(y_pred, y)
-
-        y = unnormalize(y, self.eve_norm)
-        y_pred = unnormalize(y_pred, self.eve_norm)
-
-        epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_RAE", rae.mean(), on_epoch=True, prog_bar=True, logger=True)
-        return loss
-
-    def validation_step(self, batch, batch_nb):
-        x, y = batch
-        y_pred = self(x)
-        loss = self.loss_func(y_pred, y)
-
-        y = unnormalize(y, self.eve_norm) 
-        y_pred = unnormalize(y_pred, self.eve_norm)
-
-        #computing relative absolute error
-        epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
-        av_rae = rae.mean()
-        av_rae_wl = rae.mean(0)
-        # compute average cross-correlation
-        cc = torch.tensor([torch.corrcoef(torch.stack([y[i], y_pred[i]]))[0, 1] for i in range(y.shape[0])]).mean()
-        # mean absolute error
-        mae = torch.abs(y - y_pred).mean()
-
-        self.log("valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_RAE", av_rae, on_epoch=True, prog_bar=True, logger=True)
-        [self.log(f"valid_RAE_{i}", err, on_epoch=True, prog_bar=True, logger=True) for i, err in enumerate(av_rae_wl)]
-        self.log("valid_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
-
-        return loss
-
-    def test_step(self, batch, batch_nb):
-        x, y = batch
-        y_pred = self(x)
-        loss = self.loss_func(y_pred, y)
-
-        y = unnormalize(y, self.eve_norm) 
-        y_pred = unnormalize(y_pred, self.eve_norm)
-
-        #computing relative absolute error
-        epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
-        av_rae = rae.mean()
-        av_rae_wl = rae.mean(0)
-        # compute average cross-correlation
-        cc = torch.tensor([torch.corrcoef(torch.stack([y[i], y_pred[i]]))[0, 1] for i in range(y.shape[0])]).mean()
-        # mean absolute error
-        mae = torch.abs(y - y_pred).mean()
-
-        self.log("valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_RAE", av_rae, on_epoch=True, prog_bar=True, logger=True)
-        [self.log(f"valid_RAE_{i}", err, on_epoch=True, prog_bar=True, logger=True) for i, err in enumerate(av_rae_wl)]
-        self.log("valid_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
-
-        return loss
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-2)
