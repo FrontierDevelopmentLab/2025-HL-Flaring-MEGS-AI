@@ -131,8 +131,11 @@ if __name__ == "__main__":
                         default='/mnt/disks/data-spi3s-irradiance/EVE',
                         help='Specify where data is stored locally')
     parser.add_argument('-save_dir', type=str,
-                        default='/mnt/disks/data-spi3s-irradiance/EVE',
-                        help='Specify where to store data')
+                        default=None,
+                        help='Specify where to store data using a path to a folder.  Creates automatic naming.')
+    parser.add_argument('-save_path', type=str,
+                        default=None,
+                        help='Specify the file where to store the data, overrides any automatic generation of paths')                        
     args = parser.parse_args()
 
     # TODO: Modify for EVL dataset
@@ -147,6 +150,14 @@ if __name__ == "__main__":
     data_revision = args.revision
     data_dir = args.data_dir
     save_dir = args.save_dir
+    save_path = args.save_path
+
+    if save_dir is None and save_path is None:
+        raise Exception("Either save_dir or save_path must be specified.")
+    
+    megs_output_path = None
+    if save_path is not None:
+        megs_output_path = save_path
 
     # Wavelengths - MEGS-A
     wl_megsa_start, wl_megsa_end = 5.77, 33.33
@@ -195,8 +206,9 @@ if __name__ == "__main__":
 
                 # Create netcdf file
                 if i == len(eve_files) - 1:
-                    megs_a_path = os.path.join(save_dir, f'{data_type}_MEGS-A_irradiance.nc')
-                    write_netcdf(megs_a_path, irr_megsa, t_megsa, wl_megsa)
+                    if megs_output_path is None:
+                        megs_output_path = os.path.join(save_dir, f'{data_type}_MEGS-A_irradiance.nc')
+                    write_netcdf(megs_output_path, irr_megsa, t_megsa, wl_megsa)
 
             # Check if MEGS-B data is available and if user wants to save it
             if 'MEGS-B' in data_instrument and len(t_megsb_i) > 0:
@@ -205,8 +217,9 @@ if __name__ == "__main__":
 
                 # Create netcdf file
                 if i == len(eve_files) - 1:
-                    megs_b_path = os.path.join(save_dir, f'{data_type}_MEGS-B_irradiance.nc')
-                    write_netcdf(megs_b_path, irr_megsb, t_megsb, wl_megsb)
+                    if megs_output_path is None:
+                        megs_output_path = os.path.join(save_dir, f'{data_type}_MEGS-B_irradiance.nc')
+                    write_netcdf(megs_output_path, irr_megsb, t_megsb, wl_megsb)
 
             # Identify overlap between MEGS-A and MEGS-B
             t_megsab_i = np.intersect1d(t_megsa_i, t_megsb_i)
@@ -222,8 +235,9 @@ if __name__ == "__main__":
 
                 # Create netcdf file
                 if i == len(eve_files) - 1:
-                    megs_ab_path = os.path.join(save_dir, f'{data_type}_MEGS-AB_irradiance.nc')
-                    write_netcdf(megs_ab_path, irr_megsab, t_megsab, np.concatenate([wl_megsa, wl_megsb]))
+                    if megs_output_path is None:
+                        megs_output_path = os.path.join(save_dir, f'{data_type}_MEGS-AB_irradiance.nc')
+                    write_netcdf(megs_output_path, irr_megsab, t_megsab, np.concatenate([wl_megsa, wl_megsb]))
 
             # Release memory
             irr_megsa_i = None

@@ -126,7 +126,6 @@ rule generate_eve_netcdf:
         eve_type = config['data']['eve_type'],
         eve_level = config['data']['eve_level'],
         eve_instrument = config['data']['eve_instrument'],
-        output_dir = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}"
     shell:
         """
         python -m irradiance.preprocess.generate_eve_netcdf \
@@ -136,7 +135,7 @@ rule generate_eve_netcdf:
         -level {params.eve_level} \
         -instrument {params.eve_instrument} \
         -data_dir {input.eve_dir} \
-        -save_dir {params.output_dir}
+        -save_path {output.eve_data}
         """  
 
 ## Generates matches in time between EVE data and AIA data
