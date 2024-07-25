@@ -16,9 +16,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 
 from pathlib import Path
 
-from s4pi.irradiance.models.model import IrradianceModel, ChoppedAlexnetBN, LinearIrradianceModel, HybridIrradianceModel
-from s4pi.irradiance.utilities.callback import ImagePredictionLogger
-from s4pi.irradiance.utilities.data_loader import IrradianceDataModule
+from irradiance.models.model import IrradianceModel, ChoppedAlexnetBN, LinearIrradianceModel, HybridIrradianceModel
+from irradiance.utilities.callback import ImagePredictionLogger
+from irradiance.utilities.data_loader import IrradianceDataModule
 
 # Parser
 parser = argparse.ArgumentParser()
@@ -31,7 +31,7 @@ parser.add_argument('-eve_data', type=str, default="/mnt/disks/preprocessed_data
                     help='Path to converted SDO/EVE data.')
 parser.add_argument('-eve_norm', type=str, default="/mnt/disks/preprocessed_data/EVE/megsa_normalization.npy",
                     help='Path to converted SDO/EVE normalization.')
-parser.add_argument('-eve_wl', type=str, default="/mnt/disks/preprocessed_data/EVE/megsa_wl_names.npy",
+parser.add_argument('-eve_wl', type=str, default=None,
                     help='Path to SDO/EVE wavelength names.')
 parser.add_argument('-instrument', type=str, required=True, 
                     help='Instrument wavelengths to use as input.')
@@ -88,24 +88,19 @@ for parameter_set in combined_parameters:
                                            test_months=run_config['test_months'],
                                            holdout_months=run_config['holdout_months'])
         data_loader.setup()
-
         # Initalize model
-        model = HybridIrradianceModel(d_input=len(run_config[instrument]), 
-                                      d_output=14, 
-                                      eve_norm=eve_norm, 
-                                      cnn_model=run_config['cnn_model'], 
-                                      ln_model=run_config['ln_model'],
-                                      cnn_dp=run_config['cnn_dp'],
-                                      lr=run_config['lr'])
+        model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
+                                      d_output=eve_norm.shape[1], 
+                                      eve_norm=eve_norm)
 
         # Initialize logger
         if len(combined_parameters) > 1:
             wb_name = f"{instrument}_{n}"
         else:
-            wb_name = instrument
+            wb_name = os.path.basename(checkpoint)
         wandb_logger = WandbLogger(entity=config_data['wandb']['entity'],
                                 project=config_data['wandb']['project'],                            
-                                group=config_data['wandb']['group'],
+                                #group=config_data['wandb']['group'],
                                 job_type=config_data['wandb']['job_type'],
                                 tags=config_data['wandb']['tags'],
                                 name=wb_name,
@@ -117,7 +112,8 @@ for parameter_set in combined_parameters:
         plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, total_n_valid // 4)]
         plot_images = torch.stack([image for image, eve in plot_data])
         plot_eve = torch.stack([eve for image, eve in plot_data])
-        eve_wl = np.load(eve_wl, allow_pickle=True)
+        if eve_wl is not None:
+            eve_wl = np.load(eve_wl, allow_pickle=True)
         image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
 
         # Checkpoint callback

@@ -9,14 +9,17 @@ configfile: "snakemake-config.yaml"
 rule megsai_all:
     input:
         # checkpoints = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt", instrument=config["model"]["instruments"]),
-        maven_lvl3_data= f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
-        fismp_earth_data= f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
-        fismp_mars_data=f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
-        eve_standardized = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
+        checkpoint = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"], instrument=config["model"]["instruments"]),
+        maven_lvl3_data = f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
+        fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
+        fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
+        fism2_data = expand(f"{config['data']['fism2_dir']}/"+"{fism2_type}"+f"/FISM_2014001_{config['data']['fism2_version']}.sav", fism2_type=config['data']['fism2_type']),
+        eve_standardized = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
                            f"{config['data']['eve_type']}_"+
                            f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
-        updated_matches_csv= f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                             f"{config['data']['aia_resolution']}/{config['data']['matches_csv']}"
+        updated_matches_csv= f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                             f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
+                             f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
         
 
 # Draw the DAG of the pipeline
@@ -77,19 +80,37 @@ rule download_maven_data:
         gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/MAVEN/level3/mvn_euv_l3_daily.csv {output.maven_lvl3_data}
         """
 
-rule download_fism_data:
+rule download_fismp_data:
     output:
         fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
         fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}"
     params:
-        fismp_dir = config['data']['fismp_dir'],
-        fism2_dir = config['data']['fism2_dir']
+        fismp_dir = config['data']['fismp_dir']
     shell:
         """
         mkdir -p {params.fismp_dir} && 
-        mkdir -p {params.fism2_dir} &&
         gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_earth_data} && 
         gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_mars_data}
+        """
+
+rule download_fism2_data:
+    output:
+        fism2_data = f"{config['data']['fism2_dir']}/"+"{fism2_type}"+f"/FISM_2014001_{config['data']['fism2_version']}.sav"
+    params:
+        fism2_dir = config['data']['fism2_dir'],
+        fism2_type = "{fism2_type}",
+        fism2_version = config['data']['fism2_version'],
+        fism2_url = config['data']['fism2_url']
+    shell:
+        """
+        mkdir -p {params.fism2_dir} &&
+        python -m irradiance.data.download_fism2 \
+        -start 2010-01-01T00:00:00 \
+        -end   2014-05-10T23:59:59 \
+        -type {params.fism2_type} \
+        -version {params.fism2_version} \
+        -url {params.fism2_url} \
+        -save_dir {params.fism2_dir}
         """
 
 ## Generate CDF file containing EVE irradiance data
@@ -99,7 +120,7 @@ rule generate_eve_netcdf:
         eve_file = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_L{config['data']['eve_level']}"+
                    "_2014001_008_01.fit.gz"
     output:
-        eve_data = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
                    f"{config['data']['eve_data']}"
     params:
         eve_type = config['data']['eve_type'],
@@ -122,9 +143,9 @@ rule generate_eve_netcdf:
 rule generate_matches_time:
     input:
         goes_data = config['data']['goes_dir']+"/"+config['data']['goes_data'],
-        eve_data = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
                    f"{config['data']['eve_data']}",
-        imager_dir= config['data']['aia_dir']
+        imager_dir = config['data']['aia_dir']
     output:
         matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
                       f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
@@ -149,19 +170,19 @@ rule generate_matches_time:
 ## Standardizes EVE data (for which matches were found) and generates statistics
 rule generate_eve_standardized:
     input:
-        eve_data = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
                    f"{config['data']['eve_data']}",
         matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
                       f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
     output:
-        eve_standardized = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
+        eve_standardized = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
                            f"{config['data']['eve_type']}_"+
                            f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
-        eve_stats = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}/"+
-                           f"{config['data']['eve_type']}_"+
-                           f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
+        eve_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                    f"{config['data']['eve_type']}_"+
+                    f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
     params:
-        matches_eve_dir = f"{config['data']['matches_dir']}/{config['data']['matches_eve_subdir']}"
+        matches_eve_dir = f"{config['data']['matches_dir']}"
     shell:
         """
             mkdir -p {params.matches_eve_dir} &&
@@ -181,13 +202,14 @@ rule generate_imager_stacks:
     params:
         imager_resolution = config['data']['aia_resolution'],
         imager_reproject = config['data']['aia_reproject'],
-        matches_imager_dir = f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                             f"{config['data']['aia_resolution']}"
+        matches_imager_dir = f"{config['data']['matches_dir']}"
     output:
-        matches_csv = f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                      f"{config['data']['aia_resolution']}/{config['data']['matches_csv']}",
-        imager_stats = f"{config['data']['matches_dir']}/{config['data']['matches_aia_subdir']}_"+
-                       f"{config['data']['aia_resolution']}/{config['data']['aia_stats']}"
+        matches_csv = f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                      f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
+                      f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
+        imager_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                       f"{config['data']['aia_resolution']}_{config['data']['eve_type']}_"+
+                       f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
     shell:
         """
         mkdir -p {params.matches_imager_dir} &&
@@ -206,30 +228,34 @@ rule generate_imager_stacks:
 # TRAIN & TEST MODEL
 #########################################################################################################
 
-#rule megsai_train:
-#    input:
-#        matches_table = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_table"],
-#         eve_converted_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_converted_data"],
-#        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-#         eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"]
-#     params:
-#         instrument = "{instrument}",
-#         config_file = config["model"]["config_file"],
-#         checkpoint_path = config["model"]["checkpoint_path"]+"/{instrument}",
-#         checkpoint_file = config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]
-#     output: 
-#         checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt"
-#     resources:
-#         nvidia_gpu = 1
-#     shell:
-#         """
-#         mkdir -p {params.checkpoint_path} &&
-#         python -m s4pi.irradiance.train \
-#         -checkpoint {params.checkpoint_file} \
-#         -model {params.config_file} \
-#         -matches_table {input.matches_table} \
-#         -eve_data {input.eve_converted_data} \
-#         -eve_norm {input.eve_norm} \
-#         -eve_wl {input.eve_wl} \
-#         -instrument {params.instrument}
-#         """
+rule megsai_train:
+    input:
+        matches_table = f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                        f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
+                        f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
+        eve_converted_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                             f"{config['data']['eve_type']}_"+
+                             f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
+        eve_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                    f"{config['data']['eve_type']}_"+
+                    f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
+    params:
+        instrument = "{instrument}",
+        config_file = config["model"]["config_file"],
+        checkpoint_path = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}"
+        #  checkpoint_file = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]
+    output: 
+        checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]
+    resources:
+        nvidia_gpu = 1
+    shell:
+        """
+        mkdir -p {params.checkpoint_path} &&
+        python -m irradiance.train \
+        -checkpoint {output.checkpoint} \
+        -model {params.config_file} \
+        -matches_table {input.matches_table} \
+        -eve_data {input.eve_converted_data} \
+        -eve_norm {input.eve_stats} \
+        -instrument {params.instrument}
+        """

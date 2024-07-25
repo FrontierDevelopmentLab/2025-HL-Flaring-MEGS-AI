@@ -24,8 +24,14 @@ def standardize_stack(data_zip):
     mean = data_zip[1]
     std = data_zip[2]
     stack = (np.load(stack_file) - mean) / std
-    np.save(stack_file, stack)
-    return
+    stack_mean = np.mean(stack, axis=(1, 2))
+    stack_std = np.std(stack, axis=(1, 2))
+
+    if (np.abs(stack_mean - mean) < 2*stack_std).all():
+        np.save(stack_file, stack)
+        return stack_file
+    else:
+        return f'problem with {stack_file}'
 
 
 def load_map_stack(imager_stack):
@@ -126,11 +132,23 @@ if __name__ == "__main__":
     stats['AIA'] = {'mean': imager_mean, 'std': imager_std, 'min': imager_min, 'max': imager_max}
     data = None
 
-    process_map(standardize_stack, zip(converted_file_paths,
+    standardization_output = process_map(standardize_stack, zip(converted_file_paths,
                                        [imager_mean[:, None, None]] * len(converted_file_paths),
                                        [imager_std[:, None, None]] * len(converted_file_paths)), max_workers=8, chunksize=5)
+
+    good_stacks = [file for file in standardization_output if 'problem' not in file]
+    bad_stacks = [file for file in standardization_output if 'problem' in file]
 
     print('Saving Matches')
     np.savez(imager_stats, **stats)
     matches['aia_stack'] = converted_file_paths
+    
+    matches = matches.set_index('aia_stack')
+    bad_matches =  matches[bad_stacks, :]
+    matches = matches[good_stacks, :]
+    matches = matches.reset_index()
+å
+    print('Bad stacks: ', bad_stacks)
+
     matches.to_csv(matches_output, index=False)
+    bad_matches.to_csv(matches_output +'_bad.csv', index=False)
