@@ -126,7 +126,7 @@ rule generate_eve_netcdf:
         eve_type = config['data']['eve_type'],
         eve_level = config['data']['eve_level'],
         eve_instrument = config['data']['eve_instrument'],
-        output_dir = config['data']['eve_dir']
+        output_dir = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}"
     shell:
         """
         python -m irradiance.preprocess.generate_eve_netcdf \
