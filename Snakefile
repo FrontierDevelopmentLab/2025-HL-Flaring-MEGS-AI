@@ -208,7 +208,7 @@ rule generate_imager_stacks:
                       f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
         imager_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_aia_subdir']}_"+
                        f"{config['data']['aia_resolution']}_{config['data']['eve_type']}_"+
-                       f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
+                       f"{config['data']['eve_instrument']}_{config['data']['aia_stats']}"
     shell:
         """
         mkdir -p {params.matches_imager_dir} &&
