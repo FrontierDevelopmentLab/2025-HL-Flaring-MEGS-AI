@@ -33,6 +33,7 @@ class HybridIrradianceModel(BaseModel):
                  lr=1e-4, 
                  cnn_dp=0.75, 
                  loss_func= HuberLoss()):
+        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
         self.n_channels = d_input
         self.outSize = d_output
         self.ln_params = ln_params  
@@ -60,8 +61,7 @@ class HybridIrradianceModel(BaseModel):
         if self.ln_model is None and self.cnn_model is None:
             raise ValueError('Please pass at least one model.')
 
-        # Loss function
-        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
+
 
     def forward(self, x):
         # Hybrid model
