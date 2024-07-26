@@ -14,10 +14,10 @@
             "justMyCode": false,
             "args": [
               "-checkpoint", "/mnt/disks/debug_megsai.ckpt",
-              "-model", "/home/christophschirninger/2024-HL-SPI3S-MEGS-AI/megs_ai_2024_config.yaml",
-              "-matches_table", "/mnt/disks/data-spi3s-irradiance/matches/AIA_256/EVS_MEGS-A_matches.csv",
-              "-eve_data", "/mnt/disks/data-spi3s-irradiance/matches/EVE/EVS_MEGS-A_standardized.npy",
-              "-eve_norm", "/mnt/disks/data-spi3s-irradiance/matches/EVE/EVS_MEGS-A_stats.npy",
+              "-model", "/home/andres_munoz_j/2024-HL-SPI3S-MEGS-AI/megs_ai_2024_config.yaml",
+              "-matches_table", "/mnt/disks/data-extended/matches/AIA_256_stacks_EVS_MEGS-A_matches.csv",
+              "-eve_data", "/mnt/disks/data-extended/preprocessed/EVE/EVS_MEGS-A_standardized.npy",
+              "-eve_norm", "/mnt/disks/data-extended/preprocessed/EVE/EVS_MEGS-A_stats.npy",
               "-instrument", "AIA",
             ]
         }
