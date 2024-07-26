@@ -1,0 +1,16 @@
+sunpy[all]
+git+https://github.com/RobertJaro/InstrumentToInstrument.git
+snakemake
+wandb
+pytorch-lightning
+pandas
+netCDF4
+matplotlib
+scikit-learn
+torch
+torchvision
+torchaudio
+validators
+albumentations
+opencv-python
+spicepy
