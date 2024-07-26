@@ -2,13 +2,13 @@
 model:
   # Linear model architecture
   ln_model: [True]  # Use a linear model or not.
-  ln_epochs: [100]  # Linear model epochs
+  ln_epochs: [50]  # Linear model epochs
   ln_lr: [1.e-2]  # Linear model Learning rate
   # CNN architecture
   cnn_model: ['efficientnet_b3']  # Choice of CNN model
   cnn_lr: [1.e-4]  # CNN model learning rate
   cnn_dp: [0.75]  # CNN model dropout rate
-  cnn_epochs: [100]  # CNN model epochs.
+  cnn_epochs: [50]  # CNN model epochs.
   # Hybrid model architecture
   hybrid_loop: [False]  # Use a linear model or not.
   # General training parameters
