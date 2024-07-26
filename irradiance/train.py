@@ -93,7 +93,7 @@ for parameter_set in combined_parameters:
                                            holdout_months=run_config['holdout_months'])
         data_loader.setup()
         # Initalize model
-        #model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
+        # model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
         #                              d_output=eve_norm.shape[1], 
         #                              eve_norm=eve_norm)
 
@@ -102,7 +102,7 @@ for parameter_set in combined_parameters:
                                     grid_min = -2.,
                                     grid_max = 2.,
                                     num_grids = 8,
-                                    use_base_updat = True,
+                                    use_base_update = True,
                                     base_activation = F.silu,
                                     spline_weight_init_scale = 0.1, 
                                   )
@@ -112,7 +112,11 @@ for parameter_set in combined_parameters:
             wb_name = f"{instrument}_{n}"
         else:
             wb_name = os.path.basename(checkpoint)
+
+        ########################################################################################################
         wb_name = 'linear_baseline'
+        ########################################################################################################
+        
         wandb_logger = WandbLogger(entity=config_data['wandb']['entity'],
                                 project=config_data['wandb']['project'],                            
                                 #group=config_data['wandb']['group'],
