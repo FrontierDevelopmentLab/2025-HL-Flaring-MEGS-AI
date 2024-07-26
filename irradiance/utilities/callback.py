@@ -86,7 +86,7 @@ class ImagePredictionLogger(Callback):
                 for j in range(ncols):
                     if n_plots < n_aia_wavelengths: 
                         ax = fig.add_subplot(gs[s*nrows+i, j])
-                        ax.imshow(val_imgs[s, i*ncols+j], cmap = plt.get_cmap(cmaps[i*ncols+j]), origin='lower', vmin=0, vmax=1)
+                        ax.imshow(val_imgs[s, i*ncols+j], cmap = plt.get_cmap(cmaps[i*ncols+j]), origin='lower')
                         ax.text(0.01, 0.99, cmaps[i*ncols+j], horizontalalignment='left', verticalalignment='top', color = 'w', transform=ax.transAxes)
                         ax.set_axis_off()
                         n_plots += 1
