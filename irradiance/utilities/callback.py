@@ -2,11 +2,16 @@ import wandb
 from pytorch_lightning import Callback
 import matplotlib.pyplot as plt
 import numpy as np
-
-from irradiance.models.model import unnormalize
+import torch
 
 # Custom Callback
 
+def unnormalize(y, eve_norm):
+    eve_norm = torch.tensor(eve_norm).float()
+    norm_mean = eve_norm[0]
+    norm_stdev = eve_norm[1]
+    y = y * norm_stdev[None].to(y) + norm_mean[None].to(y)
+    return y
 
 class ImagePredictionLogger(Callback):
     def __init__(self, val_imgs, val_eve, names, aia_wavelengths):
