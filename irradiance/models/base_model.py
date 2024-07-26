@@ -10,11 +10,12 @@ from albumentations.pytorch import ToTensorV2
 
 class BaseModel(LightningModule):
 
-    def __init__(self, eve_norm, model, loss_func=HuberLoss()):
+    def __init__(self, eve_norm, model, loss_func=HuberLoss(), lr=1e-4):
         super().__init__()
         self.eve_norm = eve_norm
         self.loss_func = loss_func
         self.model = model
+        self.lr = lr
 
     def forward(self, x):
         raise NotImplementedError("Forward method not implemented, please implement it in the child class.")
@@ -90,9 +91,9 @@ class BaseModel(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-4)
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
-    def unnormalize(y, eve_norm):
+    def unnormalize(self, y, eve_norm):
         eve_norm = torch.tensor(eve_norm).float()
         norm_mean = eve_norm[0]
         norm_stdev = eve_norm[1]

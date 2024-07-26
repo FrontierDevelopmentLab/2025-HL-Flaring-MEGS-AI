@@ -6,27 +6,33 @@ from irradiance.models.efficientnet import EfficientnetIrradiance
 from irradiance.models.chopped_alexnet import ChoppedAlexnet
 class LinearIrradianceModel(BaseModel):
 
-    def __init__(self, d_input, d_output, eve_norm, loss_func= HuberLoss()):
+    def __init__(self, d_input, d_output, eve_norm, loss_func= HuberLoss(), lr=1e-2):
 
         self.n_channels = d_input
         self.outSize = d_output        
 
         model = nn.Linear(2*self.n_channels, self.outSize)
-        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func)
+        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
 
     def forward(self, x):
         mean_irradiance = torch.torch.mean(x, dim=(2,3))
         std_irradiance = torch.torch.std(x, dim=(2,3))
         x = self.model(torch.cat((mean_irradiance, std_irradiance), dim=1))
         return x
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-2)
     
 
 class HybridIrradianceModel(BaseModel):
 
-    def __init__(self, d_input, d_output, eve_norm, cnn_model='resnet', ln_model=True, ln_params=None, lr=1e-4, cnn_dp=0.75, loss_func= HuberLoss()):
+    def __init__(self, 
+                 d_input, 
+                 d_output, 
+                 eve_norm, 
+                 cnn_model='resnet', 
+                 ln_model=True, 
+                 ln_params=None, 
+                 lr=1e-4, 
+                 cnn_dp=0.75, 
+                 loss_func= HuberLoss()):
         self.n_channels = d_input
         self.outSize = d_output
         self.ln_params = ln_params  
@@ -55,7 +61,7 @@ class HybridIrradianceModel(BaseModel):
             raise ValueError('Please pass at least one model.')
 
         # Loss function
-        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func)
+        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
 
     def forward(self, x):
         # Hybrid model

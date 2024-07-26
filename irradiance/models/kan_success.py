@@ -130,7 +130,9 @@ class FastKANIrradiance(BaseModel):
         base_activation = F.silu,
         spline_weight_init_scale: float = 0.1,
         loss_func = HuberLoss(),
+        lr=1e-4        
     ) -> None:
+        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
         self.layers = nn.ModuleList([
             FastKANLayer(
                 in_dim, out_dim,
@@ -142,9 +144,9 @@ class FastKANIrradiance(BaseModel):
                 spline_weight_init_scale=spline_weight_init_scale,
             ) for in_dim, out_dim in zip(layers_hidden[:-1], layers_hidden[1:])
         ])
-        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func)
 
     def forward(self, x):
+        x = torch.torch.mean(x, dim=(2,3))  # Calculating mean of images to take them as input to 1D KAN
         for layer in self.layers:
             x = layer(x)
         return x

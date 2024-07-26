@@ -6,7 +6,7 @@ from irradiance.models.base_model import BaseModel
 
 class EfficientnetIrradiance(BaseModel):
 
-    def __init__(self, d_input, d_output, eve_norm, loss_func=HuberLoss(), model='efficientnet_b0', dp=0.75):
+    def __init__(self, d_input, d_output, eve_norm, loss_func=HuberLoss(), model='efficientnet_b0', dp=0.75, lr=1e-4):
         if model == 'efficientnet_b0':
             model = torchvision.models.efficientnet_b0(pretrained=True)
         elif model == 'efficientnet_b1': 
@@ -38,7 +38,7 @@ class EfficientnetIrradiance(BaseModel):
                 m.p = dp
         model = model
 
-        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func)
+        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
     
     def forward(self, x):
         x = self.model(x)

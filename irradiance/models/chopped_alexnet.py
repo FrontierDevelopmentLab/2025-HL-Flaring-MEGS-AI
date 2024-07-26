@@ -7,7 +7,7 @@ from irradiance.models.base_model import BaseModel
 class ChoppedAlexnet(BaseModel):
 
     # def __init__(self, numlayers, n_channels, outSize, dropout):
-    def __init__(self, d_input, d_output, eve_norm, loss_func=HuberLoss(), numLayers=3, dropout=0):
+    def __init__(self, d_input, d_output, eve_norm, loss_func=HuberLoss(), numLayers=3, dropout=0, lr=1e-4):
         self.numLayers = numLayers
         self.n_channels = d_input
         self.outSize = d_output
@@ -26,7 +26,7 @@ class ChoppedAlexnet(BaseModel):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func)
+        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
 
     def getLayers(self, numLayers, n_channels):
         """Returns a list of layers + the feature size coming out"""
