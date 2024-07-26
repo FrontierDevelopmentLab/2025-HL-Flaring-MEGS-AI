@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.visualization import ImageNormalize, AsinhStretch, LinearStretch
-from iti.data.editor import LoadMapEditor, NormalizeRadiusEditor, AIAPrepEditor
+from itipy.data.editor import LoadMapEditor, NormalizeRadiusEditor, AIAPrepEditor
 from sunpy.visualization.colormaps import cm
 from irradiance.data.reprojection import transform
 
