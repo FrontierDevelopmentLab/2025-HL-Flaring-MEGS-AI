@@ -24,14 +24,10 @@ def standardize_stack(data_zip):
     mean = data_zip[1]
     std = data_zip[2]
     stack = (np.load(stack_file) - mean) / std
-    stack_mean = np.mean(stack, axis=(1, 2))
-    stack_std = np.std(stack, axis=(1, 2))
-
-    if (np.abs(stack_mean - mean) < 2*stack_std).all():
-        np.save(stack_file, stack)
-        return stack_file
+    if len(data_zip) == 4:
+        np.save(stack_file.replace('unnormalized', data_zip[3]), stack)
     else:
-        return f'problem with {stack_file}'
+        np.save(stack_file.replace('unnormalized', 'normalized'), stack)
 
 
 def load_map_stack(imager_stack):
@@ -40,7 +36,7 @@ def load_map_stack(imager_stack):
     # Replace .fits by .npy
     filename = filename.replace('.fits', '.npy')
 
-    output_file = matches_stacks + '/AIA_' + filename
+    output_file = matches_stacks + '/unnormalized/AIA_' + filename
     # print(output_file)
 
     if exists(output_file):
@@ -86,6 +82,9 @@ def parse_args():
     p.add_argument('-matches_stacks', dest='matches_stacks', type=str,
                    default="/mnt/disks/preprocessed_data/AIA/256",
                    help='Stacks for matches')
+    p.add_argument('-norm_suffix', dest='norm_suffix', type=str,
+                default=None,
+                help='Suffix to distinguish between different normalizations')
     args = p.parse_args()
     return args
 
@@ -100,6 +99,7 @@ if __name__ == "__main__":
     matches_file = args.matches_csv
     matches_stacks = args.matches_stacks
     matches_output = args.matches_output
+    norm_suffix = args.norm_suffix
 
     stats = {}
 
@@ -113,11 +113,16 @@ if __name__ == "__main__":
     for index, row in tqdm(matches.iterrows()):
         imager_files.append(row[imager_columns].tolist())  # (channel, files)
 
-    # Path for output
+    # Path for outputs
+    normalized_dir = f'normalized'
+    if norm_suffix is not None:
+        normalized_dir = normalized_dir + f'_{norm_suffix}'
     os.makedirs(matches_stacks, exist_ok=True)
+    os.makedirs(os.path.join(matches_stacks, 'unnormalized'), exist_ok=True)
+    os.makedirs(os.path.join(matches_stacks, normalized_dir), exist_ok=True)
 
     # Extract filename from index_imager_i (remove imager_path)
-    converted_file_paths = [matches_stacks + '/AIA_' +
+    converted_file_paths = [matches_stacks + '/unnormalized/AIA_' +
                             ((imager_files[i][0].replace(imager_path, '')).split('_')[1]).replace('.fits', '.npy')
                             for i in range(len(imager_files))]
 
@@ -132,23 +137,21 @@ if __name__ == "__main__":
     stats['AIA'] = {'mean': imager_mean, 'std': imager_std, 'min': imager_min, 'max': imager_max}
     data = None
 
-    standardization_output = process_map(standardize_stack, zip(converted_file_paths,
-                                       [imager_mean[:, None, None]] * len(converted_file_paths),
-                                       [imager_std[:, None, None]] * len(converted_file_paths)), chunksize=5)
+    if norm_suffix is None:
+        standardize_stack_parameters = zip(converted_file_paths,
+                                        [imager_mean[:, None, None]] * len(converted_file_paths),
+                                        [imager_std[:, None, None]] * len(converted_file_paths))
+    else:
+        standardize_stack_parameters = zip(converted_file_paths,
+                                        [imager_mean[:, None, None]] * len(converted_file_paths),
+                                        [imager_std[:, None, None]] * len(converted_file_paths),
+                                        [normalized_dir] * len(converted_file_paths))        
 
-    good_stacks = [file for file in standardization_output if 'problem' not in file]
-    bad_stacks = [file for file in standardization_output if 'problem' in file]
+    standardization_output = process_map(standardize_stack, standardize_stack_parameters, chunksize=5)
+    converted_file_paths = [file.replace('unnormalized', normalized_dir) for file in converted_file_paths]
 
     print('Saving Matches')
     np.savez(imager_stats, **stats)
-    matches['aia_stack'] = converted_file_paths
     
-    matches = matches.set_index('aia_stack')
-    bad_matches =  matches[bad_stacks, :]
-    matches = matches[good_stacks, :]
-    matches = matches.reset_index()
-
-    print('Bad stacks: ', bad_stacks)
-
+    matches['aia_stack'] = converted_file_paths
     matches.to_csv(matches_output, index=False)
-    bad_matches.to_csv(matches_output +'_bad.csv', index=False)

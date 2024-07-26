@@ -199,6 +199,7 @@ rule generate_imager_stacks:
         matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
                       f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
     params:
+        suffix = f"{config['data']['eve_type']}_{config['data']['eve_instrument']}",
         imager_resolution = config['data']['aia_resolution'],
         imager_reproject = config['data']['aia_reproject'],
         matches_imager_dir = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_aia_subdir']}_{config['data']['aia_resolution']}"
@@ -220,6 +221,7 @@ rule generate_imager_stacks:
         -matches_csv {input.matches_csv} \
         -matches_output {output.matches_csv} \
         -matches_stacks {params.matches_imager_dir} \
+        -norm_suffix {params.suffix}
         """
         
 
