@@ -54,27 +54,30 @@ class ImagePredictionLogger(Callback):
         """
         samples = pred_eve.shape[0]
         n_aia_wavelengths = len(self.aia_wavelengths)
+        wspace = 0.2
+        hspace = 0.125
+        dpi = 100
 
         if n_aia_wavelengths < 3:
             nrows = 1
             ncols = n_aia_wavelengths
-            fig = plt.figure(figsize=( 9+9/4*n_aia_wavelengths, 3*samples), dpi=150)
-            gs = fig.add_gridspec(samples, n_aia_wavelengths+3, wspace=0.4, hspace=0.25)
+            fig = plt.figure(figsize=( 9+9/4*n_aia_wavelengths, 3*samples), dpi=dpi)
+            gs = fig.add_gridspec(samples, n_aia_wavelengths+3, wspace=wspace, hspace=hspace)
         elif n_aia_wavelengths < 5:
             nrows = 2
             ncols = 2
-            fig = plt.figure(figsize=( 9+9/4*2, 6*samples), dpi=150)
-            gs = fig.add_gridspec(2*samples, 5, wspace=0.4, hspace=0.25)
+            fig = plt.figure(figsize=( 9+9/4*2, 6*samples), dpi=dpi)
+            gs = fig.add_gridspec(2*samples, 5, wspace=wspace, hspace=hspace)
         elif n_aia_wavelengths < 7:
             nrows = 2
             ncols = 3
-            fig = plt.figure(figsize=( 9+9/4*3, 6*samples), dpi=150)
-            gs = fig.add_gridspec(2*samples, 6, wspace=0.4, hspace=0.25)
+            fig = plt.figure(figsize=( 9+9/4*3, 6*samples), dpi=dpi)
+            gs = fig.add_gridspec(2*samples, 6, wspace=wspace, hspace=hspace)
         else:
             nrows = 2
             ncols = 4
-            fig = plt.figure(figsize=( 18, 6*samples), dpi=150)
-            gs = fig.add_gridspec(2*samples, 7, wspace=0.4, hspace=0.25)
+            fig = plt.figure(figsize=( 15, 5*samples), dpi=dpi)
+            gs = fig.add_gridspec(2*samples, 7, wspace=wspace, hspace=hspace)
 
         cmaps_all = ['sdoaia94', 'sdoaia131', 'sdoaia171', 'sdoaia193', 'sdoaia211', 
                      'sdoaia304', 'sdoaia335', 'sdoaia1600', 'sdoaia1700']
