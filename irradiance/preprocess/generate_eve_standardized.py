@@ -34,7 +34,7 @@ def _load(eve_nc_path, matches_csv, output_path, output_stats, output_wl):
     # normalize data between 0 and max
     eve_mean = np.nanmean(eve_data, 0)
     eve_std = np.nanstd(eve_data, 0)
-    eve_data = (eve_data - eve_mean[None]) / eve_std[None]
+    # eve_data = (eve_data - eve_mean[None]) / eve_std[None]
 
     # save eve data
     os.makedirs(os.path.split(output_path)[0], exist_ok=True)

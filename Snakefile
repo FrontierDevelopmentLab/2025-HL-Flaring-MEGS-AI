@@ -220,8 +220,7 @@ rule generate_imager_stacks:
         -imager_stats {output.imager_stats} \
         -matches_csv {input.matches_csv} \
         -matches_output {output.matches_csv} \
-        -matches_stacks {params.matches_imager_dir} \
-        -norm_suffix {params.suffix}
+        -matches_stacks {params.matches_imager_dir}
         """
         
 

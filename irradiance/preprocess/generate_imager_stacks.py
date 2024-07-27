@@ -17,26 +17,13 @@ logging.basicConfig(format='%(levelname)-4s '
 LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
 
-
-def standardize_stack(data_zip):
-
-    stack_file = data_zip[0]
-    mean = data_zip[1]
-    std = data_zip[2]
-    stack = (np.load(stack_file) - mean) / std
-    if len(data_zip) == 4:
-        np.save(stack_file.replace('unnormalized', data_zip[3]), stack)
-    else:
-        np.save(stack_file.replace('unnormalized', 'normalized'), stack)
-
-
 def load_map_stack(imager_stack):
     # Extract filename from index_imager_i (remove imager_path)
     filename = (imager_stack[0].replace(imager_path, '')).split('_')[1]
     # Replace .fits by .npy
     filename = filename.replace('.fits', '.npy')
 
-    output_file = matches_stacks + '/unnormalized/AIA_' + filename
+    output_file = matches_stacks + '/AIA_' + filename
     # print(output_file)
 
     if exists(output_file):
@@ -50,7 +37,8 @@ def load_map_stack(imager_stack):
         #     calibration = 'auto'
         calibration = 'aiapy'
         imager_stack = loadMapStack(imager_stack, resolution=imager_resolution, remove_nans=True,
-                                    map_reproject=imager_reproject, aia_preprocessing=True, calibration=calibration)
+                                    map_reproject=imager_reproject, aia_preprocessing=True, calibration=calibration,
+                                    apply_norm=False, percentile_clip=0.25)
         # Save stack
         np.save(output_file, imager_stack)
         data = np.asarray(imager_stack)
@@ -82,9 +70,6 @@ def parse_args():
     p.add_argument('-matches_stacks', dest='matches_stacks', type=str,
                    default="/mnt/disks/preprocessed_data/AIA/256",
                    help='Stacks for matches')
-    p.add_argument('-norm_suffix', dest='norm_suffix', type=str,
-                default=None,
-                help='Suffix to distinguish between different normalizations')
     args = p.parse_args()
     return args
 
@@ -99,7 +84,6 @@ if __name__ == "__main__":
     matches_file = args.matches_csv
     matches_stacks = args.matches_stacks
     matches_output = args.matches_output
-    norm_suffix = args.norm_suffix
 
     stats = {}
 
@@ -114,15 +98,10 @@ if __name__ == "__main__":
         imager_files.append(row[imager_columns].tolist())  # (channel, files)
 
     # Path for outputs
-    normalized_dir = f'normalized'
-    if norm_suffix is not None:
-        normalized_dir = normalized_dir + f'_{norm_suffix}'
     os.makedirs(matches_stacks, exist_ok=True)
-    os.makedirs(os.path.join(matches_stacks, 'unnormalized'), exist_ok=True)
-    os.makedirs(os.path.join(matches_stacks, normalized_dir), exist_ok=True)
 
     # Extract filename from index_imager_i (remove imager_path)
-    converted_file_paths = [matches_stacks + '/unnormalized/AIA_' +
+    converted_file_paths = [matches_stacks + '/AIA_' +
                             ((imager_files[i][0].replace(imager_path, '')).split('_')[1]).replace('.fits', '.npy')
                             for i in range(len(imager_files))]
 
@@ -134,21 +113,9 @@ if __name__ == "__main__":
     imager_max = np.max(data, axis=(0, 2, 3), keepdims=False)
     imager_mean = np.mean(data, axis=(0, 2, 3), keepdims=False)
     imager_std = np.stack([np.std(data[:, wl, :, :], keepdims=False) for wl in range(data.shape[1])])
-    stats['AIA'] = {'mean': imager_mean, 'std': imager_std, 'min': imager_min, 'max': imager_max}
     data = None
 
-    if norm_suffix is None:
-        standardize_stack_parameters = zip(converted_file_paths,
-                                        [imager_mean[:, None, None]] * len(converted_file_paths),
-                                        [imager_std[:, None, None]] * len(converted_file_paths))
-    else:
-        standardize_stack_parameters = zip(converted_file_paths,
-                                        [imager_mean[:, None, None]] * len(converted_file_paths),
-                                        [imager_std[:, None, None]] * len(converted_file_paths),
-                                        [normalized_dir] * len(converted_file_paths))        
-
-    standardization_output = process_map(standardize_stack, standardize_stack_parameters, chunksize=5)
-    converted_file_paths = [file.replace('unnormalized', normalized_dir) for file in converted_file_paths]
+    stats['AIA'] = {'mean': imager_mean, 'std': imager_std, 'min': imager_min, 'max': imager_max}
 
     print('Saving Matches')
     np.savez(imager_stats, **stats)
