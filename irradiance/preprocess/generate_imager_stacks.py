@@ -18,6 +18,19 @@ LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
 
 def load_map_stack(imager_stack):
+    """
+    Function that loads a stack of EUV images that is considered concurrent
+
+    Parameters
+    ----------
+    imager_stack : 
+        list with filenames to load into stack
+
+    Returns
+    -------
+    np.array
+        returns numpy array with stacks
+    """    
     # Extract filename from index_imager_i (remove imager_path)
     filename = (imager_stack[0].replace(imager_path, '')).split('_')[1]
     # Replace .fits by .npy

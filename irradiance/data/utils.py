@@ -79,20 +79,36 @@ def loadMap(file_path, resolution=1024, map_reproject=False, calibration=None):
     return s_map
 
 
-def loadMapStack(file_paths, resolution=1024, remove_nans=True, map_reproject=False, aia_preprocessing=True,
-                 calibration='auto', apply_norm=True, percentile_clip=None):
+def loadMapStack(file_paths:list, resolution:int=1024, remove_nans:bool=True, map_reproject:bool=False, aia_preprocessing:bool=True,
+                 calibration:str='auto', apply_norm:bool=True, percentile_clip:float=None)->np.array:
     """Load a stack of FITS files, resample ot specific resolution, and stack hem.
-
 
     Parameters
     ----------
-    file_paths: list of files to stack.
-    resolution: target resolution in pixels of 2.2 solar radii.
+    file_paths : list
+        list of files to stack.
+    resolution : int, optional
+        target resolution, by default 1024
+    remove_nans : bool, optional
+        remove nans and infs, replace by 0, by default True
+    map_reproject : bool, optional
+        If to reproject the stack, by default False
+    aia_preprocessing : bool, optional
+        If to use aia preprocessing, by default True
+    calibration : str, optional
+        What type of AIA degradation fix to use, by default 'auto'
+    apply_norm : bool, optional
+        Whether to apply normalization after loading stack, by default True
+    percentile_clip : float, optional
+        If to apply a percentile clip. Number in percent: i.e. 0.25 means 0.25% NOT 25%, by default None
 
     Returns
     -------
-    numpy array with AIA stack
-    """
+    np.array
+        returns AIA stack
+    """    
+
+
     load_func = loadAIAMap if aia_preprocessing else loadMap
     s_maps = [load_func(file, resolution=resolution, map_reproject=map_reproject,
                         calibration=calibration) for file in file_paths]

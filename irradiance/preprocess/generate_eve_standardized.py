@@ -15,6 +15,7 @@ def _load(eve_nc_path, matches_csv, output_path, output_stats, output_wl):
     eve_nc_path: path to the NETCDF file.
     matches_csv: path to the CSV matches file.
     output_path: output path for the numpy files.
+    output_stats:output path for the eve mean and std stats.
 
     Returns
     -------
