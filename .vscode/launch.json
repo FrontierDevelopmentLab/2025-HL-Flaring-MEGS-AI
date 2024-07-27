@@ -18,6 +18,7 @@
               "-matches_table", "/mnt/disks/data-extended/matches/AIA_256_stacks_EVS_MEGS-A_matches.csv",
               "-eve_data", "/mnt/disks/data-extended/preprocessed/EVE/EVS_MEGS-A_standardized.npy",
               "-eve_norm", "/mnt/disks/data-extended/preprocessed/EVE/EVS_MEGS-A_stats.npy",
+              "-uv_norm", "/mnt/disks/data-extended/preprocessed/AIA_256_EVS_MEGS-AB_stats.npz",
               "-instrument", "AIA",
             ]
         }
