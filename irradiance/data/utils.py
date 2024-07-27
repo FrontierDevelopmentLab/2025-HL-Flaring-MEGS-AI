@@ -80,7 +80,7 @@ def loadMap(file_path, resolution=1024, map_reproject=False, calibration=None):
 
 
 def loadMapStack(file_paths, resolution=1024, remove_nans=True, map_reproject=False, aia_preprocessing=True,
-                 calibration='auto'):
+                 calibration='auto', apply_norm=True, percentile_clip=None):
     """Load a stack of FITS files, resample ot specific resolution, and stack hem.
 
 
@@ -96,12 +96,23 @@ def loadMapStack(file_paths, resolution=1024, remove_nans=True, map_reproject=Fa
     load_func = loadAIAMap if aia_preprocessing else loadMap
     s_maps = [load_func(file, resolution=resolution, map_reproject=map_reproject,
                         calibration=calibration) for file in file_paths]
-    # Clip extreme values and normalize in the process
-    stack = np.stack([sdo_norms[s_map.wavelength.value](s_map.data) for s_map in s_maps]).astype(np.float32)
+    
+    if apply_norm:
+        stack = np.stack([sdo_norms[s_map.wavelength.value](s_map.data) for s_map in s_maps]).astype(np.float32)
+    else:
+        stack = np.stack([s_map.data for s_map in s_maps]).astype(np.float32)
 
     if remove_nans:
         stack[np.isnan(stack)] = 0
         stack[np.isinf(stack)] = 0
+
+    if percentile_clip:
+        for i in range(stack.shape[0]):
+            percentiles = np.percentile(
+                stack[i, :, :].reshape(-1), [100 - percentile_clip]
+            )
+            stack[i, :, :][stack[i, :, :] < 0] = 0
+            stack[i, :, :][stack[i, :, :] > percentiles[0]] = percentiles[0]        
 
     return stack.data
 

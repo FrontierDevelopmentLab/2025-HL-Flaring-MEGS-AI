@@ -12,7 +12,7 @@ from irradiance.data.utils import loadMapStack
 
 class IrradianceDataModule(pl.LightningDataModule):
 
-    def __init__(self, stacks_csv_path, eve_npy_path, wavelengths, batch_size: int = 32, num_workers=None,
+    def __init__(self, stacks_csv_path, eve_npy_path, eve_norm, uv_norm, wavelengths, norm_eve=True, norm_uv=True, batch_size: int = 32, num_workers=None,
                  train_transforms=None, val_transforms=None, val_months=[10, 1], test_months=[11,12], holdout_months=None):
         """ Loads paired data samples of AIA EUV images and EVE irradiance measures.
 
@@ -26,6 +26,10 @@ class IrradianceDataModule(pl.LightningDataModule):
         self.num_workers = num_workers if num_workers is not None else os.cpu_count() // 2
         self.stacks_csv_path = stacks_csv_path
         self.eve_npy_path = eve_npy_path
+        self.eve_norm = eve_norm
+        self.norm_eve = norm_eve
+        self.uv_norm = uv_norm
+        self.norm_uv = norm_uv
         self.batch_size = batch_size
         self.train_transforms = train_transforms
         self.val_transforms = val_transforms
@@ -57,12 +61,18 @@ class IrradianceDataModule(pl.LightningDataModule):
         test_df = df[test_condition]
         train_df = df[train_condition]
 
-        self.train_ds = IrradianceDataset(np.array(train_df.aia_stack), eve_data[train_df.index], 
-                                          self.wavelengths, self.train_transforms)
-        self.valid_ds = IrradianceDataset(np.array(valid_df.aia_stack), eve_data[valid_df.index], 
-                                          self.wavelengths, self.val_transforms)
-        self.test_ds = IrradianceDataset(np.array(test_df.aia_stack), eve_data[test_df.index], 
-                                         self.wavelengths, self.val_transforms)
+        self.train_ds = IrradianceDataset(np.array(train_df.aia_stack), eve_data[train_df.index],
+                                          self.eve_norm, self.uv_norm,
+                                          self.wavelengths, transformations=self.train_transforms,
+                                          norm_eve=self.norm_eve, norm_uv=self.norm_uv)
+        self.valid_ds = IrradianceDataset(np.array(valid_df.aia_stack), eve_data[valid_df.index],
+                                          self.eve_norm, self.uv_norm, 
+                                          self.wavelengths, transformations=self.val_transforms,
+                                          norm_eve=self.norm_eve, norm_uv=self.norm_uv)
+        self.test_ds = IrradianceDataset(np.array(test_df.aia_stack), eve_data[test_df.index],
+                                          self.eve_norm, self.uv_norm, 
+                                          self.wavelengths, transformations=self.val_transforms,
+                                          norm_eve=self.norm_eve, norm_uv=self.norm_uv)
 
         self.train_dates = train_df['eve_dates']
         self.valid_dates = valid_df['eve_dates']
@@ -84,7 +94,7 @@ class IrradianceDataModule(pl.LightningDataModule):
 
 class IrradianceDataset(Dataset):
 
-    def __init__(self, euv_paths, eve_irradiance, wavelengths, transformations=None):
+    def __init__(self, euv_paths, eve_irradiance, eve_norm, uv_norm, wavelengths, norm_eve=True, norm_uv=True, transformations=None):
         """ Loads paired data samples of AIA EUV images and EVE irradiance measures.
 
         Input data needs to be paired.
@@ -98,13 +108,21 @@ class IrradianceDataset(Dataset):
         self.eve_irradiance = eve_irradiance
         self.transformations = transformations
         self.wavelengths = wavelengths
+        self.eve_norm = eve_norm
+        self.norm_eve = norm_eve
+        self.uv_norm = uv_norm
+        self.norm_uv = norm_uv
 
     def __len__(self):
         return len(self.euv_paths)
 
     def __getitem__(self, idx):
         euv_images = np.load(self.euv_paths[idx])[self.wavelengths, ...]
+        if self.norm_uv:
+            euv_images = (euv_images-self.uv_norm['mean'][:,None,None])/self.uv_norm['std'][:,None,None] 
         eve_data = self.eve_irradiance[idx]
+        if self.norm_eve:
+            eve_data = (eve_data-self.eve_norm[0,:])/self.eve_norm[1,:]
         # TODO: Understand what's happening below???
         if self.transformations is not None:
             # transform as RGB + y to use transformations

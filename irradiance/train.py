@@ -35,6 +35,8 @@ parser.add_argument('-eve_data', type=str, default="/mnt/disks/preprocessed_data
                     help='Path to converted SDO/EVE data.')
 parser.add_argument('-eve_norm', type=str, default="/mnt/disks/preprocessed_data/EVE/megsa_normalization.npy",
                     help='Path to converted SDO/EVE normalization.')
+parser.add_argument('-uv_norm', type=str, default="/mnt/disks/data-extended/preprocessed/AIA_256_EVS_MEGS-AB_stats.npz",
+                    help='Path to calculated AIA normalization.')
 parser.add_argument('-eve_wl', type=str, default=None,
                     help='Path to SDO/EVE wavelength names.')
 parser.add_argument('-instrument', type=str, required=True, 
@@ -51,11 +53,13 @@ matches_table = args.matches_table
 checkpoint = args.checkpoint
 eve_data = args.eve_data
 eve_norm = args.eve_norm
+uv_norm = args.uv_norm
 eve_wl = args.eve_wl
 instrument = args.instrument
 
-# EVE: Normalization data
+# EVE and UV: Normalization data
 eve_norm = np.load(eve_norm)
+uv_norm = np.load(uv_norm, allow_pickle=True)['AIA'].item()
 
 # Perform all combination of free parameters (if there are any)
 n = 0
@@ -84,7 +88,7 @@ for parameter_set in combined_parameters:
     if (run_config['val_months'][0] in run_config['test_months']) is False and (run_config['val_months'][1] in run_config['test_months']) is False: 
 
         # Initialize data loader
-        data_loader = IrradianceDataModule(matches_table, eve_data, run_config[instrument], 
+        data_loader = IrradianceDataModule(matches_table, eve_data, eve_norm, uv_norm, run_config[instrument], 
                                            num_workers=os.cpu_count() // 2,
                                            train_transforms=train_transforms, 
                                            val_transforms=val_transforms,
@@ -117,7 +121,7 @@ for parameter_set in combined_parameters:
             wb_name = os.path.basename(checkpoint)
 
         ########################################################################################################
-        wb_name = 'change_name'
+        wb_name = 'please_delete'
         ########################################################################################################
         
         wandb_logger = WandbLogger(entity=config_data['wandb']['entity'],
