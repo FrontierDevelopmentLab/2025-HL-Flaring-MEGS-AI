@@ -96,24 +96,8 @@ for parameter_set in combined_parameters:
                                            test_months=run_config['test_months'],
                                            holdout_months=run_config['holdout_months'])
         data_loader.setup()
-        # Initalize model
-        # model = LinearIrradianceModel(d_input=len(run_config[instrument]), 
-        #                              d_output=eve_norm.shape[1], 
-        #                              eve_norm=eve_norm,
-        #                              lr = 1e-2)
-
-        model = FastKANIrradiance(eve_norm=eve_norm, 
-                                    layers_hidden=[len(run_config[instrument]), eve_norm.shape[1]],
-                                    grid_min = -2.,
-                                    grid_max = 2.,
-                                    num_grids = 8,
-                                    use_base_update = True,
-                                    base_activation = F.silu,
-                                    spline_weight_init_scale = 0.1,
-                                    lr = 1e-3,
-                                    use_std=True
-                                  )
         
+              
         # Initialize logger
         if len(combined_parameters) > 1:
             wb_name = f"{instrument}_{n}"
