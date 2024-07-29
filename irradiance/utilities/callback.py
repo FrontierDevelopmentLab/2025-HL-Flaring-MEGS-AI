@@ -119,3 +119,60 @@ class ImagePredictionLogger(Callback):
 
         fig.tight_layout()
         return fig
+
+class SpectrumPredictionLogger(ImagePredictionLogger):
+    def __init__(self, val_imgs, val_eve, names, aia_wavelengths):
+        super().__init__(val_imgs, val_eve, names, aia_wavelengths)
+        
+    def plot_aia_eve(self, val_imgs, val_eve, pred_eve):
+        """
+        Function to plot a 4 channel AIA stack and the EVE barplots
+
+        Arguments:
+        ----------
+            val_imgs: numpy array
+                Stack with 4 image channels
+            val_eve: numpy array
+                Stack of ground-truth eve channels
+            pred_eve: numpy array
+                Stack of predicted eve channels
+        Returns:
+        --------
+            fig: matplotlib figure
+                figure with plots
+        """
+        samples = pred_eve.shape[0]
+        n_aia_wavelengths = len(self.aia_wavelengths)
+        wspace = 0.2
+        hspace = 0.125
+        dpi = 200
+
+        fig = plt.figure(figsize=(5, 5), dpi=dpi)
+        gs = fig.add_gridspec(2, 1, wspace=wspace, hspace=hspace)
+
+        #eve data
+        s = 0
+        ax5 = fig.add_subplot(gs[0, 0])
+        if self.names is not None:
+            ax5.bar(np.arange(0,len(val_eve[s,:])), val_eve[s,:], label='ground truth')
+            ax5.bar(np.arange(0,len(pred_eve[s,:])), pred_eve[s,:], width = 0.5, label='prediction', alpha=0.5)
+            ax5.set_xticks(np.arange(0,len(val_eve[s,:])))
+            ax5.set_xticklabels(self.names,rotation = 45)
+        else:
+            ax5.plot(np.arange(0,len(val_eve[s,:])), val_eve[s,:], label='ground truth', alpha=0.5, drawstyle='steps-mid')
+            ax5.plot(np.arange(0,len(pred_eve[s,:])), pred_eve[s,:], label='prediction', alpha=0.5, drawstyle='steps-mid')
+        ax5.set_yscale('log')
+        ax5.legend()
+
+        ax6 = fig.add_subplot(gs[1, 0])
+        if self.names is not None:
+            ax6.bar(np.arange(0,len(val_eve[s,:])), np.abs(pred_eve[s,:]-val_eve[s,:])/val_eve[s,:]*100, label='relative error (%)')
+            ax6.set_xticks(np.arange(0,len(val_eve[s,:])))
+            ax6.set_xticklabels(self.names,rotation = 45)
+        else:
+            ax6.plot(np.arange(0,len(val_eve[s,:])), np.abs(pred_eve[s,:]-val_eve[s,:])/val_eve[s,:]*100, label='relative error (%)', alpha=0.5, drawstyle='steps-mid')
+        ax6.set_yscale('log')
+        ax6.legend()            
+
+        fig.tight_layout()
+        return fig
