@@ -1,5 +1,5 @@
 sunpy[all]
-git+https://github.com/RobertJaro/InstrumentToInstrument.git
+itipy
 snakemake
 wandb
 pytorch-lightning
@@ -14,3 +14,4 @@ validators
 albumentations
 opencv-python
 spicepy
+xitorch

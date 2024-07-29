@@ -2,29 +2,32 @@
 # MAIN
 #########################################################################################################
 configfile: "snakemake-config.yaml"
+# Draw: snakemake --forceall --dag | dot -Tpng > dag.png
 
+# TODO: Maybe remove "data" section from config (config['data']) file to make it simpler to read
+# General rule to generate all data
 rule megsai_all:
     input:
-        checkpoint = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt", instrument=config["model"]["instruments"]),
-        results_train = expand(config["model"]["checkpoint_path"]+"/{instrument}/train_irradiance.npy", instrument=config["model"]["instruments"]),
-        results_valid = expand(config["model"]["checkpoint_path"]+"/{instrument}/valid_irradiance.npy", instrument=config["model"]["instruments"]),
-        results_test = expand(config["model"]["checkpoint_path"]+"/{instrument}/test_irradiance.npy", instrument=config["model"]["instruments"]),
-        instrument_mape = config["model"]["checkpoint_path"]+"/overview_instruments_mape.png",
-        instrument_mepe = config["model"]["checkpoint_path"]+"/overview_instruments_mepe.png",
-        instrument_mae = config["model"]["checkpoint_path"]+"/overview_instruments_mae.png",
-        instrument_mee = config["model"]["checkpoint_path"]+"/overview_instruments_mee.png",
-        wavelength_mape = config["model"]["checkpoint_path"]+"/overview_wavelengths_mape.png",
-        wavelength_mepe = config["model"]["checkpoint_path"]+"/overview_wavelengths_mepe.png",
-        wavelength_mae = config["model"]["checkpoint_path"]+"/overview_wavelengths_mae.png",
-        wavelength_mee = config["model"]["checkpoint_path"]+"/overview_wavelengths_mee.png",
-        # frame = config["model"]["checkpoint_path"]+"/overview_frame_AIA_0.png"
-        matches_table = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_table"],
-        matches_tableb = config["data"]["matches_euvi_path"]+"/"+config["data"]["matches_euvi_table"],
-        forecast_table = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_euvib_table"],
-        stereo_table = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_euvi_table"] #,
-        # frame = config["model"]["checkpoint_path"]+"/images/MEGS_AI_AIA_EUVI_134.png",
-        # forecast_results = config["model"]["checkpoint_path"]+"/EUVI/images/forecast_aia1_0_FeXVIII.png",
-        # forecast_results2 = config["model"]["checkpoint_path"]+"/EUVI/images/forecast_aia2_0_FeXVIII.png"
+        # checkpoints = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt", instrument=config["model"]["instruments"]),
+        checkpoint = expand(config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"], instrument=config["model"]["instruments"]),
+        maven_lvl3_data = f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}",
+        fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
+        fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}",
+        fism2_data = expand(f"{config['data']['fism2_dir']}/"+"{fism2_type}"+f"/FISM_2014001_{config['data']['fism2_version']}.sav", fism2_type=config['data']['fism2_type']),
+        eve_standardized = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                           f"{config['data']['eve_type']}_"+
+                           f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
+        updated_matches_csv= f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                             f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
+                             f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
+        
+
+# Draw the DAG of the pipeline
+rule draw_dag:
+    output:
+        png='dag.png'
+    shell:
+        "snakemake --forceall --dag | dot -Tpng > {output.png}"
 
 #########################################################################################################
 # SETUP AND GENERATE TRAINING DATA
@@ -33,103 +36,191 @@ rule megsai_all:
 ## Download GOES soft X-ray flux data
 rule download_goes_data:
     output: 
-        goes_data = config["data"]["goes_path"]+"/"+config["data"]["goes_data"]
+        goes_data = f"{config['data']['goes_dir']}/{config['data']['goes_data']}"
     params:
-        output_path = config["data"]["goes_path"]
+        goes_dir = config['data']['goes_dir']
     shell:
         """
-        mkdir -p {params.output_path} && 
-        gsutil -m cp -r gs://us-4pieuvirradiance-dev-data/goes.csv {output.goes_data}
+        mkdir -p {params.goes_dir} && 
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/GOES/goes.csv {output.goes_data}
         """        
 
-## Generate CDF file containing MEGS-A irradiance data
+## Download EVE irradiance data
+rule download_eve_data:
+    output:
+        eve_file = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_L{config['data']['eve_level']}"+
+                   "_2014001_008_01.fit.gz"
+    params:
+        eve_type = config['data']['eve_type'],
+        eve_level = config['data']['eve_level'],
+        eve_dir = config['data']['eve_dir']
+    shell:
+        """
+        mkdir -p {params.eve_dir} &&
+        python -m irradiance.data.download_eve_data \
+        -start 2010-01-01T00:00:00 \
+        -end 2015-01-01T00:00:00 \
+        -type {params.eve_type} \
+        -level {params.eve_level} \
+        -save_dir {params.eve_dir} 
+        """
+
+rule download_maven_data:
+    output:
+        maven_lvl3_data = f"{config['data']['maven_lvl3_dir']}/{config['data']['maven_lvl3_data']}"
+    params:
+        maven_dir = config['data']['maven_dir'],
+        maven_lvl2_dir = config['data']['maven_lvl2_dir'],
+        maven_lvl3_dir = config['data']['maven_lvl3_dir']
+    shell:
+        """
+        mkdir -p {params.maven_dir} && 
+        mkdir -p {params.maven_lvl2_dir} &&
+        mkdir -p {params.maven_lvl3_dir} &&
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/MAVEN/level3/mvn_euv_l3_daily.csv {output.maven_lvl3_data}
+        """
+
+rule download_fismp_data:
+    output:
+        fismp_earth_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_earth_data']}",
+        fismp_mars_data = f"{config['data']['fismp_dir']}/{config['data']['fismp_mars_data']}"
+    params:
+        fismp_dir = config['data']['fismp_dir']
+    shell:
+        """
+        mkdir -p {params.fismp_dir} && 
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_earth_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_earth_data} && 
+        gsutil -m cp -r gs://us-spi3s-landing/megs_ai/observational_data/FISM-P/fism_p_spectrum_mars_l2v01_r00_l3v01_r00_prelim.nc {output.fismp_mars_data}
+        """
+
+rule download_fism2_data:
+    output:
+        fism2_data = f"{config['data']['fism2_dir']}/"+"{fism2_type}"+f"/FISM_2014001_{config['data']['fism2_version']}.sav"
+    params:
+        fism2_dir = config['data']['fism2_dir'],
+        fism2_type = "{fism2_type}",
+        fism2_version = config['data']['fism2_version'],
+        fism2_url = config['data']['fism2_url']
+    shell:
+        """
+        mkdir -p {params.fism2_dir} &&
+        python -m irradiance.data.download_fism2 \
+        -start 2010-01-01T00:00:00 \
+        -end   2014-05-10T23:59:59 \
+        -type {params.fism2_type} \
+        -version {params.fism2_version} \
+        -url {params.fism2_url} \
+        -save_dir {params.fism2_dir}
+        """
+
+## Generate CDF file containing EVE irradiance data
 rule generate_eve_netcdf:
     input:
-        eve_path = config["data"]["eve_path"]
+        eve_dir = config['data']['eve_dir'],
+        eve_file = f"{config['data']['eve_dir']}/{config['data']['eve_type']}_L{config['data']['eve_level']}"+
+                   "_2014001_008_01.fit.gz"
     output:
-        megsa_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"]
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+                   f"{config['data']['eve_data']}"
     params:
-        output_path = config["data"]["megsa_path"]
+        eve_type = config['data']['eve_type'],
+        eve_level = config['data']['eve_level'],
+        eve_instrument = config['data']['eve_instrument'],
     shell:
         """
-        mkdir -p {params.output_path} &&
-        python s4pi/irradiance/preprocess/generate_eve_netcdf.py \
-        -eve_path {input.eve_path} \
-        -output {output.megsa_data}
+        python -m irradiance.preprocess.generate_eve_netcdf \
+        -start 2010-01-01T00:00:00 \
+        -end 2015-01-01T00:00:00 \
+        -type {params.eve_type} \
+        -level {params.eve_level} \
+        -instrument {params.eve_instrument} \
+        -data_dir {input.eve_dir} \
+        -save_path {output.eve_data}
         """  
 
-## Generates matches between MEGS-A data and AIA data
+## Generates matches in time between EVE data and AIA data
 rule generate_matches_time:
     input:
-        goes_data = config["data"]["goes_path"]+"/"+config["data"]["goes_data"],
-        megsa_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        aia_path = config["data"]["aia_path"]
+        goes_data = config['data']['goes_dir']+"/"+config['data']['goes_data'],
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+                   f"{config['data']['eve_data']}",
+        imager_dir = config['data']['aia_dir']
     output:
-        matches_table = config["data"]["matches_path"]+"/"+config["data"]["matches_table"]
+        matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
+                      f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
     params:
-        eve_cutoff = config["data"]["eve_cutoff"],
-        aia_cutoff = config["data"]["aia_cutoff"], 
-        aia_wl = config["data"]["aia_wl"],
-        matches_path = config["data"]["matches_path"],
-        debug = config["debug"]
+        eve_to_imager_dt = config['data']['eve_cutoff'],
+        imager_dt = config['data']['aia_cutoff'],
+        imager_wl = config['data']['aia_wl'],
+        matches_dir = config['data']['matches_dir']
     shell:
         """
-        mkdir -p {params.matches_path} &&
-        python -m s4pi.irradiance.preprocess.generate_matches_time \
-        -goes_path {input.goes_data} \
-        -eve_path {input.megsa_data} \
-        -aia_path {input.aia_path} \
-        -output_path {output.matches_table} \
-        -aia_wl {params.aia_wl} \
-        -eve_cutoff {params.eve_cutoff} \
-        -aia_cutoff {params.aia_cutoff} \
-        -debug {params.debug}
+        mkdir -p {params.matches_dir} &&
+        python -m irradiance.preprocess.generate_matches_time \
+        -imager_dir {input.imager_dir} \
+        -imager_wl {params.imager_wl} \
+        -imager_dt {params.imager_dt} \
+        -goes_data {input.goes_data} \
+        -eve_data {input.eve_data} \
+        -output_path {output.matches_csv} \
+        -eve_to_imager_dt {params.eve_to_imager_dt}
         """
 
-## Preprocess MEGS-A data
-rule generate_eve_ml_ready:
+## Standardizes EVE data (for which matches were found) and generates statistics
+rule generate_eve_standardized:
     input:
-        eve_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        matches_table = config["data"]["matches_path"]+"/"+config["data"]["matches_table"]
+        eve_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/{config['data']['eve_type']}_{config['data']['eve_instrument']}_"+
+                   f"{config['data']['eve_data']}",
+        matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
+                      f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
     output:
-        eve_converted_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_converted_data"],
-        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"]
+        eve_standardized = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                           f"{config['data']['eve_type']}_"+
+                           f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
+        eve_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                    f"{config['data']['eve_type']}_"+
+                    f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
+    params:
+        matches_eve_dir = f"{config['data']['matches_dir']}"
     shell:
         """
-            python -m s4pi.irradiance.preprocess.generate_eve_ml_ready \
-            -eve_path {input.eve_data} \
-            -matches_table {input.matches_table} \
-            -output_data {output.eve_converted_data} \
-            -output_norm {output.eve_norm} \
-            -output_wl {output.eve_wl}
+            mkdir -p {params.matches_eve_dir} &&
+            python -m irradiance.preprocess.generate_eve_standardized \
+            -eve_data {input.eve_data} \
+            -matches_csv {input.matches_csv} \
+            -output_data {output.eve_standardized} \
+            -output_stats {output.eve_stats}
         """
 
 ## Generates donwnscaled stacks of the AIA channels
-rule generate_euv_image_stacks:
+rule generate_imager_stacks:
     input:
-        aia_path = config["data"]["aia_path"],
-        matches_table = config["data"]["matches_path"]+"/"+config["data"]["matches_table"]
+        imager_dir = config['data']['aia_dir'],
+        matches_csv = f"{config['data']['matches_dir']}/{config['data']['eve_type']}_"+
+                      f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}"
     params:
-        aia_resolution = config["data"]["aia_resolution"],
-        aia_reproject = config["data"]["aia_reproject"],
-        matches_stacks = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_stacks"],
-        debug = config["debug"]
+        suffix = f"{config['data']['eve_type']}_{config['data']['eve_instrument']}",
+        imager_resolution = config['data']['aia_resolution'],
+        imager_reproject = config['data']['aia_reproject'],
+        matches_imager_dir = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_aia_subdir']}_{config['data']['aia_resolution']}"
     output:
-        matches_table = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_table"],
-        aia_stats = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["aia_stats"]
+        matches_csv = f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                      f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
+                      f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
+        imager_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                       f"{config['data']['aia_resolution']}_{config['data']['eve_type']}_"+
+                       f"{config['data']['eve_instrument']}_{config['data']['aia_stats']}"
     shell:
         """
-        mkdir -p {params.matches_stacks} &&
-        python -m s4pi.irradiance.preprocess.generate_euv_image_stacks \
-        -aia_path {input.aia_path} \
-        -aia_resolution {params.aia_resolution} \
-        -aia_reproject {params.aia_reproject} \
-        -aia_stats {output.aia_stats} \
-        -matches_table {input.matches_table} \
-        -matches_output {output.matches_table} \
-        -matches_stacks {params.matches_stacks} \
-        -debug {params.debug}
+        mkdir -p {params.matches_imager_dir} &&
+        python -m irradiance.preprocess.generate_imager_stacks \
+        -imager_path {input.imager_dir} \
+        -imager_resolution {params.imager_resolution} \
+        -imager_reproject {params.imager_reproject} \
+        -imager_stats {output.imager_stats} \
+        -matches_csv {input.matches_csv} \
+        -matches_output {output.matches_csv} \
+        -matches_stacks {params.matches_imager_dir}
         """
         
 
@@ -139,321 +230,32 @@ rule generate_euv_image_stacks:
 
 rule megsai_train:
     input:
-        matches_table = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_table"],
-        eve_converted_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_converted_data"],
-        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"]
+        matches_table = f"{config['data']['matches_dir']}/{config['data']['preprocess_aia_subdir']}_"+
+                        f"{config['data']['aia_resolution']}_stacks_{config['data']['eve_type']}_"+
+                        f"{config['data']['eve_instrument']}_{config['data']['matches_csv']}",
+        eve_converted_data = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                             f"{config['data']['eve_type']}_"+
+                             f"{config['data']['eve_instrument']}_{config['data']['eve_standardized']}",
+        eve_stats = f"{config['data']['preprocess_dir']}/{config['data']['preprocess_eve_subdir']}/"+
+                    f"{config['data']['eve_type']}_"+
+                    f"{config['data']['eve_instrument']}_{config['data']['eve_stats']}"
     params:
         instrument = "{instrument}",
         config_file = config["model"]["config_file"],
-        checkpoint_path = config["model"]["checkpoint_path"]+"/{instrument}",
-        checkpoint_file = config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]
+        checkpoint_path = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}"
+        #  checkpoint_file = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]
     output: 
-        checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt"
+        checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+f"{config['data']['eve_type']}_{config['data']['eve_instrument']}/"+config["model"]["checkpoint_file"]
     resources:
         nvidia_gpu = 1
     shell:
         """
         mkdir -p {params.checkpoint_path} &&
-        python -m s4pi.irradiance.train \
-        -checkpoint {params.checkpoint_file} \
+        python -m irradiance.train \
+        -checkpoint {output.checkpoint} \
         -model {params.config_file} \
         -matches_table {input.matches_table} \
         -eve_data {input.eve_converted_data} \
-        -eve_norm {input.eve_norm} \
-        -eve_wl {input.eve_wl} \
+        -eve_norm {input.eve_stats} \
         -instrument {params.instrument}
-        """
-
-rule megsai_test:
-    input:
-        goes_data = config["data"]["goes_path"]+"/"+config["data"]["goes_data"], 
-        matches_table = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_table"],
-        eve_converted_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_converted_data"],
-        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"],
-        checkpoint = config["model"]["checkpoint_path"]+"/{instrument}/"+config["model"]["checkpoint_file"]+".ckpt"
-    params:
-        output_path = config["model"]["checkpoint_path"]+"/{instrument}"
-    output: 
-        results_train = config["model"]["checkpoint_path"]+"/{instrument}/train_irradiance.npy",
-        results_valid = config["model"]["checkpoint_path"]+"/{instrument}/valid_irradiance.npy",
-        results_test = config["model"]["checkpoint_path"]+"/{instrument}/test_irradiance.npy"
-    resources:
-        nvidia_gpu = 1
-    shell:
-        """
-        mkdir -p {params.output_path} &&
-        python -m s4pi.irradiance.evaluation.plot_megsa \
-        -checkpoint {input.checkpoint} \
-        -goes_data {input.goes_data} \
-        -matches_table {input.matches_table} \
-        -eve_data {input.eve_converted_data} \
-        -eve_norm {input.eve_norm} \
-        -eve_wl {input.eve_wl} \
-        -output_path {params.output_path} 
-        """
-
-rule megsai_summary_instruments:
-    input:
-        matches_table = config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_table"],
-        eve_converted_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_converted_data"],
-        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"],
-        aia_ckpt = config["model"]["checkpoint_path"]+"/AIA/"+config["model"]["checkpoint_file"]+".ckpt",
-        euvi_ckpt = config["model"]["checkpoint_path"]+"/EUVI/"+config["model"]["checkpoint_file"]+".ckpt",
-        eui_ckpt = config["model"]["checkpoint_path"]+"/EUI/"+config["model"]["checkpoint_file"]+".ckpt",
-        suvi_ckpt = config["model"]["checkpoint_path"]+"/SUVI/"+config["model"]["checkpoint_file"]+".ckpt",
-        circe_ckpt = config["model"]["checkpoint_path"]+"/CIRCE/"+config["model"]["checkpoint_file"]+".ckpt"
-    params:
-        checkpoint_path = config["model"]["checkpoint_path"], 
-        mission = [config["data"]["aia_mission"], config["data"]["euvi_mission"], config["data"]["eui_mission"], config["data"]["suvi_mission"], config["data"]["circe_mission"]],
-        instrument = config["model"]["instruments"][9:],
-        instrument_output = config["model"]["checkpoint_path"]+"/overview_instruments", 
-        wavelength = config["model"]["instruments"][:9],
-        wavelength_output = config["model"]["checkpoint_path"]+"/overview_wavelengths",
-        output_path = config["model"]["checkpoint_path"]
-    output: 
-        instrument_mape = config["model"]["checkpoint_path"]+"/overview_instruments_mape.png",
-        instrument_mepe = config["model"]["checkpoint_path"]+"/overview_instruments_mepe.png",
-        instrument_mae = config["model"]["checkpoint_path"]+"/overview_instruments_mae.png",
-        instrument_mee = config["model"]["checkpoint_path"]+"/overview_instruments_mee.png",
-        wavelength_mape = config["model"]["checkpoint_path"]+"/overview_wavelengths_mape.png",
-        wavelength_mepe = config["model"]["checkpoint_path"]+"/overview_wavelengths_mepe.png",
-        wavelength_mae = config["model"]["checkpoint_path"]+"/overview_wavelengths_mae.png",
-        wavelength_mee = config["model"]["checkpoint_path"]+"/overview_wavelengths_mee.png"
-    resources:
-        nvidia_gpu = 1
-    shell:
-        """
-        mkdir -p {params.output_path} &&
-        python -m s4pi.irradiance.evaluation.plot_instruments \
-        -checkpoint_path {params.checkpoint_path} \
-        -instrument {params.instrument} \
-        -mission {params.mission} \
-        -eve_data {input.eve_converted_data} \
-        -eve_norm {input.eve_norm} \
-        -eve_wl {input.eve_wl} \
-        -matches_table {input.matches_table} \
-        -output_path {params.instrument_output} &&
-        python -m s4pi.irradiance.evaluation.plot_instruments \
-        -checkpoint_path {params.checkpoint_path} \
-        -instrument {params.wavelength} \
-        -eve_data {input.eve_converted_data} \
-        -eve_norm {input.eve_norm} \
-        -eve_wl {input.eve_wl} \
-        -matches_table {input.matches_table} \
-        -output_path {params.wavelength_output}
-        """
-
-## Generates matches between MEGS-A data and AIA data
-rule generate_matches_stereo:
-    input:
-        goes_data = config["data"]["goes_path"]+"/"+config["data"]["goes_data"],
-        megsa_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        inst_path = [config["data"]["aia_path"], config["data"]["euvia_path"], config["data"]["euvib_path"]]
-    output:
-        matches_table = config["data"]["matches_euvi_path"]+"/"+config["data"]["matches_euvi_table"]
-    params:
-        inst = ['AIA', 'A/EUVI', 'B/EUVI'],
-        eve_cutoff = config["data"]["eve_cutoff"],
-        inst_cutoff = config["data"]["euvi_cutoff"], 
-        inst_wl0 = config["data"]["aia_wl"],
-        inst_wl1 = config["data"]["euvi_wl"],
-        inst_wl2 = config["data"]["euvi_wl"],
-        matches_path = config["data"]["matches_euvi_path"]
-    shell:
-        """
-        mkdir -p {params.matches_path} &&
-        python -m s4pi.irradiance.preprocess.generate_matches_time_stereo \
-        -goes_path {input.goes_data} \
-        -eve_path {input.megsa_data} \
-        -instrument {params.inst} \
-        -instrument_path {input.inst_path} \
-        -output_path {output.matches_table} \
-        -eve_cutoff {params.eve_cutoff} \
-        -instrument_cutoff {params.inst_cutoff}
-        """
-
-## Generates matches between MEGS-A data and AIA data
-rule generate_matches_stereob:
-    input:
-        goes_data = config["data"]["goes_path"]+"/"+config["data"]["goes_data"],
-        megsa_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        inst_path = [config["data"]["euvib_path"]]
-    output:
-        matches_table = config["data"]["matches_euvi_path"]+"/"+config["data"]["matches_euvib_table"]
-    params:
-        inst = ['B/EUVI'],
-        delay = True,
-        eve_cutoff = config["data"]["eve_cutoff"],
-        inst_cutoff = config["data"]["euvi_cutoff"], 
-        matches_path = config["data"]["matches_euvi_path"]
-    shell:
-        """
-        mkdir -p {params.matches_path} &&
-        python -m s4pi.irradiance.preprocess.generate_matches_time_stereo \
-        -goes_path {input.goes_data} \
-        -eve_path {input.megsa_data} \
-        -instrument {params.inst} \
-        -instrument_path {input.inst_path} \
-        -output_path {output.matches_table} \
-        -eve_cutoff {params.eve_cutoff} \
-        -instrument_cutoff {params.inst_cutoff} \
-        -delay {params.delay}
-        """
-
-## Generates donwnscaled stacks of the AIA channels
-rule generate_stacks_stereo:
-    input:
-        aia_path = config["data"]["aia_path"],
-        matches_table = config["data"]["matches_euvi_path"]+"/"+config["data"]["matches_euvi_table"]
-    params:
-        inst = ['AIA', 'A/EUVI', 'B/EUVI'],
-        aia_resolution = config["data"]["aia_resolution"],
-        aia_reproject = config["data"]["aia_reproject"],
-        matches_stacks = [config["data"]["matches_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_stacks"], config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_stacks"], config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_stacks"]],
-        debug = config["debug"]
-    output:
-        matches_table = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_euvi_table"],
-        inst_stats = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["euvi_stats"]
-    shell:
-        """
-        mkdir -p {params.matches_stacks} &&
-        python -m s4pi.irradiance.preprocess.generate_euv_image_stacks_stereo \
-        -aia_path {input.aia_path} \
-        -aia_resolution {params.aia_resolution} \
-        -aia_reproject {params.aia_reproject} \
-        -aia_stats {output.inst_stats} \
-        -instrument {params.inst} \
-        -matches_table {input.matches_table} \
-        -matches_output {output.matches_table} \
-        -matches_stacks {params.matches_stacks} \
-        -debug {params.debug}
-        """
-
-## Generates donwnscaled stacks of the AIA channels
-rule generate_stacks_stereob:
-    input:
-        aia_path = config["data"]["aia_path"],
-        matches_table = config["data"]["matches_euvi_path"]+"/"+config["data"]["matches_euvib_table"]
-    params:
-        inst = ['B/EUVI'],
-        aia_resolution = config["data"]["aia_resolution"],
-        aia_reproject = config["data"]["aia_reproject"],
-        matches_stacks = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_stacks"],
-        debug = config["debug"]
-    output:
-        matches_table = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_euvib_table"],
-        inst_stats= config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["euvi_stats"]
-    shell:
-        """
-        mkdir -p {params.matches_stacks} &&
-        python -m s4pi.irradiance.preprocess.generate_euv_image_stacks_stereo \
-        -aia_path {input.aia_path} \
-        -aia_resolution {params.aia_resolution} \
-        -aia_reproject {params.aia_reproject} \
-        -aia_stats {output.inst_stats} \
-        -instrument {params.inst} \
-        -matches_table {input.matches_table} \
-        -matches_output {output.matches_table} \
-        -matches_stacks {params.matches_stacks} \
-        -debug {params.debug}
-        """
-
-rule generate_eve_stereo_ready:
-    input:
-        eve_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        matches_table = config["data"]["matches_euvi_path"]+"/"+config["data"]["matches_euvi_table"]
-    output:
-        eve_converted_data = config["data"]["matches_euvi_path"]+"/"+config["data"]["megsa_converted_data"],
-        eve_norm = config["data"]["matches_euvi_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["matches_euvi_path"]+"/"+config["data"]["megsa_wl"]
-    shell:
-        """
-            python -m s4pi.irradiance.preprocess.generate_eve_ml_ready \
-            -eve_path {input.eve_data} \
-            -matches_table {input.matches_table} \
-            -output_data {output.eve_converted_data} \
-            -output_norm {output.eve_norm} \
-            -output_wl {output.eve_wl}
-        """
-
-rule megsai_stereo_frames:
-    input:
-        matches_table = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_euvi_table"],
-        eve_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"],
-        aia_ckpt = config["model"]["checkpoint_path"]+"/AIA/"+config["model"]["checkpoint_file"]+".ckpt",
-        euvi_ckpt = config["model"]["checkpoint_path"]+"/EUVI/"+config["model"]["checkpoint_file"]+".ckpt"
-    params: 
-        checkpoint_path = config["model"]["checkpoint_path"],
-        output_path = config["model"]["checkpoint_path"]+'/images/MEGS_AI',
-        frames = [134, 195]  # frames = [4997, 5487] 
-    output: 
-        frame = config["model"]["checkpoint_path"]+"/images/MEGS_AI_AIA_EUVI_134.png"
-    resources:
-        nvidia_gpu = 1
-    shell:
-        """
-        mkdir -p {params.output_path} &&
-        python -m s4pi.irradiance.evaluation.plot_frames \
-        -checkpoint_path {params.checkpoint_path} \
-        -eve_data {input.eve_data} \
-        -eve_norm {input.eve_norm} \
-        -eve_wl {input.eve_wl} \
-        -matches_table {input.matches_table} \
-        -output_path {params.output_path} \
-        -frames {params.frames}
-        """
-
-rule megsai_stereob_forecast:
-    input:
-        matches_table = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_euvib_table"],
-        eve_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"],
-        checkpoint = config["model"]["checkpoint_path"]+"/EUVI/"+config["model"]["checkpoint_file"]+".ckpt"
-    params:
-        output_path = config["model"]["checkpoint_path"]+"/EUVI/images"
-    output: 
-        results = config["model"]["checkpoint_path"]+"/EUVI/images/forecast_aia1_0_FeXVIII.png"
-    resources:
-        nvidia_gpu = 1
-    shell:
-        """
-        mkdir -p {params.output_path} &&
-        python -m s4pi.irradiance.evaluation.plot_forecast \
-        -checkpoint {input.checkpoint} \
-        -matches_table {input.matches_table} \
-        -eve_data {input.eve_data} \
-        -eve_norm {input.eve_norm} \
-        -eve_wl {input.eve_wl} \
-        -output_path {params.output_path} 
-        """
-
-rule megsai_stereob_forecast2:
-    input:
-        matches_table = config["data"]["matches_euvi_path"]+"/"+str(config["data"]["aia_resolution"])+"/"+config["data"]["matches_euvib_table"],
-        eve_data = config["data"]["megsa_path"]+"/"+config["data"]["megsa_data"],
-        eve_norm = config["data"]["megsa_path"]+"/"+config["data"]["megsa_norm"],
-        eve_wl = config["data"]["megsa_path"]+"/"+config["data"]["megsa_wl"],
-        checkpoint = config["model"]["checkpoint_path"]+"/EUVI/"+config["model"]["checkpoint_file"]+".ckpt"
-    params:
-        output_path = config["model"]["checkpoint_path"]+"/EUVI/images"
-    output:
-        results = config["model"]["checkpoint_path"]+"/EUVI/images/forecast_aia2_0_FeXVIII.png"
-    resources:
-        nvidia_gpu = 1
-    shell:
-        """
-        mkdir -p {params.output_path} &&
-        python -m s4pi.irradiance.evaluation.plot_forecast_hist \
-        -checkpoint {input.checkpoint} \
-        -matches_table {input.matches_table} \
-        -eve_data {input.eve_data} \
-        -eve_norm {input.eve_norm} \
-        -eve_wl {input.eve_wl} \
-        -output_path {params.output_path} 
         """
