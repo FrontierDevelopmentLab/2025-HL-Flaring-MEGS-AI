@@ -21,7 +21,7 @@ from irradiance.models.efficientnet import EfficientnetIrradiance
 from irradiance.models.chopped_alexnet import ChoppedAlexnet
 from irradiance.models.kan_success import FastKANIrradiance
 from irradiance.models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
-from irradiance.utilities.callback import ImagePredictionLogger
+from irradiance.utilities.callback import ImagePredictionLogger, SpectrumPredictionLogger
 from irradiance.utilities.data_loader import IrradianceDataModule
 
 # Parser
@@ -119,17 +119,13 @@ for parameter_set in combined_parameters:
             wb_name = f"{instrument}_{n}"
         else:
             wb_name = os.path.basename(checkpoint)
-
-        ########################################################################################################
-        wb_name = 'please_delete'
-        ########################################################################################################
-        
+              
         wandb_logger = WandbLogger(entity=config_data['wandb']['entity'],
                                 project=config_data['wandb']['project'],                            
                                 #group=config_data['wandb']['group'],
                                 job_type=config_data['wandb']['job_type'],
                                 tags=config_data['wandb']['tags'],
-                                name=wb_name,
+                                name=config_data['wandb']['wb_name'],
                                 notes=config_data['wandb']['notes'],
                                 config=run_config)                           
 
@@ -140,17 +136,60 @@ for parameter_set in combined_parameters:
         plot_eve = torch.stack([eve for image, eve in plot_data])
         if eve_wl is not None:
             eve_wl = np.load(eve_wl, allow_pickle=True)
-        image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
-
+        
+        if config_data['logging'] == 'images':
+            image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
+        elif config_data['logging'] == 'spectrum':
+            image_callback = SpectrumPredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
+        else:
+            raise NotImplementedError(f"{config_data['logging']} is not implemented.")
+            
         # Checkpoint callback
         checkpoint_path = os.path.split(checkpoint)[0]
         checkpoint_callback = ModelCheckpoint(dirpath=checkpoint_path,
                                               monitor='valid_loss', mode='min', save_top_k=1,
                                               filename=checkpoint)
+        
+        if run_config['architecture']=='kan':
+            model = FastKANIrradiance(eve_norm=eve_norm, 
+                                    layers_hidden=[len(run_config[instrument]), eve_norm.shape[1]],
+                                    grid_min = -2.,
+                                    grid_max = 2.,
+                                    num_grids = 8,
+                                    use_base_update = True,
+                                    base_activation = F.silu,
+                                    spline_weight_init_scale = 0.1,
+                                    lr = 1e-3,
+                                    use_std=True
+                                  )
+        
+        elif run_config['architecture']=='linear':
+            model =  LinearIrradianceModel(d_input=len(run_config[instrument]), 
+                                     d_output=eve_norm.shape[1], 
+                                     eve_norm=eve_norm,
+                                     lr = 1e-2)
 
-        # TODO: Make this more flexible (only linear, only cnn, both, etc.)
-        if run_config['hybrid_loop']:
+        elif run_config['architecture']=='hybrid_loop':
+            model = HybridIrradianceModel(d_input=len(run_config[instrument]), 
+                                        d_output=eve_norm.shape[1], 
+                                        eve_norm=eve_norm, 
+                                        cnn_model=run_config['cnn_model'], 
+                                        ln_model=True,
+                                        cnn_dp=run_config['cnn_dp'],
+                                        lr=run_config['lr'])
 
+        elif run_config['architecture']=='cnn':
+            model = HybridIrradianceModel(d_input=len(run_config[instrument]), 
+                                        d_output=eve_norm.shape[1], 
+                                        eve_norm=eve_norm, 
+                                        cnn_model=run_config['cnn_model'], 
+                                        ln_model=False,
+                                        cnn_dp=run_config['cnn_dp'],
+                                        lr=run_config['lr'])
+        else:
+            raise NotImplementedError(f"{run_config['architecture']} is not implemented.")
+
+        if run_config['architecture']=='hybrid_loop':
             # Lambda/Mode callback
             model.set_train_mode('linear')
             model.lr = run_config['ln_lr']
@@ -167,8 +206,7 @@ for parameter_set in combined_parameters:
                 log_every_n_steps=10
                 )
 
-        else:
-
+        else:            
             # Initialize trainer
             trainer = Trainer(
                 default_root_dir=checkpoint_path,
