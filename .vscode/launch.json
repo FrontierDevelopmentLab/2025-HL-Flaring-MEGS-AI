@@ -13,8 +13,8 @@
             "cwd":"${workspaceFolder}",
             "justMyCode": false,
             "args": [
-              "-checkpoint", "/mnt/disks/debug_megsai.ckpt",
-              "-model", "/home/andres_munoz_j/2024-HL-SPI3S-MEGS-AI/megs_ai_2024_config.yaml",
+              "-checkpoint", "/home/marcella/megsai_runs/debug_megsai.ckpt",
+              "-model", "/home/marcella/2024-HL-SPI3S-MEGS-AI/megs_ai_2024_config.yaml",
               "-matches_table", "/mnt/disks/data-extended/matches/AIA_256_stacks_EVS_MEGS-A_matches.csv",
               "-eve_data", "/mnt/disks/data-extended/preprocessed/EVE/EVS_MEGS-A_standardized.npy",
               "-eve_norm", "/mnt/disks/data-extended/preprocessed/EVE/EVS_MEGS-A_stats.npy",
