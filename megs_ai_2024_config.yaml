@@ -4,7 +4,7 @@ model:
   epochs: [100]  # If the model is not hybrid, use this value
   lr: [1.e-4]  # If the model is not hybrid, use this value
   seed: [3110]  # Seed used for training
-  architecture: ['linear']
+  architecture: ['hybrid']
   # Training, validation, testing and holdout split
   val_months: [[2, 3]]  # Month used for validation
   test_months: [[11, 12]]  # Month used for testing
@@ -15,7 +15,7 @@ model:
   # CNN architecture
   cnn_model: ['efficientnet_b3']  # Choice of CNN model
   cnn_lr: [1.e-4]  # CNN model learning rate
-  cnn_dp: [0.75]  # CNN model dropout rate
+  cnn_dp: [0.0]  # CNN model dropout rate
   cnn_epochs: [50]  # CNN model epochs.
   # wl: # Wavelengths used as input
   "94": [[0]]  
@@ -43,5 +43,5 @@ wandb:
   job_type: 'Training'  # Nme of wandb job_type
   tags: ['development'] # Run tags
   notes: "First training of linear MEGSAI model ."
-  wb_name: "please_delete"
+  wb_name: "hybrid_baseline"
   
