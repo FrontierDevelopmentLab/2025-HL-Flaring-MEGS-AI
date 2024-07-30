@@ -82,11 +82,11 @@ class BaseModel(LightningModule):
         # mean absolute error
         mae = torch.abs(y - y_pred).mean()
 
-        self.log("valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_RAE", av_rae, on_epoch=True, prog_bar=True, logger=True)
-        [self.log(f"valid_RAE_{i}", err, on_epoch=True, prog_bar=True, logger=True) for i, err in enumerate(av_rae_wl)]
-        self.log("valid_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_RAE", av_rae, on_epoch=True, prog_bar=True, logger=True)
+        #[self.log(f"valid_RAE_{i}", err, on_epoch=True, prog_bar=True, logger=True) for i, err in enumerate(av_rae_wl)]
+        self.log("test_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
 
         return loss
 
