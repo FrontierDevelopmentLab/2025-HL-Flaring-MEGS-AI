@@ -153,7 +153,7 @@ for parameter_set in combined_parameters:
                                      eve_norm=eve_norm,
                                      lr = 1e-2)
 
-        elif run_config['architecture']=='hybrid_loop':
+        elif run_config['architecture']=='hybrid':
             model = HybridIrradianceModel(d_input=len(run_config[instrument]), 
                                         d_output=eve_norm.shape[1], 
                                         eve_norm=eve_norm, 
@@ -173,7 +173,7 @@ for parameter_set in combined_parameters:
         else:
             raise NotImplementedError(f"{run_config['architecture']} is not implemented.")
 
-        if run_config['architecture']=='hybrid_loop':
+        if run_config['architecture']=='hybrid':
             # Lambda/Mode callback
             model.set_train_mode('linear')
             model.lr = run_config['ln_lr']
