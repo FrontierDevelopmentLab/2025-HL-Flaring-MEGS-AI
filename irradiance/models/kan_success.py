@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import *
 from torch.nn import HuberLoss
-from irradiance.models.base_model import BaseModel
+from irradiance.models.base_model import BaseModel, BaseDEMModel
 
 
 class SplineLinear(nn.Linear):
@@ -160,60 +160,44 @@ class FastKANIrradiance(BaseModel):
         for layer in self.layers:
             x = layer(x)
         return x
-
-
-class AttentionWithFastKANTransform(nn.Module):
     
+
+class KANDEM(BaseDEMModel):
     def __init__(
         self,
-        q_dim: int,
-        k_dim: int,
-        v_dim: int,
-        head_dim: int,
-        num_heads: int,
-        gating: bool = True,
-    ):
-        super(AttentionWithFastKANTransform, self).__init__()
+        eve_norm,
+        uv_norm,
+        wavelengths,
+        t_query_points,
+        kanfov,
+        layers_hidden: List[int],
+        grid_min: float = -2.,
+        grid_max: float = 2.,
+        num_grids: int = 8,
+        use_base_update: bool = True,
+        base_activation = F.silu,
+        spline_weight_init_scale: float = 0.1,
+        loss_func = HuberLoss(),
+        lr=1e-4,
+    ) -> None:
+        super().__init__(eve_norm=eve_norm, uv_norm=uv_norm, wavelengths=wavelengths, kanfov=kanfov, model=None, t_query_points=t_query_points, loss_func=loss_func, lr=lr)
+        self.save_hyperparameters()
 
-        self.num_heads = num_heads
-        total_dim = head_dim * self.num_heads
-        self.gating = gating
-        self.linear_q = FastKANLayer(q_dim, total_dim)
-        self.linear_k = FastKANLayer(k_dim, total_dim)
-        self.linear_v = FastKANLayer(v_dim, total_dim)
-        self.linear_o = FastKANLayer(total_dim, q_dim)
-        self.linear_g = None
-        if self.gating:
-            self.linear_g = FastKANLayer(q_dim, total_dim)
-        # precompute the 1/sqrt(head_dim)
-        self.norm = head_dim**-0.5
-
-    def forward(
-        self,
-        q: torch.Tensor,
-        k: torch.Tensor,
-        v: torch.Tensor,
-        bias: torch.Tensor = None,      # additive attention bias
-    ) -> torch.Tensor:         
-
-        wq = self.linear_q(q).view(*q.shape[:-1], 1, self.num_heads, -1) * self.norm     # *q1hc
-        wk = self.linear_k(k).view(*k.shape[:-2], 1, k.shape[-2], self.num_heads, -1)    # *1khc
-        att = (wq * wk).sum(-1).softmax(-2)     # *qkh
-        del wq, wk
-        if bias is not None:
-            att = att + bias[..., None]
-
-        wv = self.linear_v(v).view(*v.shape[:-2],1, v.shape[-2], self.num_heads, -1)     # *1khc
-        o = (att[..., None] * wv).sum(-3)        # *qhc
-        del att, wv
-
-        o = o.view(*o.shape[:-2], -1)           # *q(hc)
-
-        if self.linear_g is not None:
-            # gating, use raw query input
-            g = self.linear_g(q)
-            o = torch.sigmoid(g) * o
-
-        # merge heads
-        o = self.linear_o(o)
-        return o
+        # specify the KAN model
+        self.layers = nn.ModuleList([
+                FastKANLayer(
+                    in_dim, out_dim,
+                    grid_min=grid_min,
+                    grid_max=grid_max,
+                    num_grids=num_grids,
+                    use_base_update=use_base_update,
+                    base_activation=base_activation,
+                    spline_weight_init_scale=spline_weight_init_scale,
+                ) for in_dim, out_dim in zip(layers_hidden[:-1], layers_hidden[1:])
+            ])
+        
+ 
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x

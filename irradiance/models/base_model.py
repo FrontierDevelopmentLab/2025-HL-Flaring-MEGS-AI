@@ -7,6 +7,7 @@ from torch.nn import HuberLoss
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+from irradiance.utilities.temperature_response import TemperatureResponse
 
 class BaseModel(LightningModule):
 
@@ -100,53 +101,83 @@ class BaseModel(LightningModule):
     
 
 
-class BaseDEMModel(LightningModule):
+class BaseDEMModel(BaseModel):
 
-    def __init__(self, eve_norm, uv_norm, model, t_query_points, loss_func=HuberLoss(), lr=1e-4):
-        super().__init__()
-        self.eve_norm = eve_norm
+    def __init__(self, eve_norm, uv_norm, model, t_query_points, wavelengths: list, loss_func=HuberLoss(), lr=1e-4, kanfov=3):
+        super().__init__(eve_norm=eve_norm, model=model, loss_func=loss_func, lr=lr)
         self.uv_norm = uv_norm
-        self.loss_func = loss_func
-        self.model = model
-        self.lr = lr
         self.t_query_points = t_query_points
+        self.kanfov = kanfov
+        self.temp_resp = TemperatureResponse()
+        self.wavelengths = wavelengths
 
-    def forward(self, x):
-        raise NotImplementedError("Forward method not implemented, please implement it in the child class.")
-
-    def forward_unnormalize(self, x):
-        x = self.forward(x)
-        return self.unnormalize(x, self.eve_norm)
-        
+    
     def training_step(self, batch, batch_nb):
         x, y = batch
-        x = x.unfold(2, 3, 1).unfold(3, 3, 1).reshape(x.shape[0], x.shape[1], -1, 3, 3) # channel, pixels, 3x3
-        y = x[:, :, :, 1, 1] # central pixel
-        y_pred = self(x)
-        loss = self.loss_func(y_pred, y)
+        x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
+        y = x[:, :, :, :, self.kanfov // 2, self.kanfov // 2] # central pixel --> batch, channel, pixel_x, pixel_y
+        y = y.reshape(y.shape[0], y.shape[1], -1) # batch, channel, center_pixel_x*center_pixel_y
+        y = y.transpose(1, 2) # batch, center_pixel_x*center_pixel_y, channel
+        x = x.reshape(x.shape[0], x.shape[1], -1, self.kanfov, self.kanfov) # batch, channel, pixel_x*pixel_y, kanfov, kanfov
+        x = x.transpose(1, 2) # batch, pixel_x*pixel_y, channel, kanfov, kanfov
+        x = x.reshape(x.shape[0], x.shape[1], -1) # batch, pixelx_*pixel_y, channel*kanfov*kanfov
+        x = x[:, :, None, :].expand((x.shape[0], x.shape[1], self.t_query_points.shape[0], x.shape[2])) # batch, pixel_x*pixel_y, t_query_points, channel*kanfov*kanfov
+        
+        x = torch.cat((x, self.t_query_points[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+
+        dem = self(x) # batch, t_query_points
+        dem = dem.expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
+        
+        t_resp = torch.zeros(self.t_query_points.shape[0], len(self.wavelengths), device=dem.device) # channel, t_query_points
+        for i, wl in enumerate(self.wavelengths):
+            t_resp[:, i] = self.temp_resp.response[wl]['interpolator'](self.t_query_points)
+
+        t_resp = t_resp[None, None, :, :].expand((dem.shape[0], dem.shape[1], dem.shape[2], dem.shape[3])) # batch, channel, t_query_points
+        intensity = torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
+        
+        loss = self.loss_func(intensity, y)
 
         epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
+        rae = torch.abs((y - intensity) / (torch.abs(y) + epsilon)) * 100
         self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_RAE", rae.mean(), on_epoch=True, prog_bar=True, logger=True)
+        
         return loss
 
     def validation_step(self, batch, batch_nb):
         x, y = batch
-        x = x.unfold(2, 3, 1).unfold(3, 3, 1).reshape(x.shape[0], x.shape[1], -1, 3, 3) # channel, pixels, 3x3
-        y = x[:, :, :, 1, 1] # central pixel
-        y_pred = self(x)
-        loss = self.loss_func(y_pred, y)
+        x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
+        y = x[:, :, :, :, self.kanfov // 2, self.kanfov // 2] # central pixel --> batch, channel, pixel_x, pixel_y
+        y = y.reshape(y.shape[0], y.shape[1], -1) # batch, channel, center_pixel_x*center_pixel_y
+        y = y.transpose(1, 2) # batch, center_pixel_x*center_pixel_y, channel
+        x = x.reshape(x.shape[0], x.shape[1], -1, self.kanfov, self.kanfov) # batch, channel, pixel_x*pixel_y, kanfov, kanfov
+        x = x.transpose(1, 2) # batch, pixel_x*pixel_y, channel, kanfov, kanfov
+        x = x.reshape(x.shape[0], x.shape[1], -1) # batch, pixelx_*pixel_y, channel*kanfov*kanfov
+        x = x[:, :, None, :].expand((x.shape[0], x.shape[1], self.t_query_points.shape[0], x.shape[2])) # batch, pixel_x*pixel_y, t_query_points, channel*kanfov*kanfov
+        
+        x = torch.cat((x, self.t_query_points[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+
+        dem = self(x) # batch, t_query_points
+        dem = dem.expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
+        
+        t_resp = torch.zeros(self.t_query_points.shape[0], len(self.wavelengths), device=dem.device) # channel, t_query_points
+        for i, wl in enumerate(self.wavelengths):
+            t_resp[:, i] = self.temp_resp.response[wl]['interpolator'](self.t_query_points)
+
+        t_resp = t_resp[None, None, :, :].expand((dem.shape[0], dem.shape[1], dem.shape[2], dem.shape[3])) # batch, channel, t_query_points
+        intensity = torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
+        
+        loss = self.loss_func(intensity, y)
 
         #computing relative absolute error
         epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
+        rae = torch.abs((y - intensity) / (torch.abs(y) + epsilon)) * 100
         av_rae = rae.mean()
         av_rae_wl = rae.mean(0)
         # compute average cross-correlation
-        cc = torch.tensor([torch.corrcoef(torch.stack([y[i], y_pred[i]]))[0, 1] for i in range(y.shape[0])]).mean()
+        cc = torch.corrcoef(torch.stack([y.reshape(-1), intensity.reshape(-1)]))[0, 1]
         # mean absolute error
-        mae = torch.abs(y - y_pred).mean()
+        mae = torch.abs(y - intensity).mean()
 
         self.log("valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
@@ -157,23 +188,41 @@ class BaseDEMModel(LightningModule):
 
     def test_step(self, batch, batch_nb):
         x, y = batch
-        x = x.unfold(2, 3, 1).unfold(3, 3, 1).reshape(x.shape[0], x.shape[1], -1, 3, 3) # channel, pixels, 3x3
-        y = x[:, :, :, 1, 1] # central pixel
-        y_pred = self(x)
-        loss = self.loss_func(y_pred, y)
+        x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
+        y = x[:, :, :, :, self.kanfov // 2, self.kanfov // 2] # central pixel --> batch, channel, pixel_x, pixel_y
+        y = y.reshape(y.shape[0], y.shape[1], -1) # batch, channel, center_pixel_x*center_pixel_y
+        y = y.transpose(1, 2) # batch, center_pixel_x*center_pixel_y, channel
+        x = x.reshape(x.shape[0], x.shape[1], -1, self.kanfov, self.kanfov) # batch, channel, pixel_x*pixel_y, kanfov, kanfov
+        x = x.transpose(1, 2) # batch, pixel_x*pixel_y, channel, kanfov, kanfov
+        x = x.reshape(x.shape[0], x.shape[1], -1) # batch, pixelx_*pixel_y, channel*kanfov*kanfov
+        x = x[:, :, None, :].expand((x.shape[0], x.shape[1], self.t_query_points.shape[0], x.shape[2])) # batch, pixel_x*pixel_y, t_query_points, channel*kanfov*kanfov
+        
+        x = torch.cat((x, self.t_query_points[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+
+        dem = self(x) # batch, t_query_points
+        dem = dem.expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
+        
+        t_resp = torch.zeros(self.t_query_points.shape[0], len(self.wavelengths), device=dem.device) # channel, t_query_points
+        for i, wl in enumerate(self.wavelengths):
+            t_resp[:, i] = self.temp_resp.response[wl]['interpolator'](self.t_query_points)
+
+        t_resp = t_resp[None, None, :, :].expand((dem.shape[0], dem.shape[1], dem.shape[2], dem.shape[3])) # batch, channel, t_query_points
+        intensity = torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
+        
+        loss = self.loss_func(intensity, y)
 
         #computing relative absolute error
         epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
+        rae = torch.abs((y - intensity) / (torch.abs(y) + epsilon)) * 100
         av_rae = rae.mean()
         # compute average cross-correlation
-        cc = torch.tensor([torch.corrcoef(torch.stack([y[i], y_pred[i]]))[0, 1] for i in range(y.shape[0])]).mean()
+        cc = torch.corrcoef(torch.stack([y.reshape(-1), intensity.reshape(-1)]))[0, 1]
         # mean absolute error
-        mae = torch.abs(y - y_pred).mean()
+        mae = torch.abs(y - intensity).mean()
 
         self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_RAE", av_rae, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
-
+    
         return loss
