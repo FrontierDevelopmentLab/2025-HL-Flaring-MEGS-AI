@@ -32,6 +32,7 @@ model:
   EUI: [[2, 5]] 
   SUVI: [[0, 1, 2, 3, 4, 5]]  
   CIRCE: [[1, 3, 5]]
+  AIA_UV: [[0, 1, 2, 3, 4, 5, 6]]
 
 logging: 'spectrum'
 
@@ -43,5 +44,5 @@ wandb:
   job_type: 'Training'  # Nme of wandb job_type
   tags: ['development'] # Run tags
   notes: "First training of linear MEGSAI model ."
-  wb_name: "KANDEM_v0"
+  wb_name: "please_delete"
   
