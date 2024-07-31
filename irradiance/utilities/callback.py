@@ -176,3 +176,23 @@ class SpectrumPredictionLogger(ImagePredictionLogger):
 
         fig.tight_layout()
         return fig
+
+
+# class DEMSpectrumPredictionLogger(SpectrumPredictionLogger):
+#     def __init__(self, val_imgs, val_eve, names, aia_wavelengths):
+#         super().__init__(val_imgs, val_eve, names, aia_wavelengths)
+
+#     def on_validation_epoch_end(self, trainer, pl_module):
+#         # Bring the tensors to CPU
+#         val_imgs = self.val_imgs.to(device=pl_module.device)
+#         # Get model prediction
+#         # pred_eve = pl_module.forward(val_imgs).cpu().numpy()
+#         pred_eve = pl_module.forward_unnormalize(val_imgs).cpu().numpy()
+#         val_eve = unnormalize(self.val_eve, pl_module.eve_norm).numpy()
+#         val_imgs = val_imgs.cpu().numpy()
+
+#         # create matplotlib figure
+#         fig = self.plot_aia_eve(val_imgs, val_eve, pred_eve)
+#         # Log the images to wandb
+#         trainer.logger.experiment.log({"AIA Images and EVE bar plots": wandb.Image(fig)})
+#         plt.close(fig)

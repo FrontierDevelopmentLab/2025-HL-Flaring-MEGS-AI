@@ -196,7 +196,7 @@ for parameter_set in combined_parameters:
                 accelerator="gpu",
                 devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
                 max_epochs=run_config['epochs'],
-                callbacks=[checkpoint_callback],
+                callbacks=[image_callback, checkpoint_callback],
                 logger=wandb_logger,
                 log_every_n_steps=10
                 )
