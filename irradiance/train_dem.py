@@ -14,8 +14,9 @@ from albumentations.pytorch import ToTensorV2
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
-from irradiance.models.kan_success import KANDEM
+from irradiance.models.kan_success import KANDEM, KANDEMSpectrum
 from irradiance.utilities.data_loader import IrradianceDataModule
+from irradiance.utilities.callback import ImagePredictionLogger, SpectrumPredictionLogger
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Parser
@@ -90,7 +91,7 @@ for parameter_set in combined_parameters:
                                            val_months=run_config['val_months'], 
                                            test_months=run_config['test_months'],
                                            holdout_months=run_config['holdout_months'],
-                                           norm_eve=False,
+                                           norm_eve=True,
                                            norm_uv=False,
                                            )
         data_loader.setup()
@@ -111,20 +112,20 @@ for parameter_set in combined_parameters:
                                 notes=config_data['wandb']['notes'],
                                 config=run_config)                           
 
-        # # Plot callback
-        # total_n_valid = len(data_loader.valid_ds)
-        # plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, total_n_valid // 4)]
-        # plot_images = torch.stack([image for image, eve in plot_data])
-        # plot_eve = torch.stack([eve for image, eve in plot_data])
-        # if eve_wl is not None:
-        #     eve_wl = np.load(eve_wl, allow_pickle=True)
+        # Plot callback
+        total_n_valid = len(data_loader.valid_ds)
+        plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, total_n_valid // 4)]
+        plot_images = torch.stack([image for image, eve in plot_data])
+        plot_eve = torch.stack([eve for image, eve in plot_data])
+        if eve_wl is not None:
+            eve_wl = np.load(eve_wl, allow_pickle=True)
         
-        # if config_data['logging'] == 'images':
-        #     image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
-        # elif config_data['logging'] == 'spectrum':
-        #     image_callback = SpectrumPredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
-        # else:
-        #     raise NotImplementedError(f"{config_data['logging']} is not implemented.")
+        if config_data['logging'] == 'images':
+            image_callback = ImagePredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
+        elif config_data['logging'] == 'spectrum':
+            image_callback = SpectrumPredictionLogger(plot_images, plot_eve, eve_wl, run_config[instrument])
+        else:
+            raise NotImplementedError(f"{config_data['logging']} is not implemented.")
             
         # Checkpoint callback
         checkpoint_path = os.path.split(checkpoint)[0]
@@ -134,33 +135,71 @@ for parameter_set in combined_parameters:
         
         kanfov = 3
         wavelengths = [94, 131, 171, 193, 211, 304, 335]
-        model = KANDEM(eve_norm=eve_norm,
-                       uv_norm=uv_norm,
-                       kanfov = kanfov,
-                       wavelengths=wavelengths,
-                       layers_hidden=[len(wavelengths) * kanfov * kanfov + 1, 128, 1],
-                       grid_min = [0, -3],
-                       grid_max = [7, 3],
-                       num_grids = 8,
-                       use_base_update = True,
-                       base_activation = F.silu,
-                       spline_weight_init_scale = 0.1,
-                       lr = 1e-3,
-                       t_query_points=torch.linspace(4, 9, 20).to(device), # 20 query points between 10^4 and 10^9 K
-                       base_temp_exponent = 3,
-                       intensity_factor=1e20
-                       )
-
-        # Initialize trainer
-        trainer = Trainer(
-            default_root_dir=checkpoint_path,
-            accelerator="gpu",
-            devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
-            max_epochs=run_config['epochs'],
-            callbacks=[checkpoint_callback],
-            logger=wandb_logger,
-            log_every_n_steps=10
-            )
+        t_query_points_n= run_config['t_query_points_n']
+        
+        if run_config['architecture'] == 'DEM':
+            model = KANDEM(eve_norm=eve_norm,
+                        uv_norm=uv_norm,
+                        kanfov = kanfov,
+                        wavelengths=wavelengths,
+                        layers_hidden=[len(wavelengths) * kanfov * kanfov + 1, 128, 1],
+                        grid_min = [0, -3],
+                        grid_max = [7, 3],
+                        num_grids = 8,
+                        use_base_update = True,
+                        base_activation = F.silu,
+                        spline_weight_init_scale = 0.1,
+                        lr = run_config['lr'],
+                        t_query_points=torch.linspace(4, 9, t_query_points_n).to(device), # 20 query points between 10^4 and 10^9 K
+                        base_temp_exponent = 3,
+                        intensity_factor=1e20,
+                        )
+            
+            # Initialize trainer
+            trainer = Trainer(
+                default_root_dir=checkpoint_path,
+                accelerator="gpu",
+                devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
+                max_epochs=run_config['epochs'],
+                callbacks=[checkpoint_callback],
+                logger=wandb_logger,
+                log_every_n_steps=10
+                )
+                
+        elif run_config['architecture'] == 'DEMSpectrum':
+            model = KANDEMSpectrum(eve_norm = eve_norm,
+                                uv_norm = uv_norm,
+                                kanfov = kanfov,
+                                wavelengths = wavelengths,
+                                t_query_points = torch.linspace(4, 9, t_query_points_n).to(device),
+                                layers_hidden_dem = [len(wavelengths) * kanfov * kanfov + 1, 128, 1],
+                                layers_hidden_sp = [t_query_points_n, 128, eve_norm.shape[1]],
+                                grid_min_dem = [0, -3],
+                                grid_min_sp = [0, -3],
+                                grid_max_dem = [7, 3],
+                                grid_max_sp = [7, 3],
+                                num_grids_dem= 8,
+                                num_grids_sp = 8,
+                                use_base_update_dem = True,
+                                use_base_update_sp = True,
+                                spline_weight_init_scale_dem = 0.1,
+                                spline_weight_init_scale_sp = 0.1,
+                                base_activation = F.silu,
+                                base_temp_exponent=0,
+                                intensity_factor=1e25,
+                                lr=run_config['lr']
+                                )
+            
+            # Initialize trainer
+            trainer = Trainer(
+                default_root_dir=checkpoint_path,
+                accelerator="gpu",
+                devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
+                max_epochs=run_config['epochs'],
+                callbacks=[checkpoint_callback],
+                logger=wandb_logger,
+                log_every_n_steps=10
+                )
 
         # Train the model ⚡
         trainer.fit(model, data_loader)
