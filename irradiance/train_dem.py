@@ -91,7 +91,8 @@ for parameter_set in combined_parameters:
                                            test_months=run_config['test_months'],
                                            holdout_months=run_config['holdout_months'],
                                            norm_eve=False,
-                                           norm_uv=False)
+                                           norm_uv=False,
+                                           )
         data_loader.setup()
         
               
@@ -138,14 +139,16 @@ for parameter_set in combined_parameters:
                        kanfov = kanfov,
                        wavelengths=wavelengths,
                        layers_hidden=[len(wavelengths) * kanfov * kanfov + 1, 128, 1],
-                       grid_min = -2.,
-                       grid_max = 2.,
+                       grid_min = [0, -3],
+                       grid_max = [7, 3],
                        num_grids = 8,
                        use_base_update = True,
                        base_activation = F.silu,
                        spline_weight_init_scale = 0.1,
                        lr = 1e-3,
                        t_query_points=torch.linspace(4, 9, 20).to(device), # 20 query points between 10^4 and 10^9 K
+                       base_temp_exponent = 3,
+                       intensity_factor=1e20
                        )
 
         # Initialize trainer
