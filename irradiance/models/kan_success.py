@@ -16,6 +16,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import sys
 from typing import *
 from torch.nn import HuberLoss
 from irradiance.models.base_model import BaseModel, BaseDEMModel
@@ -212,3 +213,163 @@ class KANDEM(BaseDEMModel):
         for layer in self.layers:
             x = layer(x)
         return x
+
+
+
+class KANDEMSpectrum(BaseDEMModel):
+    def __init__(
+        self,
+        eve_norm,
+        uv_norm,
+        wavelengths,
+        t_query_points,
+        kanfov,
+        layers_hidden_dem: List[int],
+        layers_hidden_sp: List[int],
+        grid_min_dem: List[float],
+        grid_min_sp: List[float],
+        grid_max_dem: List[float],
+        grid_max_sp: List[float],
+        num_grids_dem: int = 8,
+        num_grids_sp: int = 8,
+        use_base_update_dem: bool = True,
+        use_base_update_sp: bool = True,
+        spline_weight_init_scale_dem: float = 0.1,
+        spline_weight_init_scale_sp: float = 0.1,
+        base_activation = F.silu,
+        base_temp_exponent=0,
+        intensity_factor=1e25,
+        lr=1e-4,
+        loss_func = HuberLoss(),
+    ) -> None:
+        super().__init__(eve_norm=eve_norm, 
+                         uv_norm=uv_norm, 
+                         wavelengths=wavelengths, 
+                         kanfov=kanfov, 
+                         model=None, 
+                         t_query_points=t_query_points, 
+                         loss_func=loss_func, 
+                         lr=lr,
+                         base_temp_exponent=base_temp_exponent,
+                         intensity_factor = intensity_factor)
+        self.save_hyperparameters()
+
+        # specify the KAN model
+        self.dem_layers = nn.ModuleList([
+                FastKANLayer(
+                    in_dim, out_dim,
+                    grid_min=grid_min_l,
+                    grid_max=grid_max_l,
+                    num_grids=num_grids_dem,
+                    use_base_update=use_base_update_dem,
+                    base_activation=base_activation,
+                    spline_weight_init_scale=spline_weight_init_scale_dem,
+                ) for in_dim, out_dim, grid_min_l, grid_max_l in zip(layers_hidden_dem[:-1], layers_hidden_dem[1:], grid_min_dem, grid_max_dem)
+            ])
+        
+        self.spectrum_layers = nn.ModuleList([
+                FastKANLayer(
+                    in_dim, out_dim,
+                    grid_min=grid_min_l,
+                    grid_max=grid_max_l,
+                    num_grids=num_grids_sp,
+                    use_base_update=use_base_update_sp,
+                    base_activation=base_activation,
+                    spline_weight_init_scale=spline_weight_init_scale_sp,
+                ) for in_dim, out_dim, grid_min_l, grid_max_l in zip(layers_hidden_sp[:-1], layers_hidden_sp[1:], grid_min_sp, grid_max_sp)
+            ])
+    
+    
+    def forward(self, x):
+        for layer in self.dem_layers:
+            x = layer(x)
+        return x
+
+    def forward_spectrum(self, x):
+        for layer in self.spectrum_layers:
+            x = layer(x)
+        return x
+
+    
+    def training_step(self, batch, batch_nb):
+        x, y = batch
+
+        intensity, dem, intensity_target = self.intensity_calculation(x, y) # dem: batch, channel, t_query_points
+        dem = dem[:, :, :, 0] # batch, pixels, t_query_points
+        spectrum = self.forward_spectrum(dem)
+        spectrum = torch.mean(spectrum, dim=1)
+        # Compare with target
+        loss_dem = self.loss_func(intensity, intensity_target)
+        loss_sp = self.loss_func(spectrum, y)
+        # Penalize negatives in dem
+        loss_dem_negative = torch.mean(torch.relu(-dem))
+
+        epsilon = sys.float_info.min
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
+        rae_sp = torch.abs((y - spectrum) / (torch.abs(y) + epsilon)) * 100
+        self.log("train_loss_dem", loss_dem, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_RAE_dem", torch.mean(rae_dem[torch.isfinite(rae_dem)]), on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_loss_sp", loss_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_dem_negative", loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+
+        return loss_dem + loss_sp + loss_dem_negative
+
+    
+    def validation_step(self, batch, batch_nb):
+        x, y = batch
+
+        intensity, dem, intensity_target = self.intensity_calculation(x, y)
+        dem = dem[:, :, :, 0] # batch, pixels, t_query_points
+        spectrum = self.forward_spectrum(dem)
+        spectrum = torch.mean(spectrum, dim=1)
+        # Compare with target
+        loss_dem = self.loss_func(intensity, intensity_target)
+        loss_sp = self.loss_func(spectrum, y)
+        # Penalize negatives in dem
+        loss_dem_negative = torch.mean(torch.relu(-dem))
+
+        epsilon = sys.float_info.min
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
+        rae_sp = torch.abs((y - spectrum) / (torch.abs(y) + epsilon)) * 100
+        mae_dem = torch.abs(intensity_target - intensity).mean()
+        mae_sp = torch.abs(y - spectrum).mean()
+        self.log("valid_loss_dem", loss_dem, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_RAE_dem", torch.mean(rae_dem[torch.isfinite(rae_dem)]), on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_loss_sp", loss_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_MAE_dem", mae_dem, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+
+        return loss_dem + loss_sp + loss_dem_negative
+    
+    
+    def test_step(self, batch, batch_nb):
+        x, y = batch
+
+        intensity, dem, intensity_target = self.intensity_calculation(x, y)
+        dem = dem[:, :, :, 0] # batch, pixels, t_query_points
+        spectrum = self.forward_spectrum(dem)
+        spectrum = torch.mean(spectrum, dim=1)
+        # Compare with target
+        loss_dem = self.loss_func(intensity, intensity_target)
+        loss_sp = self.loss_func(spectrum, y)
+        # Penalize negatives in dem
+        loss_dem_negative = torch.mean(torch.relu(-dem))
+
+        epsilon = sys.float_info.min
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
+        rae_sp = torch.abs((y - spectrum) / (torch.abs(y) + epsilon)) * 100
+        mae_dem = torch.abs(intensity_target - intensity).mean()
+        mae_sp = torch.abs(y - spectrum).mean()
+        self.log("test_loss_dem", loss_dem, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_RAE_dem", torch.mean(rae_dem[torch.isfinite(rae_dem)]), on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_loss_sp", loss_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_MAE_dem", mae_dem, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+
+        return loss_dem + loss_sp + loss_dem_negative
