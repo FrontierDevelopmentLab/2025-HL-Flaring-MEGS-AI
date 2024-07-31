@@ -4,7 +4,8 @@ model:
   epochs: [100]  # If the model is not hybrid, use this value
   lr: [1.e-4]  # If the model is not hybrid, use this value
   seed: [3110]  # Seed used for training
-  architecture: ['linear']
+  t_query_points_n: [20] # number of temperature query points
+  architecture: ['DEMSpectrum']
   # Training, validation, testing and holdout split
   val_months: [[2, 3]]  # Month used for validation
   test_months: [[11, 12]]  # Month used for testing
@@ -44,5 +45,5 @@ wandb:
   job_type: 'Training'  # Nme of wandb job_type
   tags: ['development'] # Run tags
   notes: "First training of linear MEGSAI model ."
-  wb_name: "please_delete"
+  wb_name: "KANDEMSpectrum_v0"
   
