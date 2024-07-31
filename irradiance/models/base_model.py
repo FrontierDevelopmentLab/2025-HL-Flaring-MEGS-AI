@@ -177,8 +177,8 @@ class BaseDEMModel(BaseModel):
         epsilon = sys.float_info.min
         rae = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
         self.log("train_loss", loss + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_RAE", torch.mean(rae[torch.isfinite(rae)]), on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_loss_dem_negative", loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_RAE_dem", torch.mean(rae[torch.isfinite(rae)]), on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_dem_negative", loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_loss_dem", loss, on_epoch=True, prog_bar=True, logger=True)
         
         return loss + loss_dem_negative
@@ -203,10 +203,9 @@ class BaseDEMModel(BaseModel):
         mae = torch.abs(intensity_target - intensity).mean()
 
         self.log("valid_loss", loss + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_RAE", av_rae, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_MAE_dem", mae, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_RAE_dem", av_rae, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_loss_dem_negative", loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_loss_dem", loss, on_epoch=True, prog_bar=True, logger=True)
 
         return loss + loss_dem_negative
@@ -231,10 +230,9 @@ class BaseDEMModel(BaseModel):
         mae = torch.abs(intensity_target - intensity).mean()
 
         self.log("test_loss", loss + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_MAE", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_RAE", av_rae, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_MAE_dem", mae, on_epoch=True, prog_bar=True, logger=True)
+        self.log("test_RAE_dem", av_rae, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_loss_dem_negative", loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_loss_dem", loss, on_epoch=True, prog_bar=True, logger=True)
     
         return loss + loss_dem_negative
