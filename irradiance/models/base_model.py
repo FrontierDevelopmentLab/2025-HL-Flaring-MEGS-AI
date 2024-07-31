@@ -35,6 +35,7 @@ class BaseModel(LightningModule):
 
         epsilon = sys.float_info.min
         rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_loss_sp", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_RAE_sp", rae.mean(), on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -57,6 +58,7 @@ class BaseModel(LightningModule):
         # mean absolute error
         mae = torch.abs(y - y_pred).mean()
 
+        self.log("valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_loss_sp", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_MAE_sp", mae, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_RAE_sp", av_rae, on_epoch=True, prog_bar=True, logger=True)
@@ -82,6 +84,7 @@ class BaseModel(LightningModule):
         # mean absolute error
         mae = torch.abs(y - y_pred).mean()
 
+        self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_loss_sp", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_MAE_sp", mae, on_epoch=True, prog_bar=True, logger=True)
         self.log("test_RAE_sp", av_rae, on_epoch=True, prog_bar=True, logger=True)
