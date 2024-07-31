@@ -103,77 +103,120 @@ class BaseModel(LightningModule):
 
 class BaseDEMModel(BaseModel):
 
-    def __init__(self, eve_norm, uv_norm, model, t_query_points, wavelengths: list, loss_func=HuberLoss(), lr=1e-4, kanfov=3):
+    def __init__(self, 
+                 eve_norm, 
+                 uv_norm, 
+                 model, 
+                 t_query_points, 
+                 wavelengths: list, 
+                 loss_func=HuberLoss(), 
+                 lr=1e-4, 
+                 kanfov=3,
+                 base_temp_exponent=0,
+                 intensity_factor=1e25):
         super().__init__(eve_norm=eve_norm, model=model, loss_func=loss_func, lr=lr)
-        self.uv_norm = uv_norm
+        self.uv_norm = torch.mean(torch.Tensor(uv_norm['mean'])) # TODO: remove 1600 and 1700 from mean
         self.t_query_points = t_query_points
         self.kanfov = kanfov
         self.temp_resp = TemperatureResponse()
         self.wavelengths = wavelengths
+        self.base_temp_exponent = base_temp_exponent
+        self.intensity_factor = intensity_factor
+        self.calibration = nn.Parameter(torch.Tensor([1.0]))
 
-    
     def training_step(self, batch, batch_nb):
         x, y = batch
+
+        # Create tiles
         x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
+        
+        # Store center pixels
         y = x[:, :, :, :, self.kanfov // 2, self.kanfov // 2] # central pixel --> batch, channel, pixel_x, pixel_y
         y = y.reshape(y.shape[0], y.shape[1], -1) # batch, channel, center_pixel_x*center_pixel_y
         y = y.transpose(1, 2) # batch, center_pixel_x*center_pixel_y, channel
+
+        # Reshape input
         x = x.reshape(x.shape[0], x.shape[1], -1, self.kanfov, self.kanfov) # batch, channel, pixel_x*pixel_y, kanfov, kanfov
         x = x.transpose(1, 2) # batch, pixel_x*pixel_y, channel, kanfov, kanfov
         x = x.reshape(x.shape[0], x.shape[1], -1) # batch, pixelx_*pixel_y, channel*kanfov*kanfov
         x = x[:, :, None, :].expand((x.shape[0], x.shape[1], self.t_query_points.shape[0], x.shape[2])) # batch, pixel_x*pixel_y, t_query_points, channel*kanfov*kanfov
         
-        x = torch.cat((x, self.t_query_points[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+        # Normalize input
+        x = x/self.uv_norm
 
+        # Concatenate log10(T) subtracting base exponent
+        x = torch.cat((x, (self.t_query_points-self.base_temp_exponent)[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+
+        # Get DEM
         dem = self(x) # batch, t_query_points
         dem = dem.expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
         
+        # Calculate temperature response function
         t_resp = torch.zeros(self.t_query_points.shape[0], len(self.wavelengths), device=dem.device) # channel, t_query_points
         for i, wl in enumerate(self.wavelengths):
             t_resp[:, i] = self.temp_resp.response[wl]['interpolator'](self.t_query_points)
 
+        # Expand temperature response function
         t_resp = t_resp[None, None, :, :].expand((dem.shape[0], dem.shape[1], dem.shape[2], dem.shape[3])) # batch, channel, t_query_points
-        intensity = torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
         
+        # Integrate temperature response function and DEM to get itensity
+        intensity = self.calibration*self.intensity_factor*torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
+        
+        # Compare with target
         loss = self.loss_func(intensity, y)
 
         epsilon = sys.float_info.min
         rae = torch.abs((y - intensity) / (torch.abs(y) + epsilon)) * 100
         self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_RAE", rae.mean(), on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_RAE", torch.mean(rae[torch.isfinite(rae)]), on_epoch=True, prog_bar=True, logger=True)
         
         return loss
 
     def validation_step(self, batch, batch_nb):
         x, y = batch
+
+        # Create tiles
         x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
+        
+        # Store center pixels
         y = x[:, :, :, :, self.kanfov // 2, self.kanfov // 2] # central pixel --> batch, channel, pixel_x, pixel_y
         y = y.reshape(y.shape[0], y.shape[1], -1) # batch, channel, center_pixel_x*center_pixel_y
         y = y.transpose(1, 2) # batch, center_pixel_x*center_pixel_y, channel
+
+        # Reshape input
         x = x.reshape(x.shape[0], x.shape[1], -1, self.kanfov, self.kanfov) # batch, channel, pixel_x*pixel_y, kanfov, kanfov
         x = x.transpose(1, 2) # batch, pixel_x*pixel_y, channel, kanfov, kanfov
         x = x.reshape(x.shape[0], x.shape[1], -1) # batch, pixelx_*pixel_y, channel*kanfov*kanfov
         x = x[:, :, None, :].expand((x.shape[0], x.shape[1], self.t_query_points.shape[0], x.shape[2])) # batch, pixel_x*pixel_y, t_query_points, channel*kanfov*kanfov
         
-        x = torch.cat((x, self.t_query_points[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+        # Normalize input
+        x = x/self.uv_norm
 
+        # Concatenate log10(T) subtracting base exponent
+        x = torch.cat((x, (self.t_query_points-self.base_temp_exponent)[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+
+        # Get DEM
         dem = self(x) # batch, t_query_points
         dem = dem.expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
         
+        # Calculate temperature response function
         t_resp = torch.zeros(self.t_query_points.shape[0], len(self.wavelengths), device=dem.device) # channel, t_query_points
         for i, wl in enumerate(self.wavelengths):
             t_resp[:, i] = self.temp_resp.response[wl]['interpolator'](self.t_query_points)
 
+        # Expand temperature response function
         t_resp = t_resp[None, None, :, :].expand((dem.shape[0], dem.shape[1], dem.shape[2], dem.shape[3])) # batch, channel, t_query_points
-        intensity = torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
         
+        # Integrate temperature response function and DEM to get itensity
+        intensity = self.calibration*self.intensity_factor*torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
+        
+        # Compare with target
         loss = self.loss_func(intensity, y)
 
         #computing relative absolute error
         epsilon = sys.float_info.min
         rae = torch.abs((y - intensity) / (torch.abs(y) + epsilon)) * 100
-        av_rae = rae.mean()
-        av_rae_wl = rae.mean(0)
+        av_rae = torch.mean(rae[torch.isfinite(rae)])
         # compute average cross-correlation
         cc = torch.corrcoef(torch.stack([y.reshape(-1), intensity.reshape(-1)]))[0, 1]
         # mean absolute error
@@ -188,33 +231,49 @@ class BaseDEMModel(BaseModel):
 
     def test_step(self, batch, batch_nb):
         x, y = batch
+
+        # Create tiles
         x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
+        
+        # Store center pixels
         y = x[:, :, :, :, self.kanfov // 2, self.kanfov // 2] # central pixel --> batch, channel, pixel_x, pixel_y
         y = y.reshape(y.shape[0], y.shape[1], -1) # batch, channel, center_pixel_x*center_pixel_y
         y = y.transpose(1, 2) # batch, center_pixel_x*center_pixel_y, channel
+
+        # Reshape input
         x = x.reshape(x.shape[0], x.shape[1], -1, self.kanfov, self.kanfov) # batch, channel, pixel_x*pixel_y, kanfov, kanfov
         x = x.transpose(1, 2) # batch, pixel_x*pixel_y, channel, kanfov, kanfov
         x = x.reshape(x.shape[0], x.shape[1], -1) # batch, pixelx_*pixel_y, channel*kanfov*kanfov
         x = x[:, :, None, :].expand((x.shape[0], x.shape[1], self.t_query_points.shape[0], x.shape[2])) # batch, pixel_x*pixel_y, t_query_points, channel*kanfov*kanfov
         
-        x = torch.cat((x, self.t_query_points[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+        # Normalize input
+        x = x/self.uv_norm
 
+        # Concatenate log10(T) subtracting base exponent
+        x = torch.cat((x, (self.t_query_points-self.base_temp_exponent)[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
+
+        # Get DEM
         dem = self(x) # batch, t_query_points
         dem = dem.expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
         
+        # Calculate temperature response function
         t_resp = torch.zeros(self.t_query_points.shape[0], len(self.wavelengths), device=dem.device) # channel, t_query_points
         for i, wl in enumerate(self.wavelengths):
             t_resp[:, i] = self.temp_resp.response[wl]['interpolator'](self.t_query_points)
 
+        # Expand temperature response function
         t_resp = t_resp[None, None, :, :].expand((dem.shape[0], dem.shape[1], dem.shape[2], dem.shape[3])) # batch, channel, t_query_points
-        intensity = torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
         
+        # Integrate temperature response function and DEM to get itensity
+        intensity = self.calibration*self.intensity_factor*torch.trapezoid(dem * t_resp, x=torch.pow(10, self.t_query_points), dim=2) # batch, channel
+        
+        # Compare with target
         loss = self.loss_func(intensity, y)
 
         #computing relative absolute error
         epsilon = sys.float_info.min
         rae = torch.abs((y - intensity) / (torch.abs(y) + epsilon)) * 100
-        av_rae = rae.mean()
+        av_rae = torch.mean(rae[torch.isfinite(rae)])
         # compute average cross-correlation
         cc = torch.corrcoef(torch.stack([y.reshape(-1), intensity.reshape(-1)]))[0, 1]
         # mean absolute error
