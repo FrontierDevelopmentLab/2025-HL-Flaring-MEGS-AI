@@ -45,5 +45,5 @@ wandb:
   job_type: 'Training'  # Nme of wandb job_type
   tags: ['development'] # Run tags
   notes: "First training of linear MEGSAI model ."
-  wb_name: "KANDEMSpectrum_v0"
+  wb_name: "please_delete"
   
