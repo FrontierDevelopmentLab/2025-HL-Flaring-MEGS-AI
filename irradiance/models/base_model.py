@@ -125,7 +125,7 @@ class BaseDEMModel(BaseModel):
         self.calibration = nn.Parameter(torch.Tensor([1.0]))
 
     
-    def intensity_calculation(self, x, y):
+    def intensity_calculation(self, x):
         # Create tiles
         x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
         
@@ -167,7 +167,7 @@ class BaseDEMModel(BaseModel):
     def training_step(self, batch, batch_nb):
         x, y = batch
 
-        intensity, dem, intensity_target = self.intensity_calculation(x, y) 
+        intensity, dem, intensity_target = self.intensity_calculation(x) 
 
         loss_dem_negative = torch.mean(torch.relu(-dem))
         
@@ -186,7 +186,7 @@ class BaseDEMModel(BaseModel):
     def validation_step(self, batch, batch_nb):
         x, y = batch
 
-        intensity, dem, intensity_target = self.intensity_calculation(x, y)
+        intensity, dem, intensity_target = self.intensity_calculation(x)
 
         loss_dem_negative = torch.mean(torch.relu(-dem))
         
@@ -214,7 +214,7 @@ class BaseDEMModel(BaseModel):
     def test_step(self, batch, batch_nb):
         x, y = batch
 
-        intensity, dem, intensity_target = self.intensity_calculation(x, y)
+        intensity, dem, intensity_target = self.intensity_calculation(x)
         
         # Compare with target
         loss = self.loss_func(intensity, intensity_target)

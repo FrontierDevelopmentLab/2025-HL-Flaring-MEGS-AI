@@ -280,6 +280,13 @@ class KANDEMSpectrum(BaseDEMModel):
             ])
     
     
+    def forward_unnormalize(self, x):
+        intensity, dem, intensity_target = self.intensity_calculation(x) # dem: batch, channel, t_query_points
+        dem = dem[:, :, :, 0] # batch, pixels, t_query_points
+        spectrum = self.forward_spectrum(dem)
+        spectrum = torch.mean(spectrum, dim=1)
+        return self.unnormalize(spectrum, self.eve_norm)
+    
     def forward(self, x):
         for layer in self.dem_layers:
             x = layer(x)
@@ -294,7 +301,7 @@ class KANDEMSpectrum(BaseDEMModel):
     def training_step(self, batch, batch_nb):
         x, y = batch
 
-        intensity, dem, intensity_target = self.intensity_calculation(x, y) # dem: batch, channel, t_query_points
+        intensity, dem, intensity_target = self.intensity_calculation(x) # dem: batch, channel, t_query_points
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
         spectrum = torch.mean(spectrum, dim=1)
@@ -320,7 +327,7 @@ class KANDEMSpectrum(BaseDEMModel):
     def validation_step(self, batch, batch_nb):
         x, y = batch
 
-        intensity, dem, intensity_target = self.intensity_calculation(x, y)
+        intensity, dem, intensity_target = self.intensity_calculation(x)
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
         spectrum = torch.mean(spectrum, dim=1)
@@ -349,7 +356,7 @@ class KANDEMSpectrum(BaseDEMModel):
     def test_step(self, batch, batch_nb):
         x, y = batch
 
-        intensity, dem, intensity_target = self.intensity_calculation(x, y)
+        intensity, dem, intensity_target = self.intensity_calculation(x)
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
         spectrum = torch.mean(spectrum, dim=1)
