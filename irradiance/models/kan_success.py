@@ -171,29 +171,40 @@ class KANDEM(BaseDEMModel):
         t_query_points,
         kanfov,
         layers_hidden: List[int],
-        grid_min: float = -2.,
-        grid_max: float = 2.,
+        grid_min: List[float],
+        grid_max: List[float],
         num_grids: int = 8,
         use_base_update: bool = True,
         base_activation = F.silu,
         spline_weight_init_scale: float = 0.1,
         loss_func = HuberLoss(),
         lr=1e-4,
+        base_temp_exponent=0,
+        intensity_factor=1e25
     ) -> None:
-        super().__init__(eve_norm=eve_norm, uv_norm=uv_norm, wavelengths=wavelengths, kanfov=kanfov, model=None, t_query_points=t_query_points, loss_func=loss_func, lr=lr)
+        super().__init__(eve_norm=eve_norm, 
+                         uv_norm=uv_norm, 
+                         wavelengths=wavelengths, 
+                         kanfov=kanfov, 
+                         model=None, 
+                         t_query_points=t_query_points, 
+                         loss_func=loss_func, 
+                         lr=lr,
+                         base_temp_exponent=base_temp_exponent,
+                         intensity_factor = intensity_factor)
         self.save_hyperparameters()
 
         # specify the KAN model
         self.layers = nn.ModuleList([
                 FastKANLayer(
                     in_dim, out_dim,
-                    grid_min=grid_min,
-                    grid_max=grid_max,
+                    grid_min=grid_min_l,
+                    grid_max=grid_max_l,
                     num_grids=num_grids,
                     use_base_update=use_base_update,
                     base_activation=base_activation,
                     spline_weight_init_scale=spline_weight_init_scale,
-                ) for in_dim, out_dim in zip(layers_hidden[:-1], layers_hidden[1:])
+                ) for in_dim, out_dim, grid_min_l, grid_max_l in zip(layers_hidden[:-1], layers_hidden[1:], grid_min, grid_max)
             ])
         
  
