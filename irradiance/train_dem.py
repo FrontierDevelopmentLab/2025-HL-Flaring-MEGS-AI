@@ -18,6 +18,8 @@ from irradiance.models.kan_success import KANDEM, KANDEMSpectrum
 from irradiance.utilities.data_loader import IrradianceDataModule
 from irradiance.utilities.callback import ImagePredictionLogger, SpectrumPredictionLogger
 
+torch.set_float32_matmul_precision('high')
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Parser
 parser = argparse.ArgumentParser()
@@ -87,7 +89,7 @@ for parameter_set in combined_parameters:
                                            num_workers=os.cpu_count() // 2,
                                            train_transforms=train_transforms, 
                                            val_transforms=val_transforms,
-                                           batch_size=4,
+                                           batch_size=2,
                                            val_months=run_config['val_months'], 
                                            test_months=run_config['test_months'],
                                            holdout_months=run_config['holdout_months'],
@@ -172,12 +174,12 @@ for parameter_set in combined_parameters:
                                 kanfov = kanfov,
                                 wavelengths = wavelengths,
                                 t_query_points = torch.linspace(4, 9, t_query_points_n).to(device),
-                                layers_hidden_dem = [len(wavelengths) * kanfov * kanfov + 1, 128, 1],
-                                layers_hidden_sp = [t_query_points_n, 128, eve_norm.shape[1]],
-                                grid_min_dem = [0, -3],
-                                grid_min_sp = [0, -3],
-                                grid_max_dem = [7, 3],
-                                grid_max_sp = [7, 3],
+                                layers_hidden_dem = [len(wavelengths) * kanfov * kanfov + 1, 128, 64, 1],
+                                layers_hidden_sp = [t_query_points_n, 128, 64, eve_norm.shape[1]],
+                                grid_min_dem = [0, -3, -3],
+                                grid_min_sp = [0, -3, -3],
+                                grid_max_dem = [7, 3, 3],
+                                grid_max_sp = [7, 3, 3],
                                 num_grids_dem= 8,
                                 num_grids_sp = 8,
                                 use_base_update_dem = True,
@@ -187,7 +189,8 @@ for parameter_set in combined_parameters:
                                 base_activation = F.silu,
                                 base_temp_exponent=0,
                                 intensity_factor=1e25,
-                                lr=run_config['lr']
+                                lr=run_config['lr'],
+                                stride=2
                                 )
             
             # Initialize trainer
