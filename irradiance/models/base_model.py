@@ -115,9 +115,14 @@ class BaseDEMModel(BaseModel):
                  loss_func=HuberLoss(), 
                  lr=1e-4, 
                  kanfov=3,
+                 stride=None,
                  base_temp_exponent=0,
                  intensity_factor=1e25):
         super().__init__(eve_norm=eve_norm, model=model, loss_func=loss_func, lr=lr)
+        if stride is None:
+            self.stride = kanfov
+        else:
+            self.stride = stride
         self.uv_norm = torch.mean(torch.Tensor(uv_norm['mean'])) # TODO: remove 1600 and 1700 from mean
         self.t_query_points = t_query_points
         self.kanfov = kanfov
@@ -130,7 +135,7 @@ class BaseDEMModel(BaseModel):
     
     def intensity_calculation(self, x):
         # Create tiles
-        x = x.unfold(2, self.kanfov, self.kanfov).unfold(3, self.kanfov, self.kanfov) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
+        x = x.unfold(2, self.kanfov, self.stride).unfold(3, self.kanfov, self.stride) # batch, channel, pixel_x, pixel_y, kanfov, kanfov
         
         # Store center pixels
         y = x[:, :, :, :, self.kanfov // 2, self.kanfov // 2] # central pixel --> batch, channel, pixel_x, pixel_y
@@ -150,8 +155,8 @@ class BaseDEMModel(BaseModel):
         x = torch.cat((x, (self.t_query_points-self.base_temp_exponent)[None, None, :, None].expand(x.shape[0], x.shape[1], x.shape[2], 1)), dim=3)
 
         # Get DEM
-        dem = self(x) # batch, t_query_points
-        dem = dem.expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
+        dem = self(x).squeeze() # batch, pixel_x*pixel_y, t_query_points
+        dem = dem[:,:,:,None].expand((dem.shape[0], dem.shape[1], dem.shape[2], y.shape[2])) # batch, channel, t_query_points
         
         # Calculate temperature response function
         t_resp = torch.zeros(self.t_query_points.shape[0], len(self.wavelengths), device=dem.device) # channel, t_query_points

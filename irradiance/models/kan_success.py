@@ -181,7 +181,8 @@ class KANDEM(BaseDEMModel):
         loss_func = HuberLoss(),
         lr=1e-4,
         base_temp_exponent=0,
-        intensity_factor=1e25
+        intensity_factor=1e25,
+        stride = None
     ) -> None:
         super().__init__(eve_norm=eve_norm, 
                          uv_norm=uv_norm, 
@@ -192,7 +193,9 @@ class KANDEM(BaseDEMModel):
                          loss_func=loss_func, 
                          lr=lr,
                          base_temp_exponent=base_temp_exponent,
-                         intensity_factor = intensity_factor)
+                         intensity_factor = intensity_factor,
+                         stride=stride)
+        
         self.save_hyperparameters()
 
         # specify the KAN model
@@ -241,6 +244,7 @@ class KANDEMSpectrum(BaseDEMModel):
         intensity_factor=1e25,
         lr=1e-4,
         loss_func = HuberLoss(),
+        stride=None
     ) -> None:
         super().__init__(eve_norm=eve_norm, 
                          uv_norm=uv_norm, 
@@ -251,7 +255,8 @@ class KANDEMSpectrum(BaseDEMModel):
                          loss_func=loss_func, 
                          lr=lr,
                          base_temp_exponent=base_temp_exponent,
-                         intensity_factor = intensity_factor)
+                         intensity_factor = intensity_factor,
+                         stride=stride)
         self.save_hyperparameters()
 
         # specify the KAN model
@@ -311,9 +316,8 @@ class KANDEMSpectrum(BaseDEMModel):
         # Penalize negatives in dem
         loss_dem_negative = torch.mean(torch.relu(-dem))
 
-        epsilon = sys.float_info.min
-        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
-        rae_sp = torch.abs((y - spectrum) / (torch.abs(y) + epsilon)) * 100
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
+        rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
         self.log("train_loss_dem", loss_dem, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_RAE_dem", torch.mean(rae_dem[torch.isfinite(rae_dem)]), on_epoch=True, prog_bar=True, logger=True)
         self.log("train_loss_sp", loss_sp, on_epoch=True, prog_bar=True, logger=True)
@@ -337,9 +341,8 @@ class KANDEMSpectrum(BaseDEMModel):
         # Penalize negatives in dem
         loss_dem_negative = torch.mean(torch.relu(-dem))
 
-        epsilon = sys.float_info.min
-        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
-        rae_sp = torch.abs((y - spectrum) / (torch.abs(y) + epsilon)) * 100
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
+        rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
         mae_dem = torch.abs(intensity_target - intensity).mean()
         mae_sp = torch.abs(y - spectrum).mean()
         self.log("valid_loss_dem", loss_dem, on_epoch=True, prog_bar=True, logger=True)
@@ -366,9 +369,8 @@ class KANDEMSpectrum(BaseDEMModel):
         # Penalize negatives in dem
         loss_dem_negative = torch.mean(torch.relu(-dem))
 
-        epsilon = sys.float_info.min
-        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
-        rae_sp = torch.abs((y - spectrum) / (torch.abs(y) + epsilon)) * 100
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
+        rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
         mae_dem = torch.abs(intensity_target - intensity).mean()
         mae_sp = torch.abs(y - spectrum).mean()
         self.log("test_loss_dem", loss_dem, on_epoch=True, prog_bar=True, logger=True)

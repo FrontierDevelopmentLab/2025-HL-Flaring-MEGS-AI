@@ -106,16 +106,16 @@ class IrradianceDataModule(pl.LightningDataModule):
 
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True, drop_last=True)
 
     def val_dataloader(self):
-        return DataLoader(self.valid_ds, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.valid_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=True)
 
     def test_dataloader(self):
-        return DataLoader(self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=True)
 
     def predict_dataloader(self):
-        return DataLoader(self.valid_ds, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.valid_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=True)
 
 
 class IrradianceDataset(Dataset):
