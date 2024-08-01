@@ -135,7 +135,8 @@ for parameter_set in combined_parameters:
                                               monitor='valid_loss', mode='min', save_top_k=1,
                                               filename=checkpoint)
         
-        kanfov = 3
+        kanfov = run_config['kanfov']
+        stride = run_config['kanstride']
         wavelengths = [94, 131, 171, 193, 211, 304, 335]
         t_query_points_n= run_config['t_query_points_n']
         
@@ -173,12 +174,12 @@ for parameter_set in combined_parameters:
                                 uv_norm = uv_norm,
                                 kanfov = kanfov,
                                 wavelengths = wavelengths,
-                                t_query_points = torch.linspace(4, 9, t_query_points_n).to(device),
+                                t_query_points = torch.linspace(5, 7, t_query_points_n).to(device),
                                 layers_hidden_dem = [len(wavelengths) * kanfov * kanfov + 1, 128, 64, 1],
                                 layers_hidden_sp = [t_query_points_n, 128, 64, eve_norm.shape[1]],
                                 grid_min_dem = [0, -3, -3],
                                 grid_min_sp = [0, -3, -3],
-                                grid_max_dem = [7, 3, 3],
+                                grid_max_dem = [5, 3, 3],
                                 grid_max_sp = [7, 3, 3],
                                 num_grids_dem= 8,
                                 num_grids_sp = 8,
@@ -187,10 +188,10 @@ for parameter_set in combined_parameters:
                                 spline_weight_init_scale_dem = 0.1,
                                 spline_weight_init_scale_sp = 0.1,
                                 base_activation = F.silu,
-                                base_temp_exponent=0,
-                                intensity_factor=1e25,
+                                base_temp_exponent=4,
+                                intensity_factor=1e20,
                                 lr=run_config['lr'],
-                                stride=2
+                                stride=stride
                                 )
             
             # Initialize trainer

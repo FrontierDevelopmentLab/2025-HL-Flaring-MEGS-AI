@@ -4,7 +4,9 @@ model:
   epochs: [100]  # If the model is not hybrid, use this value
   lr: [1.e-4]  # If the model is not hybrid, use this value
   seed: [3110]  # Seed used for training
-  t_query_points_n: [20] # number of temperature query points
+  t_query_points_n: [40] # number of temperature query points
+  kanfov: [3]
+  kanstride: [3]
   architecture: ['DEMSpectrum']
   # Training, validation, testing and holdout split
   val_months: [[2, 3]]  # Month used for validation
@@ -37,13 +39,13 @@ model:
 
 logging: 'spectrum'
 
-# Training logging
+
+  wb_name: "kandem_baseline_40T"# Training logging
 wandb:
   entity: 'trilliumtechnologies'  # Name of wandb entity
-  project: 'SPI3S-Irradiance'  # Name of wandb project
+  project: '2024-SPI3S-Irradiance'  # Name of wandb project
   #group: 'Virtual Instrumentation'  # Name of wandb group
-  job_type: 'Training'  # Nme of wandb job_type
-  tags: ['development'] # Run tags
-  notes: "First training of linear MEGSAI model ."
-  wb_name: "please_delete"
+  job_type: 'Irradiance Training'  # Nme of wandb job_type
+  tags: ['baseline'] # Run tags
+  notes: "Baseline of Kandem."
   

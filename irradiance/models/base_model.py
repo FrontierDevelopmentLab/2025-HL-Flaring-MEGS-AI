@@ -123,7 +123,7 @@ class BaseDEMModel(BaseModel):
             self.stride = kanfov
         else:
             self.stride = stride
-        self.uv_norm = torch.mean(torch.Tensor(uv_norm['mean'])) # TODO: remove 1600 and 1700 from mean
+        self.uv_norm = torch.mean(torch.Tensor(uv_norm['mean'][0:len(wavelengths)])) # TODO: Make sure the means match the wavelengths
         self.t_query_points = t_query_points
         self.kanfov = kanfov
         self.temp_resp = TemperatureResponse()
