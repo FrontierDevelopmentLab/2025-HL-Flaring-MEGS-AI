@@ -15,6 +15,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from irradiance.models.kan_success import KANDEM, KANDEMSpectrum
+from irradiance.models.mlp import MLPDEMSpectrum
 from irradiance.utilities.data_loader import IrradianceDataModule
 from irradiance.utilities.callback import ImagePredictionLogger, SpectrumPredictionLogger
 
@@ -169,7 +170,7 @@ for parameter_set in combined_parameters:
                 log_every_n_steps=10
                 )
                 
-        elif run_config['architecture'] == 'DEMSpectrum':
+        elif run_config['architecture'] == 'KANDEMSpectrum':
             model = KANDEMSpectrum(eve_norm = eve_norm,
                                 uv_norm = uv_norm,
                                 kanfov = kanfov,
@@ -205,6 +206,33 @@ for parameter_set in combined_parameters:
                 log_every_n_steps=10
                 )
 
+        elif run_config['architecture'] == 'MLPDEMSpectrum':
+            model = MLPDEMSpectrum(eve_norm = eve_norm,
+                                uv_norm = uv_norm,
+                                kanfov = kanfov,
+                                wavelengths = wavelengths,
+                                t_query_points = torch.log10(torch.linspace(10**5, 10**7, t_query_points_n)).to(device),
+                                layers_hidden_dem = [len(wavelengths) * kanfov * kanfov + 1, 128, 64, 1],
+                                layers_hidden_sp = [t_query_points_n, 128, 64, eve_norm.shape[1]],
+                                base_activation = F.silu,
+                                base_temp_exponent=4,
+                                intensity_factor=1e20,
+                                lr=run_config['lr'],
+                                stride=stride
+                                )
+            
+            # Initialize trainer
+            trainer = Trainer(
+                default_root_dir=checkpoint_path,
+                accelerator="gpu",
+                devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
+                max_epochs=run_config['epochs'],
+                callbacks=[image_callback, checkpoint_callback],
+                logger=wandb_logger,
+                log_every_n_steps=10
+                )
+
+
         # Train the model ⚡
         trainer.fit(model, data_loader)
 
@@ -213,10 +241,10 @@ for parameter_set in combined_parameters:
         save_dictionary['instrument'] = instrument
         if len(combined_parameters) > 1:
             # TODO: Modify
-            full_checkpoint_path = f"{checkpoint}_{n}.ckpt"
+            full_checkpoint_path = f"{checkpoint}_{n}_sunerf.ckpt"
             n = n + 1
         else:
-            full_checkpoint_path = f"{checkpoint}.ckpt"
+            full_checkpoint_path = f"{checkpoint}_sunerf.ckpt"
         torch.save(save_dictionary, full_checkpoint_path)
 
         # Evaluate on test set
