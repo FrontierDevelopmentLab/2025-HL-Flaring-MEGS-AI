@@ -20,6 +20,7 @@ import sys
 from typing import *
 from torch.nn import HuberLoss
 from irradiance.models.base_model import BaseModel, BaseDEMModel
+from pytorch_optimizer import create_optimizer
 
 
 class SplineLinear(nn.Linear):
@@ -268,6 +269,7 @@ class KANDEMSpectrum(BaseDEMModel):
                     num_grids=num_grids_dem,
                     use_base_update=use_base_update_dem,
                     base_activation=base_activation,
+                    use_layernorm=True,
                     spline_weight_init_scale=spline_weight_init_scale_dem,
                 ) for in_dim, out_dim, grid_min_l, grid_max_l in zip(layers_hidden_dem[:-1], layers_hidden_dem[1:], grid_min_dem, grid_max_dem)
             ])
@@ -283,19 +285,21 @@ class KANDEMSpectrum(BaseDEMModel):
                     spline_weight_init_scale=spline_weight_init_scale_sp,
                 ) for in_dim, out_dim, grid_min_l, grid_max_l in zip(layers_hidden_sp[:-1], layers_hidden_sp[1:], grid_min_sp, grid_max_sp)
             ])
+        
+        self.eve_calibration = nn.Parameter(torch.Tensor([1.0]))
     
     
     def forward_unnormalize(self, x):
         intensity, dem, intensity_target = self.intensity_calculation(x) # dem: batch, channel, t_query_points
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
-        spectrum = torch.mean(spectrum, dim=1)
+        spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
         return self.unnormalize(spectrum, self.eve_norm)
     
     def forward(self, x):
         for layer in self.dem_layers:
             x = layer(x)
-        return x
+        return F.relu(x)
 
     def forward_spectrum(self, x):
         for layer in self.spectrum_layers:
@@ -309,7 +313,7 @@ class KANDEMSpectrum(BaseDEMModel):
         intensity, dem, intensity_target = self.intensity_calculation(x) # dem: batch, channel, t_query_points
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
-        spectrum = torch.mean(spectrum, dim=1)
+        spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -334,7 +338,7 @@ class KANDEMSpectrum(BaseDEMModel):
         intensity, dem, intensity_target = self.intensity_calculation(x)
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
-        spectrum = torch.mean(spectrum, dim=1)
+        spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -362,7 +366,7 @@ class KANDEMSpectrum(BaseDEMModel):
         intensity, dem, intensity_target = self.intensity_calculation(x)
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
-        spectrum = torch.mean(spectrum, dim=1)
+        spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -382,3 +386,14 @@ class KANDEMSpectrum(BaseDEMModel):
         self.log("test_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
 
         return loss_dem + loss_sp + loss_dem_negative
+    
+
+    def configure_optimizers(self):
+        optimizer = create_optimizer(
+            self,
+            'adamp',
+            lr=1e-3,
+            use_gc=True,
+            use_lookahead=True,
+        )
+        return optimizer
