@@ -393,7 +393,6 @@ class KANDEMSpectrum(BaseDEMModel):
             self,
             'adamp',
             lr=1e-4,
-            use_gc=True,
             use_lookahead=True,
         )
         return optimizer
