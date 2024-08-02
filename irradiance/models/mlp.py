@@ -6,29 +6,6 @@ from torch.nn import HuberLoss
 from pytorch_optimizer import create_optimizer
 from typing import *
 
-class LinearLayer(nn.Module):
-    def __init__(
-        self,
-        input_dim: int,
-        output_dim: int,
-        use_layernorm: bool = True,
-        base_activation = F.silu,
-    ) -> None:
-        super().__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.layernorm = None
-        if use_layernorm:
-            assert input_dim > 1, "Do not use layernorms on 1D inputs. Set `use_layernorm=False`."
-            self.layernorm = nn.LayerNorm(input_dim)
-        self.base_activation = base_activation
-        self.base_linear = nn.Linear(input_dim, output_dim)
-
-    def forward(self, x, use_layernorm=True):
-        if self.layernorm is not None and use_layernorm:
-            x = self.layernorm(x)
-        ret = self.base_activation(self.base_linear(x))
-        return ret
 
 class MLPDEMSpectrum(BaseDEMModel):
     def __init__(
@@ -41,6 +18,7 @@ class MLPDEMSpectrum(BaseDEMModel):
         layers_hidden_dem: List[int],
         layers_hidden_sp: List[int],
         base_activation = F.silu,
+        use_layernorm = False,
         base_temp_exponent=0,
         intensity_factor=1e25,
         lr=1e-4,
@@ -59,21 +37,19 @@ class MLPDEMSpectrum(BaseDEMModel):
                          intensity_factor = intensity_factor,
                          stride=stride)
         self.save_hyperparameters()
+        self.use_layer_norm = use_layernorm
+        self.base_activation = base_activation
 
         # specify the Linear model
         self.dem_layers = nn.ModuleList([
-                LinearLayer(
+                nn.Linear(
                     in_dim, out_dim,
-                    base_activation=base_activation,
-                    use_layernorm=True,
                 ) for in_dim, out_dim  in zip(layers_hidden_dem[:-1], layers_hidden_dem[1:])
             ])            
         
         self.spectrum_layers = nn.ModuleList([
-                LinearLayer(
+                nn.Linear(
                     in_dim, out_dim,
-                    base_activation=base_activation,
-                    use_layernorm=True,
                 ) for in_dim, out_dim in zip(layers_hidden_sp[:-1], layers_hidden_sp[1:])
             ])
         
@@ -88,13 +64,23 @@ class MLPDEMSpectrum(BaseDEMModel):
         return self.unnormalize(spectrum, self.eve_norm)
     
     def forward(self, x):
-        for layer in self.dem_layers:
-            x = layer(x)
+        for layer in self.dem_layers[:-1]:
+            if self.use_layer_norm:
+                x = nn.LayerNorm(layer(x))
+            x = self.base_activation(layer(x))
+        if self.use_layer_norm:
+            x = nn.LayerNorm(x)
+        x = self.dem_layers[-1](x)
         return F.relu(x)
 
     def forward_spectrum(self, x):
-        for layer in self.spectrum_layers:
-            x = layer(x)
+        for layer in self.spectrum_layers[:-1]:
+            if self.use_layer_norm:
+                x = nn.LayerNorm(layer(x))
+            x = self.base_activation(layer(x))
+        if self.use_layer_norm:
+            x = nn.LayerNorm(x)
+        x = self.spectrum_layers[-1](x)
         return x
 
     
