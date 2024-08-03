@@ -33,11 +33,11 @@ class BaseModel(LightningModule):
         y = self.unnormalize(y, self.eve_norm)
         y_pred = self.unnormalize(y_pred, self.eve_norm)
 
-        epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
+        rae = torch.abs((y - y_pred) / (torch.abs(y))) * 100
+        av_rae = rae.mean(rae[torch.isfinite(rae)])
         self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_loss_sp", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_RAE_sp", rae.mean(), on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_RAE_sp", av_rae, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     def validation_step(self, batch, batch_nb):
@@ -49,9 +49,8 @@ class BaseModel(LightningModule):
         y_pred = self.unnormalize(y_pred, self.eve_norm)
 
         #computing relative absolute error
-        epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
-        av_rae = rae.mean()
+        rae = torch.abs((y - y_pred) / (torch.abs(y))) * 100
+        av_rae = rae.mean(rae[torch.isfinite(rae)])
         av_rae_wl = rae.mean(0)
         # compute average cross-correlation
         cc = torch.tensor([torch.corrcoef(torch.stack([y[i], y_pred[i]]))[0, 1] for i in range(y.shape[0])]).mean()
@@ -75,20 +74,19 @@ class BaseModel(LightningModule):
         y_pred = self.unnormalize(y_pred, self.eve_norm)
 
         #computing relative absolute error
-        epsilon = sys.float_info.min
-        rae = torch.abs((y - y_pred) / (torch.abs(y) + epsilon)) * 100
-        av_rae = rae.mean()
+        rae = torch.abs((y - y_pred) / (torch.abs(y))) * 100
+        av_rae = rae.mean(rae[torch.isfinite(rae)])
         av_rae_wl = rae.mean(0)
         # compute average cross-correlation
         cc = torch.tensor([torch.corrcoef(torch.stack([y[i], y_pred[i]]))[0, 1] for i in range(y.shape[0])]).mean()
         # mean absolute error
         mae = torch.abs(y - y_pred).mean()
 
-        self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_loss_sp", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_MAE_sp", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_RAE_sp", av_rae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss_sp", loss, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_MAE_sp", mae, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_RAE_sp", av_rae, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
 
         return loss
 
@@ -175,48 +173,40 @@ class BaseDEMModel(BaseModel):
     def training_step(self, batch, batch_nb):
         x, y = batch
 
-        intensity, dem, intensity_target = self.intensity_calculation(x) 
-
-        loss_dem_negative = torch.mean(torch.relu(-dem))
+        intensity, dem, intensity_target = self.intensity_calculation(x)
         
         # Compare with target
         loss = self.loss_func(intensity, intensity_target)
 
-        epsilon = sys.float_info.min
-        rae = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
-        self.log("train_loss", loss + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_RAE_dem", torch.mean(rae[torch.isfinite(rae)]), on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_dem_negative", loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_RAE_dem", torch.mean(rae_dem[torch.isfinite(rae_dem)]), on_epoch=True, prog_bar=True, logger=True)
         self.log("train_loss_dem", loss, on_epoch=True, prog_bar=True, logger=True)
         
-        return loss + loss_dem_negative
+        return loss
 
     def validation_step(self, batch, batch_nb):
         x, y = batch
 
         intensity, dem, intensity_target = self.intensity_calculation(x)
-
-        loss_dem_negative = torch.mean(torch.relu(-dem))
         
         # Compare with target
         loss = self.loss_func(intensity, intensity_target)
 
         #computing relative absolute error
-        epsilon = sys.float_info.min
-        rae = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
+        rae = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         av_rae = torch.mean(rae[torch.isfinite(rae)])
         # compute average cross-correlation
         cc = torch.corrcoef(torch.stack([intensity_target.reshape(-1), intensity.reshape(-1)]))[0, 1]
         # mean absolute error
         mae = torch.abs(intensity_target - intensity).mean()
 
-        self.log("valid_loss", loss + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_loss", on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_MAE_dem", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_RAE_dem", av_rae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_RAE_dem", torch.mean(rae[torch.isfinite(rae)]), on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_loss_dem", loss, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss + loss_dem_negative
+        return loss
 
     def test_step(self, batch, batch_nb):
         x, y = batch
@@ -226,22 +216,18 @@ class BaseDEMModel(BaseModel):
         # Compare with target
         loss = self.loss_func(intensity, intensity_target)
 
-        loss_dem_negative = torch.mean(torch.relu(-dem))
-
         #computing relative absolute error
-        epsilon = sys.float_info.min
-        rae = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target) + epsilon)) * 100
+        rae = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         av_rae = torch.mean(rae[torch.isfinite(rae)])
         # compute average cross-correlation
         cc = torch.corrcoef(torch.stack([intensity_target.reshape(-1), intensity.reshape(-1)]))[0, 1]
         # mean absolute error
         mae = torch.abs(intensity_target - intensity).mean()
 
-        self.log("test_loss", loss + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_MAE_dem", mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_RAE_dem", av_rae, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_correlation_coefficient", cc, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_loss_dem", loss, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss", loss + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_MAE_dem", mae, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_RAE_dem", torch.mean(rae[torch.isfinite(rae)]), on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss_dem", loss, on_epoch=True, prog_bar=True, logger=True)
     
-        return loss + loss_dem_negative
+        return loss
     
