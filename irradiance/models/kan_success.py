@@ -323,7 +323,8 @@ class KANDEMSpectrum(BaseDEMModel):
         loss_sp = self.loss_func(spectrum, y)
 
         # Add log loss
-        loss_log_sp = self.loss_func(torch.log(self.unnormalize(spectrum, self.eve_norm)), torch.log(self.unnormalize(y, self.eve_norm)))
+        eps=1e-10
+        loss_log_sp = self.loss_func(torch.log(self.unnormalize(F.relu(spectrum), self.eve_norm)+eps), torch.log(self.unnormalize(F.relu(y), self.eve_norm)+eps))
 
         rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
@@ -349,7 +350,8 @@ class KANDEMSpectrum(BaseDEMModel):
         loss_sp = self.loss_func(spectrum, y)
 
         # Add log loss
-        loss_log_sp = self.loss_func(torch.log(self.unnormalize(spectrum, self.eve_norm)), torch.log(self.unnormalize(y, self.eve_norm)))
+        eps=1e-10
+        loss_log_sp = self.loss_func(torch.log(self.unnormalize(F.relu(spectrum), self.eve_norm)+eps), torch.log(self.unnormalize(F.relu(y), self.eve_norm)+eps))
 
         rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
@@ -377,8 +379,9 @@ class KANDEMSpectrum(BaseDEMModel):
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
-        # Penalize negatives in dem
-        loss_dem_negative = torch.mean(torch.relu(-dem))
+        # Add log loss
+        eps=1e-10
+        loss_log_sp = self.loss_func(torch.log(self.unnormalize(F.relu(spectrum), self.eve_norm)+eps), torch.log(self.unnormalize(F.relu(y), self.eve_norm)+eps))
 
         rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
@@ -392,7 +395,7 @@ class KANDEMSpectrum(BaseDEMModel):
         # self.log("test_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
         # self.log("test_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss_dem + loss_sp + loss_dem_negative
+        return loss_dem + loss_sp + loss_log_sp
     
 
     def configure_optimizers(self):
