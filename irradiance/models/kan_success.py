@@ -324,7 +324,7 @@ class KANDEMSpectrum(BaseDEMModel):
 
         # Add log loss
         eps=1e-10
-        loss_log_sp = self.loss_func(torch.log(self.unnormalize(F.relu(spectrum), self.eve_norm)+eps), torch.log(self.unnormalize(F.relu(y), self.eve_norm)+eps))
+        loss_log_sp = self.loss_func(torch.log(F.relu(self.unnormalize(spectrum, self.eve_norm))+eps), torch.log(F.relu(self.unnormalize(y, self.eve_norm))+eps))
 
         rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
@@ -351,7 +351,7 @@ class KANDEMSpectrum(BaseDEMModel):
 
         # Add log loss
         eps=1e-10
-        loss_log_sp = self.loss_func(torch.log(self.unnormalize(F.relu(spectrum), self.eve_norm)+eps), torch.log(self.unnormalize(F.relu(y), self.eve_norm)+eps))
+        loss_log_sp = self.loss_func(torch.log(F.relu(self.unnormalize(spectrum, self.eve_norm))+eps), torch.log(F.relu(self.unnormalize(y, self.eve_norm))+eps))
 
         rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
@@ -381,7 +381,7 @@ class KANDEMSpectrum(BaseDEMModel):
         loss_sp = self.loss_func(spectrum, y)
         # Add log loss
         eps=1e-10
-        loss_log_sp = self.loss_func(torch.log(self.unnormalize(F.relu(spectrum), self.eve_norm)+eps), torch.log(self.unnormalize(F.relu(y), self.eve_norm)+eps))
+        loss_log_sp = self.loss_func(torch.log(F.relu(self.unnormalize(spectrum, self.eve_norm))+eps), torch.log(F.relu(self.unnormalize(y, self.eve_norm))+eps))
 
         rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
         rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
