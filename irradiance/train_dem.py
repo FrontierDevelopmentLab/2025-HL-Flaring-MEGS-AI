@@ -156,7 +156,7 @@ for parameter_set in combined_parameters:
                         lr = run_config['lr'],
                         t_query_points=torch.linspace(4, 9, t_query_points_n).to(device), # 20 query points between 10^4 and 10^9 K
                         base_temp_exponent = 3,
-                        intensity_factor=1e20,
+                        intensity_factor = 1e20,
                         )
             
             # Initialize trainer
@@ -193,7 +193,9 @@ for parameter_set in combined_parameters:
                                 base_temp_exponent=4,
                                 intensity_factor=1e20,
                                 lr=run_config['lr'],
-                                stride=stride
+                                stride=stride,
+                                log_sploss_factor = run_config['log_sploss_factor'],
+                                lin_sploss_factor = run_config['lin_sploss_factor'],
                                 )
             
             # Initialize trainer
@@ -220,7 +222,9 @@ for parameter_set in combined_parameters:
                                 base_temp_exponent=4,
                                 intensity_factor=1e20,
                                 lr=run_config['lr'],
-                                stride=stride
+                                stride=stride,
+                                log_sploss_factor = run_config['log_sploss_factor'],
+                                lin_sploss_factor = run_config['lin_sploss_factor'],
                                 )
             
             # Initialize trainer
