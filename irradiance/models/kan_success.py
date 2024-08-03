@@ -297,7 +297,7 @@ class KANDEMSpectrum(BaseDEMModel):
             ])
         
         if hybrid:
-            linear_modl = nn.Linear(2*len(wavelengths), layers_hidden_sp[-1])
+            self.linear_model = nn.Linear(len(wavelengths), layers_hidden_sp[-1])
         
         self.eve_calibration = nn.Parameter(torch.Tensor([1.0]))
     
@@ -320,8 +320,9 @@ class KANDEMSpectrum(BaseDEMModel):
         return x
     
     def forward_linear(self, x):
+        x = (x-torch.Tensor(self.uv_norm_wl['mean'][0:len(self.wavelengths)]).to(self.device)[:,None,None])/torch.Tensor(self.uv_norm_wl['std'][0:len(self.wavelengths)]).to(self.device)[:,None,None] 
         mean_irradiance = torch.torch.mean(x, dim=(2,3))
-        x = self.model(mean_irradiance)
+        x = self.linear_model(mean_irradiance)
         return x
     
     def training_step(self, batch, batch_nb):
@@ -332,7 +333,7 @@ class KANDEMSpectrum(BaseDEMModel):
         spectrum = self.forward_spectrum(dem)
         spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
         if self.hybrid:
-            spectrum = self.forward_linear(x)
+            spectrum = spectrum + self.forward_linear(x)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -361,7 +362,7 @@ class KANDEMSpectrum(BaseDEMModel):
         spectrum = self.forward_spectrum(dem)
         spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
         if self.hybrid:
-            spectrum = self.forward_linear(x)
+            spectrum = spectrum + self.forward_linear(x)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -394,7 +395,7 @@ class KANDEMSpectrum(BaseDEMModel):
         spectrum = self.forward_spectrum(dem)
         spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
         if self.hybrid:
-            spectrum = self.forward_linear(x)
+            spectrum = spectrum + self.forward_linear(x)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)

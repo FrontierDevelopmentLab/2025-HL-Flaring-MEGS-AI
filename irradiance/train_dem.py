@@ -196,6 +196,7 @@ for parameter_set in combined_parameters:
                                 stride=stride,
                                 log_sploss_factor = run_config['log_sploss_factor'],
                                 lin_sploss_factor = run_config['lin_sploss_factor'],
+                                hybrid=True
                                 )
             
             # Initialize trainer
