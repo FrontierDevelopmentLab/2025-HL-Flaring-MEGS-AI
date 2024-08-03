@@ -6,6 +6,29 @@ from torch.nn import HuberLoss
 from pytorch_optimizer import create_optimizer
 from typing import *
 
+class LayerNormLinear(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        use_layernorm: bool = True,
+        base_activation = F.silu,
+    ) -> None:
+        super().__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.layernorm = None
+        if use_layernorm:
+            assert input_dim > 1, "Do not use layernorms on 1D inputs. Set `use_layernorm=False`."
+            self.layernorm = nn.LayerNorm(output_dim)
+
+        self.base_linear = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x, use_layernorm=True):
+        x = self.base_linear(x)
+        if self.layernorm is not None and use_layernorm:
+            x = self.layernorm(x)
+        return x    
 
 class MLPDEMSpectrum(BaseDEMModel):
     def __init__(
@@ -17,8 +40,8 @@ class MLPDEMSpectrum(BaseDEMModel):
         kanfov,
         layers_hidden_dem: List[int],
         layers_hidden_sp: List[int],
-        base_activation = F.silu,
-        use_layernorm = False,
+        base_activation = F.relu,
+        use_layernorm = True,
         base_temp_exponent=0,
         intensity_factor=1e25,
         lr=1e-4,
@@ -36,25 +59,27 @@ class MLPDEMSpectrum(BaseDEMModel):
                          base_temp_exponent=base_temp_exponent,
                          intensity_factor = intensity_factor,
                          stride=stride)
+        self.lr = lr
         self.save_hyperparameters()
-        self.use_layer_norm = use_layernorm
         self.base_activation = base_activation
 
-        # specify the Linear model
+        # specify the DEM KAN model
         self.dem_layers = nn.ModuleList([
-                nn.Linear(
+                LayerNormLinear(
                     in_dim, out_dim,
-                ) for in_dim, out_dim  in zip(layers_hidden_dem[:-1], layers_hidden_dem[1:])
-            ])            
-        
-        self.spectrum_layers = nn.ModuleList([
-                nn.Linear(
-                    in_dim, out_dim,
-                ) for in_dim, out_dim in zip(layers_hidden_sp[:-1], layers_hidden_sp[1:])
+                    use_layernorm=use_layernorm,
+                ) for in_dim, out_dim, in zip(layers_hidden_dem[:-1], layers_hidden_dem[1:])
             ])
         
+        # specif the spectrum KAN model
+        self.spectrum_layers = nn.ModuleList([
+                LayerNormLinear(
+                    in_dim, out_dim,
+                    use_layernorm=use_layernorm,
+                ) for in_dim, out_dim in zip(layers_hidden_sp[:-1], layers_hidden_sp[1:])
+            ])      
+
         self.eve_calibration = nn.Parameter(torch.Tensor([1.0]))
-    
     
     def forward_unnormalize(self, x):
         intensity, dem, intensity_target = self.intensity_calculation(x) # dem: batch, channel, t_query_points
@@ -65,24 +90,15 @@ class MLPDEMSpectrum(BaseDEMModel):
     
     def forward(self, x):
         for layer in self.dem_layers[:-1]:
-            if self.use_layer_norm:
-                x = nn.LayerNorm(layer(x))
             x = self.base_activation(layer(x))
-        if self.use_layer_norm:
-            x = nn.LayerNorm(x)
         x = self.dem_layers[-1](x)
         return F.relu(x)
 
     def forward_spectrum(self, x):
         for layer in self.spectrum_layers[:-1]:
-            if self.use_layer_norm:
-                x = nn.LayerNorm(layer(x))
             x = self.base_activation(layer(x))
-        if self.use_layer_norm:
-            x = nn.LayerNorm(x)
         x = self.spectrum_layers[-1](x)
         return x
-
     
     def training_step(self, batch, batch_nb):
         x, y = batch
@@ -138,12 +154,41 @@ class MLPDEMSpectrum(BaseDEMModel):
         self.log("valid_loss", loss_dem + loss_sp + loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
 
         return loss_dem + loss_sp + loss_log_sp
+    
+    def test_step(self, batch, batch_nb):
+        x, y = batch
+
+        intensity, dem, intensity_target = self.intensity_calculation(x)
+        dem = dem[:, :, :, 0] # batch, pixels, t_query_points
+        spectrum = self.forward_spectrum(dem)
+        spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
+        # Compare with target
+        loss_dem = self.loss_func(intensity, intensity_target)
+        loss_sp = self.loss_func(spectrum, y)
+
+        # Add log loss
+        loss_log_sp = self.loss_func(torch.log(self.unnormalize(spectrum, self.eve_norm)), torch.log(self.unnormalize(y, self.eve_norm)))
+
+        rae_dem = torch.abs((intensity_target - intensity) / (torch.abs(intensity_target))) * 100
+        rae_sp = torch.abs((y - spectrum) / (torch.abs(y))) * 100
+        mae_dem = torch.abs(intensity_target - intensity).mean()
+        mae_sp = torch.abs(y - spectrum).mean()
+        # self.log("test_loss_dem", loss_dem, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_RAE_dem", torch.mean(rae_dem[torch.isfinite(rae_dem)]), on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss_sp", loss_sp, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_MAE_dem", mae_dem, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+
+        return loss_dem + loss_sp + loss_log_sp
+
 
     def configure_optimizers(self):
         optimizer = create_optimizer(
             self,
             'adamp',
-            lr=1e-4,
+            lr=self.lr,
             use_gc=True,
             use_lookahead=True,
         )
