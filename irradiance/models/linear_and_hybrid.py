@@ -6,18 +6,24 @@ from irradiance.models.efficientnet import EfficientnetIrradiance
 from irradiance.models.chopped_alexnet import ChoppedAlexnet
 class LinearIrradianceModel(BaseModel):
 
-    def __init__(self, d_input, d_output, eve_norm, loss_func= HuberLoss(), lr=1e-2):
+    def __init__(self, d_input, d_output, eve_norm, loss_func= HuberLoss(), lr=1e-2, use_std=True):
 
         self.n_channels = d_input
-        self.outSize = d_output        
-
-        model = nn.Linear(2*self.n_channels, self.outSize)
+        self.outSize = d_output
+        self.use_std = use_std
+        if use_std:
+            model = nn.Linear(2*self.n_channels, self.outSize)
+        else:
+            model = nn.Linear(self.n_channels, self.outSize)
         super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
 
     def forward(self, x):
         mean_irradiance = torch.torch.mean(x, dim=(2,3))
         std_irradiance = torch.torch.std(x, dim=(2,3))
-        x = self.model(torch.cat((mean_irradiance, std_irradiance), dim=1))
+        if self.use_std:
+            x = self.model(torch.cat((mean_irradiance, std_irradiance), dim=1))
+        else:
+            x = self.model(mean_irradiance)
         return x
     
 

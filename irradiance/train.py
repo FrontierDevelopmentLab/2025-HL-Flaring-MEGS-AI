@@ -151,7 +151,8 @@ for parameter_set in combined_parameters:
             model =  LinearIrradianceModel(d_input=len(run_config[instrument]), 
                                      d_output=eve_norm.shape[1], 
                                      eve_norm=eve_norm,
-                                     lr = 1e-2)
+                                     lr = 1e-2,
+                                     use_std=False)
 
         elif run_config['architecture']=='hybrid':
             model = HybridIrradianceModel(d_input=len(run_config[instrument]), 

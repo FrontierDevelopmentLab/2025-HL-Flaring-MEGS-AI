@@ -159,7 +159,7 @@ class IrradianceDataset(Dataset):
     def __getitem__(self, idx):
         euv_images = np.load(self.euv_paths[idx])[self.wavelengths, ...]
         if self.norm_uv:
-            euv_images = (euv_images-self.uv_norm['mean'][:,None,None])/self.uv_norm['std'][:,None,None] 
+            euv_images = (euv_images-self.uv_norm['mean'][self.wavelengths,None,None])/self.uv_norm['std'][self.wavelengths,None,None] 
         eve_data = self.eve_irradiance[idx]
         if self.norm_eve:
             eve_data = (eve_data-self.eve_norm[0,:])/self.eve_norm[1,:]
