@@ -166,5 +166,5 @@ cython_debug/
 
 wandb/
 .snakemake/
-.ckpt
-.jpg
+*.ckpt
+*.jpg

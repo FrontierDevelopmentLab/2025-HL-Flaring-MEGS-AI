@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from albumentations.pytorch import ToTensorV2
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
+from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback, StochasticWeightAveraging
 from irradiance.models.kan_success import KANDEM, KANDEMSpectrum
 from irradiance.models.mlp import MLPDEMSpectrum
 from irradiance.utilities.data_loader import IrradianceDataModule
@@ -205,9 +205,10 @@ for parameter_set in combined_parameters:
                 accelerator="gpu",
                 devices=1 if torch.cuda.is_available() else None,  # limiting got iPython runs
                 max_epochs=run_config['epochs'],
-                callbacks=[image_callback, checkpoint_callback],
+                callbacks=[image_callback, checkpoint_callback, StochasticWeightAveraging(swa_lrs=1.e-3, swa_epoch_start=0.7, annealing_epochs=10)],
                 logger=wandb_logger,
-                log_every_n_steps=10
+                log_every_n_steps=10,
+
                 )
 
         elif run_config['architecture'] == 'MLPDEMSpectrum':

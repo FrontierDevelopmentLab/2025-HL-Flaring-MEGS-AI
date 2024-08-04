@@ -34,7 +34,7 @@ class BaseModel(LightningModule):
         y_pred = self.unnormalize(y_pred, self.eve_norm)
 
         rae = torch.abs((y - y_pred) / (torch.abs(y))) * 100
-        av_rae = rae.mean(rae[torch.isfinite(rae)])
+        av_rae = torch.mean(rae[torch.isfinite(rae)])
         self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_loss_sp", loss, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_RAE_sp", av_rae, on_epoch=True, prog_bar=True, logger=True)
@@ -50,7 +50,7 @@ class BaseModel(LightningModule):
 
         #computing relative absolute error
         rae = torch.abs((y - y_pred) / (torch.abs(y))) * 100
-        av_rae = rae.mean(rae[torch.isfinite(rae)])
+        av_rae = torch.mean(rae[torch.isfinite(rae)])
         av_rae_wl = rae.mean(0)
         # compute average cross-correlation
         cc = torch.tensor([torch.corrcoef(torch.stack([y[i], y_pred[i]]))[0, 1] for i in range(y.shape[0])]).mean()
