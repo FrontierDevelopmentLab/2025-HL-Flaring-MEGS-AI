@@ -246,7 +246,10 @@ class KANDEMSpectrum(BaseDEMModel):
         intensity_factor=1e25,
         lr=1e-4,
         loss_func = HuberLoss(),
-        stride=None
+        stride=None,
+        log_sploss_factor = 1.0,
+        lin_sploss_factor = 1.0,
+        hybrid = False
     ) -> None:
         super().__init__(eve_norm=eve_norm, 
                          uv_norm=uv_norm, 
@@ -260,6 +263,9 @@ class KANDEMSpectrum(BaseDEMModel):
                          intensity_factor = intensity_factor,
                          stride=stride)
         self.lr = lr
+        self.log_sploss_factor = log_sploss_factor
+        self.lin_sploss_factor  = lin_sploss_factor
+        self.hybrid = hybrid
         self.save_hyperparameters()
 
         # specify the DEM KAN model
@@ -290,6 +296,9 @@ class KANDEMSpectrum(BaseDEMModel):
                 ) for in_dim, out_dim, grid_min_l, grid_max_l in zip(layers_hidden_sp[:-1], layers_hidden_sp[1:], grid_min_sp, grid_max_sp)
             ])
         
+        if hybrid:
+            self.linear_model = nn.Linear(len(wavelengths), layers_hidden_sp[-1])
+        
         self.eve_calibration = nn.Parameter(torch.Tensor([1.0]))
     
     
@@ -309,7 +318,12 @@ class KANDEMSpectrum(BaseDEMModel):
         for layer in self.spectrum_layers:
             x = layer(x)
         return x
-
+    
+    def forward_linear(self, x):
+        x = (x-torch.Tensor(self.uv_norm_wl['mean'][0:len(self.wavelengths)]).to(self.device)[:,None,None])/torch.Tensor(self.uv_norm_wl['std'][0:len(self.wavelengths)]).to(self.device)[:,None,None] 
+        mean_irradiance = torch.torch.mean(x, dim=(2,3))
+        x = self.linear_model(mean_irradiance)
+        return x
     
     def training_step(self, batch, batch_nb):
         x, y = batch
@@ -318,6 +332,8 @@ class KANDEMSpectrum(BaseDEMModel):
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
         spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
+        if self.hybrid:
+            spectrum = spectrum + self.forward_linear(x)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -333,9 +349,9 @@ class KANDEMSpectrum(BaseDEMModel):
         self.log("train_loss_sp", loss_sp, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
         self.log("train_log_loss_sp", loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_loss", loss_dem + loss_sp + loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_loss", loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss_dem + loss_sp + loss_log_sp
+        return loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp
 
     
     def validation_step(self, batch, batch_nb):
@@ -345,6 +361,8 @@ class KANDEMSpectrum(BaseDEMModel):
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
         spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
+        if self.hybrid:
+            spectrum = spectrum + self.forward_linear(x)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -364,9 +382,9 @@ class KANDEMSpectrum(BaseDEMModel):
         self.log("valid_MAE_dem", mae_dem, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_log_loss_sp", loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_loss", loss_dem + loss_sp + loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_loss", loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss_dem + loss_sp + loss_log_sp
+        return loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp
     
     
     def test_step(self, batch, batch_nb):
@@ -376,6 +394,8 @@ class KANDEMSpectrum(BaseDEMModel):
         dem = dem[:, :, :, 0] # batch, pixels, t_query_points
         spectrum = self.forward_spectrum(dem)
         spectrum = self.eve_calibration*torch.mean(spectrum, dim=1)
+        if self.hybrid:
+            spectrum = spectrum + self.forward_linear(x)
         # Compare with target
         loss_dem = self.loss_func(intensity, intensity_target)
         loss_sp = self.loss_func(spectrum, y)
@@ -393,9 +413,9 @@ class KANDEMSpectrum(BaseDEMModel):
         # self.log("test_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
         # self.log("test_MAE_dem", mae_dem, on_epoch=True, prog_bar=True, logger=True)
         # self.log("test_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
-        # self.log("test_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss", loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss_dem + loss_sp + loss_log_sp
+        return loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp
     
 
     def configure_optimizers(self):

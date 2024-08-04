@@ -122,6 +122,7 @@ class BaseDEMModel(BaseModel):
         else:
             self.stride = stride
         self.uv_norm = torch.mean(torch.Tensor(uv_norm['mean'][0:len(wavelengths)])) # TODO: Make sure the means match the wavelengths
+        self.uv_norm_wl = uv_norm # TODO: Make sure the means match the wavelengths
         self.t_query_points = t_query_points
         self.kanfov = kanfov
         self.temp_resp = TemperatureResponse()

@@ -46,7 +46,9 @@ class MLPDEMSpectrum(BaseDEMModel):
         intensity_factor=1e25,
         lr=1e-4,
         loss_func = HuberLoss(),
-        stride=None
+        stride=None,
+        log_sploss_factor = 1.0,
+        lin_sploss_factor = 1.0,
     ) -> None:
         super().__init__(eve_norm=eve_norm, 
                          uv_norm=uv_norm, 
@@ -60,6 +62,8 @@ class MLPDEMSpectrum(BaseDEMModel):
                          intensity_factor = intensity_factor,
                          stride=stride)
         self.lr = lr
+        self.log_sploss_factor = log_sploss_factor
+        self.lin_sploss_factor  = lin_sploss_factor
         self.save_hyperparameters()
         self.base_activation = base_activation
 
@@ -122,9 +126,9 @@ class MLPDEMSpectrum(BaseDEMModel):
         self.log("train_loss_sp", loss_sp, on_epoch=True, prog_bar=True, logger=True)
         self.log("train_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
         self.log("train_log_loss_sp", loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_loss", loss_dem + loss_sp + loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train_loss", loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss_dem + loss_sp + loss_log_sp
+        return loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp
 
     
     def validation_step(self, batch, batch_nb):
@@ -153,9 +157,9 @@ class MLPDEMSpectrum(BaseDEMModel):
         self.log("valid_MAE_dem", mae_dem, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
         self.log("valid_log_loss_sp", loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
-        self.log("valid_loss", loss_dem + loss_sp + loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
+        self.log("valid_loss", loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss_dem + loss_sp + loss_log_sp
+        return loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp
     
     def test_step(self, batch, batch_nb):
         x, y = batch
@@ -182,9 +186,9 @@ class MLPDEMSpectrum(BaseDEMModel):
         # self.log("test_RAE_sp", torch.mean(rae_sp[torch.isfinite(rae_sp)]), on_epoch=True, prog_bar=True, logger=True)
         # self.log("test_MAE_dem", mae_dem, on_epoch=True, prog_bar=True, logger=True)
         # self.log("test_MAE_sp", mae_sp, on_epoch=True, prog_bar=True, logger=True)
-        # self.log("test_loss", loss_dem + loss_sp + loss_dem_negative, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss", loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp, on_epoch=True, prog_bar=True, logger=True)
 
-        return loss_dem + loss_sp + loss_log_sp
+        return loss_dem + self.lin_sploss_factor*loss_sp + self.log_sploss_factor*loss_log_sp
 
 
     def configure_optimizers(self):
