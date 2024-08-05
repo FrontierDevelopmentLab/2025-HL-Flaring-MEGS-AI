@@ -216,7 +216,7 @@ class KANDEM(BaseDEMModel):
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
-        return x
+        return F.relu(x)
 
 
 
