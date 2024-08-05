@@ -6,7 +6,7 @@ model:
   seed: [3110]  # Seed used for training
   t_query_points_n: [20] # number of temperature query points
   kanfov: [3]
-  kanstride: [1]
+  kanstride: [2]
   architecture: ['KANDEMSpectrum']
   log_sploss_factor: [100.0]
   lin_sploss_factor: [100.0]
