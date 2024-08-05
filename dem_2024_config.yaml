@@ -4,10 +4,12 @@ model:
   epochs: [100]  # If the model is not hybrid, use this value
   lr: [1.e-4]  # If the model is not hybrid, use this value
   seed: [3110]  # Seed used for training
-  t_query_points_n: [40] # number of temperature query points
+  t_query_points_n: [20] # number of temperature query points
   kanfov: [3]
-  kanstride: [3]
-  architecture: ['DEMSpectrum']
+  kanstride: [1]
+  architecture: ['MLPDEMSpectrum']
+  log_sploss_factor: [100.0]
+  lin_sploss_factor: [100.0]
   # Training, validation, testing and holdout split
   val_months: [[2, 3]]  # Month used for validation
   test_months: [[11, 12]]  # Month used for testing
