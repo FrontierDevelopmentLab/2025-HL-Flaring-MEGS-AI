@@ -8,8 +8,8 @@ model:
   kanfov: [3]
   kanstride: [2]
   architecture: ['KANDEMSpectrum']
-  log_sploss_factor: [100.0]
-  lin_sploss_factor: [100.0]
+  log_sploss_factor: [1.0]
+  lin_sploss_factor: [1.0]
   # Training, validation, testing and holdout split
   val_months: [[2, 3]]  # Month used for validation
   test_months: [[11, 12]]  # Month used for testing
