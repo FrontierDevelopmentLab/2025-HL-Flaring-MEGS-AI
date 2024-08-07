@@ -6,6 +6,8 @@ from astropy.visualization import ImageNormalize, AsinhStretch, LinearStretch
 from itipy.data.editor import LoadMapEditor, NormalizeRadiusEditor, AIAPrepEditor
 from sunpy.visualization.colormaps import cm
 from irradiance.data.reprojection import transform
+from skimage.measure import block_reduce
+from sunpy.map import Map
 
 sdo_img_norm = ImageNormalize(vmin=0, vmax=1, stretch=LinearStretch(), clip=True)
 
@@ -27,7 +29,7 @@ sdo_norms = {94: ImageNormalize(vmin=0, vmax=340, clip=True),
              }
 
 
-def loadAIAMap(file_path, resolution=1024, map_reproject=False, calibration='auto'):
+def loadAIAMap(file_path, resolution=1024, map_reproject=False, calibration='auto', normalize_radius=False):
     """Load and preprocess AIA file to make them compatible to ITI.
 
 
@@ -44,18 +46,27 @@ def loadAIAMap(file_path, resolution=1024, map_reproject=False, calibration='aut
     """
     s_map, _ = LoadMapEditor().call(file_path)
     assert s_map.meta['QUALITY'] == 0, f'Invalid quality flag while loading AIA Map: {s_map.meta["QUALITY"]}'
-    s_map = NormalizeRadiusEditor(resolution, padding_factor=0.1).call(s_map)
+
     try:
         s_map = AIAPrepEditor(calibration=calibration).call(s_map)
     except:
         s_map = AIAPrepEditor(calibration='aiapy').call(s_map)
+
+    if normalize_radius:
+        s_map = NormalizeRadiusEditor(resolution, padding_factor=0.1).call(s_map)
+    else:
+        downscale_factor = int(s_map.data.shape[0]/resolution)
+        dummy_map = s_map.resample((resolution, resolution) * u.pix)
+        binned_data = block_reduce(s_map.data, (downscale_factor,downscale_factor), func=np.mean)
+        s_map = Map(binned_data, dummy_map.meta)
+
     if map_reproject:
         s_map = transform(s_map, lat=s_map.heliographic_latitude,
                           lon=s_map.heliographic_longitude, distance=1 * u.AU)
     return s_map
 
 
-def loadMap(file_path, resolution=1024, map_reproject=False, calibration=None):
+def loadMap(file_path, resolution=1024, map_reproject=False, calibration=None, normalize_radius=False):
     """Load and resample a FITS file (no pre-processing).
 
 
@@ -80,7 +91,7 @@ def loadMap(file_path, resolution=1024, map_reproject=False, calibration=None):
 
 
 def loadMapStack(file_paths:list, resolution:int=1024, remove_nans:bool=True, map_reproject:bool=False, aia_preprocessing:bool=True,
-                 calibration:str='auto', apply_norm:bool=True, percentile_clip:float=None)->np.array:
+                 calibration:str='auto', apply_norm:bool=True, percentile_clip:float=None, normalize_radius=False)->np.array:
     """Load a stack of FITS files, resample ot specific resolution, and stack hem.
 
     Parameters
@@ -111,7 +122,7 @@ def loadMapStack(file_paths:list, resolution:int=1024, remove_nans:bool=True, ma
 
     load_func = loadAIAMap if aia_preprocessing else loadMap
     s_maps = [load_func(file, resolution=resolution, map_reproject=map_reproject,
-                        calibration=calibration) for file in file_paths]
+                        calibration=calibration, normalize_radius=normalize_radius) for file in file_paths]
     
     if apply_norm:
         stack = np.stack([sdo_norms[s_map.wavelength.value](s_map.data) for s_map in s_maps]).astype(np.float32)
