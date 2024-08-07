@@ -2,14 +2,14 @@
 model:
  # General training parameters
   epochs: [100]  # If the model is not hybrid, use this value
-  lr: [1.e-4]  # If the model is not hybrid, use this value
+  lr: [5.e-3]  # If the model is not hybrid, use this value
   seed: [3110]  # Seed used for training
   t_query_points_n: [20] # number of temperature query points
   kanfov: [3]
-  kanstride: [1]
-  architecture: ['MLPDEMSpectrum']
-  log_sploss_factor: [100.0]
-  lin_sploss_factor: [100.0]
+  kanstride: [2]
+  architecture: ['KANDEMSpectrum']
+  log_sploss_factor: [1.0]
+  lin_sploss_factor: [1.0]
   # Training, validation, testing and holdout split
   val_months: [[2, 3]]  # Month used for validation
   test_months: [[11, 12]]  # Month used for testing
@@ -48,6 +48,6 @@ wandb:
   #group: 'Virtual Instrumentation'  # Name of wandb group
   job_type: 'Irradiance Training'  # Nme of wandb job_type
   tags: ['baseline'] # Run tags
-  notes: "Baseline of Kandem."
+  notes: "Baseline of KandemSpectrum."
   wb_name: "please_delete"
   
