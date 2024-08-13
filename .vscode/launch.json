@@ -39,6 +39,15 @@
               "-instrument", "AIA_UV",
               "-checkpoint", "/home/andres_munoz_j/dem_runs/debug_dem.ckpt"
             ]
+        },
+        {
+            "name": "Irradiance test",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "${command:extension.commandvariable.file.relativeFileDotsNoExtension}",
+            "console": "integratedTerminal",
+            "cwd":"${workspaceFolder}",
+            "justMyCode": false,
         }
     ]
 }
