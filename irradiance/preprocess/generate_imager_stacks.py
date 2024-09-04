@@ -51,7 +51,7 @@ def load_map_stack(imager_stack):
         calibration = 'aiapy'
         imager_stack = loadMapStack(imager_stack, resolution=imager_resolution, remove_nans=True,
                                     map_reproject=imager_reproject, aia_preprocessing=True, calibration=calibration,
-                                    apply_norm=False, percentile_clip=0.25)
+                                    apply_norm=False)
         # Save stack
         np.save(output_file, imager_stack)
         data = np.asarray(imager_stack)
