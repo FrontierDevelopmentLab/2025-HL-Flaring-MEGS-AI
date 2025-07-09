@@ -40,10 +40,10 @@ class SXRDownloader:
             a.Resolution('avg1m')  # 1-minute averaged data
         )
 
-        logging.info(f"Found {len(goes_query[0])} GOES files.")
+        logging.info(f"Found {len(goes_query)} GOES files.")
 
         # Skip if no files found
-        if len(goes_query[0]) == 0:
+        if len(goes_query) == 0:
             logging.warning("No files found for the specified query.")
             return []
 

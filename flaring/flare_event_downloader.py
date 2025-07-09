@@ -2,7 +2,7 @@ from sunpy.net import Fido
 from sunpy.net import attrs as a
 
 class FlareEventDownloader:
-    def __init__(self, start_date, end_date, event_type="FL", GOESCls="M1.0"):
+    def __init__(self, start_date, end_date, event_type="FL", GOESCls="M1.0", directory=None):
         """
         start_date: Start date for the flare event download.
         end_date: End date for the flare event download.
@@ -13,6 +13,7 @@ class FlareEventDownloader:
         self.end_date = end_date
         self.event_type = event_type
         self.GOESCls = GOESCls
+        self.directory = directory
 
     def download_events(self):
         """
@@ -22,7 +23,7 @@ class FlareEventDownloader:
         # Search for flare events in the specified date range
         result = Fido.search(
             a.Time(self.start_date, self.end_date),
-            a.hek.EventType(self.event_type),
+            a.hek.EventType("FL"),
             a.hek.FL.GOESCls >= self.GOESCls,
             a.hek.OBS.Observatory == "GOES"
         )
@@ -38,5 +39,5 @@ class FlareEventDownloader:
 
         # Convert to pandas DataFrame
         flare_df = filtered_results.to_pandas()
-
+        flare_df.to_csv(f"{self.directory}/flare_events.csv")
         return flare_df
