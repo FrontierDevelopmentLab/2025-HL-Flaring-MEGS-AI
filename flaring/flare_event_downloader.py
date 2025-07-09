@@ -34,7 +34,7 @@ class FlareEventDownloader:
 
         # Filter results to keep only relevant columns
         hek_results = result["hek"]
-        filtered_results = hek_results["event_starttime", "event_peaktime", "event_endtime", "fl_goescls", "ar_noaanum"]
+        filtered_results = hek_results["event_starttime", "event_peaktime", "event_endtime", "fl_goescls", "ar_noaanum","hgc_coord"]
 
         # Convert to pandas DataFrame
         flare_df = filtered_results.to_pandas()
