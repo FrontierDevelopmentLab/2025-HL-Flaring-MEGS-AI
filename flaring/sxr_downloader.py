@@ -131,7 +131,7 @@ class SXRDownloader:
                 min_date = df.index.min().strftime('%Y%m%d')
                 max_date = df.index.max().strftime('%Y%m%d')
                 filename = f"{str(output_file)}_{min_date}_{max_date}.csv"
-                df.to_csv(filename, index=False)
+                df.to_csv(filename, index=True)
 
                 logging.info(f"Saved combined file: {output_file}")
             except Exception as e:
