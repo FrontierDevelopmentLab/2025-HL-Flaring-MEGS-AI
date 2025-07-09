@@ -152,5 +152,3 @@ class SXRDownloader:
             process_files(g17_files, "GOES-17", self.concat_dir / "combined_g17_avg1m", self.used_g17_files)
         if len(g18_files) != 0:
             process_files(g18_files, "GOES-18", self.concat_dir / "combined_g18_avg1m", self.used_g18_files)
-
-#checking push
