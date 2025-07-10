@@ -54,9 +54,38 @@ if __name__ == '__main__':
     # start_date = args.start_date
     # end_date = args.end_date
     # cadence = args.cadence
+    download_dir = "/mnt/data"
+    start_date = "2012-01-01"
+    end_date = "2023-01-01"
+    chunk_size = 180  # days per chunk
+    # Parse start and end dates
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d")
 
-    sxr_downloader = sxr.SXRDownloader("/mnt/data/GOES-additional", "/mnt/data/GOES-additional/combined")
-    flare_event = fed.FlareEventDownloader("2012-01-01", "2025-01-01", event_type="FL", GOESCls="M1.0", directory="/mnt/data/SDO-AIA-additional/FlareEvents")
-    sdo_downloader = sdo.SDODownloader("/mnt/data/SDO-AIA-additional","ggoodwin5@gsu.edu")
-    FlareDownloadProcessor(flare_event, sdo_downloader,sxr_downloader).process_download()
+    # Process in chunks
+    current_start = start
+    while current_start < end:
+        current_end = min(current_start + timedelta(days=chunk_size), end)
+        print(f"Processing chunk: {current_start.strftime('%Y-%m-%d')} to {current_end.strftime('%Y-%m-%d')}")
+
+        sxr_downloader = sxr.SXRDownloader(f"{download_dir}/GOES-additional",
+                                           f"{download_dir}/GOES-additional/combined")
+        flare_event = fed.FlareEventDownloader(
+            current_start.strftime("%Y-%m-%d"),
+            current_end.strftime("%Y-%m-%d"),
+            event_type="FL",
+            GOESCls="M1.0",
+            directory=f"{download_dir}/SDO-AIA-additional/FlareEvents"
+        )
+        sdo_downloader = sdo.SDODownloader(f"{download_dir}/SDO-AIA-additional", "ggoodwin5@gsu.edu")
+
+        processor = FlareDownloadProcessor(flare_event, sdo_downloader, sxr_downloader)
+        processor.process_download()
+
+        current_start = current_end
+
+    #sxr_downloader = sxr.SXRDownloader("/mnt/data/GOES-additional", "/mnt/data/GOES-additional/combined")
+    #flare_event = fed.FlareEventDownloader("2012-01-01", "2025-01-01", event_type="FL", GOESCls="M1.0", directory="/mnt/data/SDO-AIA-additional/FlareEvents")
+    #sdo_downloader = sdo.SDODownloader("/mnt/data/SDO-AIA-additional","ggoodwin5@gsu.edu")
+    #FlareDownloadProcessor(flare_event, sdo_downloader,sxr_downloader).process_download()
 
