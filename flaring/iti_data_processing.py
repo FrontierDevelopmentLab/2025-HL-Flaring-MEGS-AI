@@ -9,7 +9,7 @@ import multiprocessing as mp
 from functools import partial
 
 # Configuration for all wavelengths to process
-wavelengths = [94, 131, 171, 193, 211, 335]
+wavelengths = [94, 131, 171, 193, 211, 304]
 base_input_folder = '/mnt/data/SDO-AIA'
 output_folder = '/mnt/data2/AIA_processed_data'
 os.makedirs(output_folder, exist_ok=True)
