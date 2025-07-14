@@ -40,10 +40,10 @@ class SXRDownloader:
             a.Resolution('avg1m')  # 1-minute averaged data
         )
 
-        logging.info(f"Found {len(goes_query[0])} GOES files.")
+        logging.info(f"Found {len(goes_query)} GOES files.")
 
         # Skip if no files found
-        if len(goes_query[0]) == 0:
+        if len(goes_query) == 0:
             logging.warning("No files found for the specified query.")
             return []
 
@@ -111,10 +111,12 @@ class SXRDownloader:
 
             try:
                 combined_ds = xr.concat(datasets, dim='time').sortby('time')
+                #Scaling factors for GOES-13, GOES-14, and GOES-15
                 if satellite_name in ['GOES-13', 'GOES-14', 'GOES-15']:
                     combined_ds['xrsa_flux'] = combined_ds['xrsa_flux'] / .85
                     combined_ds['xrsb_flux'] = combined_ds['xrsb_flux'] / .7
                 df = combined_ds.to_dataframe().reset_index()
+                #
                 if 'quad_diode' in df.columns:
                     df = df[df['quad_diode'] == 0]  # Filter out quad diode data
                 df['time'] = pd.to_datetime(df['time'])
@@ -131,7 +133,7 @@ class SXRDownloader:
                 min_date = df.index.min().strftime('%Y%m%d')
                 max_date = df.index.max().strftime('%Y%m%d')
                 filename = f"{str(output_file)}_{min_date}_{max_date}.csv"
-                df.to_csv(filename, index=False)
+                df.to_csv(filename, index=True)
 
                 logging.info(f"Saved combined file: {output_file}")
             except Exception as e:
