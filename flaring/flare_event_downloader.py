@@ -84,3 +84,6 @@ class FlareEventDownloader:
             flare_df.to_csv(f"{self.directory}/flare_events_{self.start_date}_{self.end_date}.csv")
         
         return flare_df
+
+flare_event = FlareEventDownloader("2023-07-01", "2023-08-15", event_type="FL", GOESCls="M1.0", directory="/mnt/data/flare_list")
+flare_events = flare_event.download_events()
