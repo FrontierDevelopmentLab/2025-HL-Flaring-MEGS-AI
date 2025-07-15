@@ -72,14 +72,14 @@ else:
 instrument = args.instrument
 
 # Transforms
-train_transforms = transforms.Compose([
-    transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Remove clone/detach
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomRotation(10),
-])
-val_transforms = transforms.Compose([
-    transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Remove clone/detach
-])
+# train_transforms = transforms.Compose([
+#     transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Remove clone/detach
+#     transforms.RandomHorizontalFlip(p=0.5),
+#     transforms.RandomRotation(10),
+# ])
+# val_transforms = transforms.Compose([
+#     transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Remove clone/detach
+# ])
 
 # Training loop
 n = 0
@@ -94,9 +94,9 @@ for parameter_set in combined_parameters:
         sxr_dir=sxr_dir,
         sxr_norm=sxr_norm,
         batch_size=64,
-        num_workers=os.cpu_count() // 2,
-        train_transforms=train_transforms,
-        val_transforms=val_transforms,
+        num_workers=os.cpu_count(),
+        # train_transforms=train_transforms,
+        # val_transforms=val_transforms,
         val_split=0.2,
         test_split=0.1
     )
