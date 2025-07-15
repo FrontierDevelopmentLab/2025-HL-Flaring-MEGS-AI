@@ -14,22 +14,23 @@ from pytorch_lightning.callbacks import ModelCheckpoint, Callback
 from torch.nn import HuberLoss
 from SDOAIA_dataloader import AIA_GOESDataModule
 from linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
+from callback import ImagePredictionLogger_SXR
 
 # SXR Prediction Logger
-class SXRPredictionLogger(Callback):
-    def __init__(self, val_samples):
-        super().__init__()
-        self.val_samples = val_samples
-
-    def on_validation_epoch_end(self, trainer, pl_module):
-        # val_samples is a list of ((aia, sxr), target)
-        for (aia, sxr), target in self.val_samples:
-            aia, sxr, target = aia.to(pl_module.device), sxr.to(pl_module.device), target.to(pl_module.device)
-            pred = pl_module(aia.unsqueeze(0))  # Add batch dimension
-            trainer.logger.experiment.log({
-                "val_pred_sxr": pred.cpu().numpy(),
-                "val_target_sxr": target.cpu().numpy()
-            })
+# class SXRPredictionLogger(Callback):
+#     def __init__(self, val_samples):
+#         super().__init__()
+#         self.val_samples = val_samples
+#
+#     def on_validation_epoch_end(self, trainer, pl_module):
+#         # val_samples is a list of ((aia, sxr), target)
+#         for (aia, sxr), target in self.val_samples:
+#             aia, sxr, target = aia.to(pl_module.device), sxr.to(pl_module.device), target.to(pl_module.device)
+#             pred = pl_module(aia.unsqueeze(0))  # Add batch dimension
+#             trainer.logger.experiment.log({
+#                 "val_pred_sxr": pred.cpu().numpy(),
+#                 "val_target_sxr": target.cpu().numpy()
+#             })
 
 # Compute SXR normalization
 def compute_sxr_norm(sxr_dir):
@@ -117,7 +118,10 @@ for parameter_set in combined_parameters:
     total_n_valid = len(data_loader.valid_ds)
     plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, max(1, total_n_valid // 4))]
     plot_samples = plot_data  # Keep as list of ((aia, sxr), target)
-    sxr_callback = SXRPredictionLogger(plot_samples)
+    #sxr_callback = SXRPredictionLogger(plot_samples)
+
+    sxr_plot_callback = ImagePredictionLogger_SXR(plot_data[0][0], plot_data[0][1], sxr_norm, plot_samples)
+
 
     # Checkpoint callback
     checkpoint_callback = ModelCheckpoint(

@@ -53,5 +53,5 @@ if __name__ == "__main__":
     # Update this path to your real data SXR directory
     sxr_dir = "/mnt/data/ML-Ready-Data-No-Intensity-Cut/GOES-18-SXR-B/"  # Replace with actual path
     sxr_norm = compute_sxr_norm(sxr_dir)
-    np.save("/home/jayantbiradar619/sxr_norm2.npy", sxr_norm)
-    print(f"Saved SXR normalization to /home/jayantbiradar619/sxr_norm.npy")
+    np.save("/mnt/data/ML-Ready-Data-No-Intensity-Cut/normalized_sxr.npy", sxr_norm)
+    print(f"Saved SXR normalization to /mnt/data/ML-Ready-Data-No-Intensity-Cut/normalized_sxr")

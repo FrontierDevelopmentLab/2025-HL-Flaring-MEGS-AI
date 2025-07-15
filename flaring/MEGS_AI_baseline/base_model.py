@@ -20,8 +20,8 @@ class BaseModel(LightningModule):
     def training_step(self, batch, batch_idx):
         (x, sxr), target = batch
         pred = self(x, sxr)
-        pred = pred * self.eve_norm[1] + self.eve_norm[0]  # Denormalize for loss
-        target = target * self.eve_norm[1] + self.eve_norm[0]  # Denormalize target
+        # pred = pred * self.eve_norm[1] + self.eve_norm[0]  # Denormalize for loss
+        # target = target * self.eve_norm[1] + self.eve_norm[0]  # Denormalize target
         loss = self.loss_func(pred, target)
         self.log('train_loss', loss)
         return loss
@@ -29,8 +29,8 @@ class BaseModel(LightningModule):
     def validation_step(self, batch, batch_idx):
         (x, sxr), target = batch
         pred = self(x, sxr)
-        pred = pred * self.eve_norm[1] + self.eve_norm[0]
-        target = target * self.eve_norm[1] + self.eve_norm[0]
+        # pred = pred * self.eve_norm[1] + self.eve_norm[0]
+        # target = target * self.eve_norm[1] + self.eve_norm[0]
         loss = self.loss_func(pred, target)
         self.log('valid_loss', loss)
         return loss
