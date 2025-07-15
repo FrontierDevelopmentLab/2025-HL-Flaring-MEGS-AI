@@ -20,12 +20,12 @@ def unnormalize(y, eve_norm):
 
 class ImagePredictionLogger_SXR(Callback):
 
-    def __init__(self, val_aia, val_sxr, sxr_norm, val_samples):
+    def __init__(self, data_samples, sxr_norm):
         super().__init__()
-        self.val_aia = val_aia
-        self.val_sxr = val_sxr
+        self.data_samples = data_samples
+        self.val_aia = data_samples[0][0]
+        self.val_sxr = data_samples[0][1]
         self.sxr_norm = sxr_norm
-        self.val_samples = val_samples
 
     def unnormalize_sxr(self, normalized_values):
 
@@ -42,7 +42,7 @@ class ImagePredictionLogger_SXR(Callback):
         true_sxr = []
         pred_sxr = []
         # print(self.val_samples)
-        for (aia, _), target in self.val_samples:
+        for (aia, _), target in self.data_samples:
             #device = torch.device("cuda:0")
             aia = aia.to(pl_module.device).unsqueeze(0)
             # Get prediction
@@ -69,15 +69,24 @@ class ImagePredictionLogger_SXR(Callback):
 
 
         for i in range(num_samples):
-            #print("Aia images:", val_aia[i])
-            print(val_aia[i].shape)
-            axes[i, 0].imshow(val_aia[i][:, :, 0], cmap=sdoaia94, origin='lower')
-            axes[i, 0].set_title("AIA 94Å Index" + str(i))
-            axes[i, 1].scatter(i, val_sxr[i])
-            axes[i, 1].scatter(i, pred_sxr[i])
-            axes[i, 1].set_xlabel("Index")
-            axes[i, 1].set_ylabel("Soft x-ray flux [W/m2]")
-            axes[i, 1].set_yscale('log')
+            axes.scatter(i, val_sxr[i], label='Ground truth' if i == 0 else "", color='blue')
+            axes.scatter(i, pred_sxr[i], label='Prediction' if i == 0 else "", color='orange')
+        axes.set_xlabel("Index")
+        axes.set_ylabel("Soft x-ray flux [W/m2]")
+        axes.set_yscale('log')
+        axes.legend()
+
+        fig.tight_layout()
+        return fig
+
+    def plot_aia_sxr_difference(self, val_aia, val_sxr, pred_sxr):
+        num_samples = len(val_aia)
+        fig, axes = plt.subplots(1, 1, figsize=(5, 2))
+        for i in range(num_samples):
+            # print("Aia images:", val_aia[i])
+            axes.scatter(i, val_sxr[i]-pred_sxr[i], label='Soft X-ray Flux Difference', color='blue')
+            axes.set_xlabel("Index")
+            axes.set_ylabel("Soft X-ray Flux Difference (True - Pred.) [W/m2]")
 
         fig.tight_layout()
         return fig

@@ -93,7 +93,7 @@ for parameter_set in combined_parameters:
         aia_dir=aia_dir,
         sxr_dir=sxr_dir,
         sxr_norm=sxr_norm,
-        batch_size=16,
+        batch_size=64,
         num_workers=os.cpu_count() // 2,
         train_transforms=train_transforms,
         val_transforms=val_transforms,
@@ -120,7 +120,7 @@ for parameter_set in combined_parameters:
     plot_samples = plot_data  # Keep as list of ((aia, sxr), target)
     #sxr_callback = SXRPredictionLogger(plot_samples)
 
-    sxr_plot_callback = ImagePredictionLogger_SXR(plot_data[0][0], plot_data[0][1], sxr_norm, plot_samples)
+    sxr_plot_callback = ImagePredictionLogger_SXR(plot_samples, sxr_norm)
 
 
     # Checkpoint callback
@@ -138,8 +138,8 @@ for parameter_set in combined_parameters:
             d_input=6,
             d_output=1,
             eve_norm=sxr_norm,
-            lr=run_config.get('lr', 1e-2),
-            loss_func=HuberLoss()
+            lr=run_config.get('lr', 1e-4),
+            loss_func=MSELoss()
         )
     elif run_config['architecture'] == 'hybrid':
         model = HybridIrradianceModel(
