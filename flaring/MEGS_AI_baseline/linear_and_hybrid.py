@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import HuberLoss
-from base
+from base_model import BaseModel
 
 class LinearIrradianceModel(BaseModel):
     def __init__(self, d_input, d_output, loss_func=HuberLoss(), lr=1e-2):
