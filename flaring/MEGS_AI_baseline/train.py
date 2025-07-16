@@ -62,13 +62,13 @@ for parameter_set in combined_parameters:
     data_loader.setup()
 
     # Logger
-    wb_name = f"{instrument}_{n}" if len(combined_parameters) > 1 else "aia_sxr_model"
+    #wb_name = f"{instrument}_{n}" if len(combined_parameters) > 1 else "aia_sxr_model"
     wandb_logger = WandbLogger(
         entity=config_data['wandb']['entity'],
         project=config_data['wandb']['project'],
         job_type=config_data['wandb']['job_type'],
         tags=config_data['wandb']['tags'],
-        name=wb_name,
+        name=config_data['wandb']['wb_name'],
         notes=config_data['wandb']['notes'],
         config=run_config
     )
@@ -89,7 +89,7 @@ for parameter_set in combined_parameters:
         monitor='valid_loss',
         mode='min',
         save_top_k=1,
-        filename=f"{wb_name}-{{epoch:02d}}-{{valid_loss:.4f}}"
+        filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{valid_loss:.4f}}"
     )
 
     # Model
@@ -131,7 +131,7 @@ for parameter_set in combined_parameters:
 
     # Save final PyTorch checkpoint with model and state_dict
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    final_checkpoint_path = os.path.join(checkpoint_dir, f"{wb_name}-final-{timestamp}.pth")
+    final_checkpoint_path = os.path.join(checkpoint_dir, f"{config_data['wandb']['wb_name']}-final-{timestamp}.pth")
     torch.save({
         'model': model,
         'state_dict': model.state_dict()
