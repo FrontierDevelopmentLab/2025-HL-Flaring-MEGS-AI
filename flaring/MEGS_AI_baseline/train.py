@@ -49,15 +49,15 @@ for parameter_set in combined_parameters:
 
     # DataModule
     data_loader = AIA_GOESDataModule(
-        aia_dir=aia_dir,
-        sxr_dir=sxr_dir,
+        aia_train_dir= aia_dir+"/train",
+        aia_val_dir=aia_dir+"/val",
+        aia_test_dir=aia_dir+"/test",
+        sxr_train_dir=sxr_dir+"/train",
+        sxr_val_dir=sxr_dir+"/val",
+        sxr_test_dir=sxr_dir+"/test",
         batch_size=32,
         num_workers=os.cpu_count(),
         sxr_norm=sxr_norm,
-        # train_transforms=train_transforms,
-        # val_transforms=val_transforms,
-        val_split=0.2,
-        test_split=0.1
     )
     data_loader.setup()
 
@@ -74,8 +74,8 @@ for parameter_set in combined_parameters:
     )
 
     # Logging callback
-    total_n_valid = len(data_loader.valid_ds)
-    plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, max(1, total_n_valid // 4))]
+    total_n_valid = len(data_loader.val_ds)
+    plot_data = [data_loader.val_ds[i] for i in range(0, total_n_valid, max(1, total_n_valid // 4))]
     print(plot_data[0])  # Print first sample for debugging
     plot_samples = plot_data  # Keep as list of ((aia, sxr), target)
     #sxr_callback = SXRPredictionLogger(plot_samples)

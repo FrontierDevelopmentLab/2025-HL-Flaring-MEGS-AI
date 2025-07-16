@@ -11,9 +11,8 @@
     cnn_dp:
       - 0.75
     epochs:
-      - 1
-    save_dictionary:
-      -
+      - 50
+
   wandb:
     entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
     project: MEGS-AI flaring  # Lowercase, no spaces
@@ -22,5 +21,5 @@
       - aia
       - sxr
       - regression
-    name: flaring_100epoch
+    wb_name: megs_ai_hybrid_non_flare
     notes: Regression from AIA images (6 channels) to GOES SXR flux

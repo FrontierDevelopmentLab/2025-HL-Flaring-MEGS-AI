@@ -83,20 +83,22 @@ import pandas as pd
 import shutil
 from datetime import datetime
 
-data_dir = "/mnt/data/ML-Ready/AIA-Data/"
+aia_data_dir = "/mnt/data/ML-Ready/AIA-Data/"
+sxr_data_dir = "/mnt/data/ML-Ready/GOES-18-SXR-B/"
 flares_event_dir = "/mnt/data/ML-Ready/flares_event_dir/"
 non_flares_event_dir = "/mnt/data/ML-Ready/non_flares_event_dir/"
 flare_events_csv = "/mnt/data/flare_list/flare_events_2023-07-01_2023-08-15.csv"
 
 # Create train, val, test subdirectories under flaring and non-flaring
 for base_dir in [flares_event_dir, non_flares_event_dir]:
-    os.makedirs(os.path.join(base_dir, "train"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "val"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "test"), exist_ok=True)
+    os.makedirs(os.path.join(base_dir, "AIA"), exist_ok=True)
+    os.makedirs(os.path.join(base_dir, "SXR"), exist_ok=True)
+    for split in ["train", "val", "test"]:
+        os.makedirs(os.path.join(base_dir, "AIA", split), exist_ok=True)
+        os.makedirs(os.path.join(base_dir, "SXR", split), exist_ok=True)
 
 # Load flare events
 flare_event = pd.read_csv(flare_events_csv)
-print(flare_event.head())
 
 # Create list of flare event time ranges
 flaring_eve_list = []
@@ -111,7 +113,7 @@ val_range = (datetime(2023, 7, 27), datetime(2023, 7, 30))
 test_range = (datetime(2023, 8, 1), datetime(2023, 8, 15))
 
 # Get list of files in data_dir
-data_list = os.listdir(data_dir)
+data_list = os.listdir(aia_data_dir)
 
 for file in data_list:
     try:
@@ -136,7 +138,10 @@ for file in data_list:
         continue
 
     # Copy file to appropriate directory
-    src = os.path.join(data_dir, file)
-    dst = os.path.join(base_dir, split_dir, file)
-    shutil.copy(src, dst)
-    print(f"Copied {file} to {base_dir}/{split_dir}")
+    src_aia = os.path.join(aia_data_dir, file)
+    src_sxr = os.path.join(sxr_data_dir, file)
+    dst_aia = os.path.join(base_dir, "AIA", split_dir , file)
+    dst_sxr = os.path.join(base_dir, "SXR" , split_dir, file)
+    shutil.copy(src_aia, dst_aia)
+    shutil.copy(src_sxr, dst_sxr)
+    print(f"Copied {file} to {dst_aia} and {dst_sxr}")
