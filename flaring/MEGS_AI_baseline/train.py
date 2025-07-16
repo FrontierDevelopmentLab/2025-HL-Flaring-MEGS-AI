@@ -127,11 +127,7 @@ for parameter_set in combined_parameters:
     trainer.fit(model, data_loader)
 
     # Save checkpoint
-    save_dictionary = run_config
-    save_dictionary['model'] = model
-    save_dictionary['instrument'] = instrument
-    full_checkpoint_path = os.path.join(checkpoint_dir, f"{wb_name}_{n}.ckpt")
-    torch.save(save_dictionary, full_checkpoint_path)
+    trainer.fit(model, data_loader)
 
     # Save final PyTorch checkpoint with model and state_dict
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
