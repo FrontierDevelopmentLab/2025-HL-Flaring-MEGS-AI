@@ -15,7 +15,7 @@ class LinearIrradianceModel(BaseModel):
 
 
         # Debug: Print input shape
-        print(f"Input shape to LinearIrradianceModel.forward: {x.shape}")
+        #print(f"Input shape to LinearIrradianceModel.forward: {x.shape}")
 
         # Expect x shape: (batch_size, H, W, C)
         if len(x.shape) != 4:
@@ -32,10 +32,10 @@ class LinearIrradianceModel(BaseModel):
         std_irradiance = torch.std(x, dim=(2, 3))    # Shape: (batch_size, n_channels)
 
         # Debug: Print shapes after mean and std
-        print(f"mean_irradiance shape: {mean_irradiance.shape}, std_irradiance shape: {std_irradiance.shape}")
+        #print(f"mean_irradiance shape: {mean_irradiance.shape}, std_irradiance shape: {std_irradiance.shape}")
 
         input_features = torch.cat((mean_irradiance, std_irradiance), dim=1)  # Shape: (batch_size, 2 * n_channels)
-        print(f"Input features shape to linear layer: {input_features.shape}")
+        #print(f"Input features shape to linear layer: {input_features.shape}")
 
         if input_features.shape[1] != 2 * self.n_channels:
             raise ValueError(f"Expected {2 * self.n_channels} features, got {input_features.shape[1]}")

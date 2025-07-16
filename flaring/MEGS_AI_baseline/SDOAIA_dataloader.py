@@ -94,7 +94,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 class AIA_GOESDataModule(LightningDataModule):
     """PyTorch Lightning DataModule for AIA and SXR data."""
 
-    def __init__(self, aia_dir, sxr_dir, sxr_norm, batch_size=16, num_workers=4,
+    def __init__(self, aia_dir, sxr_dir, sxr_norm, batch_size=64, num_workers=4,
                  train_transforms=None, val_transforms=None, val_split=0.2, test_split=0.1):
         super().__init__()
         self.aia_dir = aia_dir
