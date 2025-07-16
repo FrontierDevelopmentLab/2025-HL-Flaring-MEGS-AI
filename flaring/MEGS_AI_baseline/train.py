@@ -1,19 +1,19 @@
 
 import argparse
 import os
+from datetime import datetime
+
 import yaml
 import itertools
 import wandb
 import torch
 import numpy as np
-from pathlib import Path
-import torchvision.transforms as transforms
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, Callback
-from torch.nn import HuberLoss, MSELoss
+from pytorch_lightning.callbacks import ModelCheckpoint
+from torch.nn import MSELoss
 from SDOAIA_dataloader import AIA_GOESDataModule
-from linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
+from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR
 
 # Parser
@@ -117,7 +117,7 @@ for parameter_set in combined_parameters:
         default_root_dir=checkpoint_dir,
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
-        max_epochs=run_config.get('epochs', 10),
+        max_epochs=run_config['epochs'],
         callbacks=[sxr_plot_callback, checkpoint_callback],
         logger=wandb_logger,
         log_every_n_steps=10
@@ -127,15 +127,16 @@ for parameter_set in combined_parameters:
     trainer.fit(model, data_loader)
 
     # Save checkpoint
-    save_dictionary = run_config
-    save_dictionary['model'] = model
-    save_dictionary['instrument'] = instrument
-    full_checkpoint_path = os.path.join(checkpoint_dir, f"{wb_name}_{n}.ckpt")
-    torch.save(save_dictionary, full_checkpoint_path)
+    trainer.fit(model, data_loader)
 
-    # Test
-    trainer.test(model, dataloaders=data_loader.test_dataloader())
-
+    # Save final PyTorch checkpoint with model and state_dict
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    final_checkpoint_path = os.path.join(checkpoint_dir, f"{wb_name}-final-{timestamp}.pth")
+    torch.save({
+        'model': model,
+        'state_dict': model.state_dict()
+    }, final_checkpoint_path)
+    print(f"Saved final PyTorch checkpoint: {final_checkpoint_path}")
+    n += 1
     # Finalize
     wandb.finish()
-    n += 1
