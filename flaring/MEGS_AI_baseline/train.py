@@ -6,14 +6,12 @@ import itertools
 import wandb
 import torch
 import numpy as np
-from pathlib import Path
-import torchvision.transforms as transforms
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, Callback
-from torch.nn import HuberLoss, MSELoss
+from pytorch_lightning.callbacks import ModelCheckpoint
+from torch.nn import MSELoss
 from SDOAIA_dataloader import AIA_GOESDataModule
-from linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
+from flaring.MEGS_AI_baseline.models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR
 
 # Parser
