@@ -14,6 +14,7 @@ os.makedirs(non_flares_event_dir, exist_ok=True)
 
 flare_event = pd.read_csv(flare_events_csv)
 
+
 flaring_eve_list = []
 for i, row in flare_event.iterrows():
     start_time = pd.to_datetime(row['event_starttime'])
@@ -46,6 +47,7 @@ train_range = (datetime(2023, 7, 1), datetime(2023, 7, 20))
 val_range = (datetime(2023, 7, 21), datetime(2023, 8, 5))
 test_range = (datetime(2023, 8, 6), datetime(2023, 8, 15))
 
+print(train_range[0],train_range[1])
 # Create train, val, test subdirectories under flaring and non-flaring
 for base_dir in [flares_event_dir, non_flares_event_dir]:
     os.makedirs(os.path.join(base_dir, "train"), exist_ok=True)
