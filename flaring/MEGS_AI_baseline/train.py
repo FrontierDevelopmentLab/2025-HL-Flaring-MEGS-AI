@@ -144,4 +144,3 @@ for parameter_set in combined_parameters:
     n += 1
     # Finalize
     wandb.finish()
-    n += 1
