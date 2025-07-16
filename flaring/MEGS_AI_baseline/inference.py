@@ -4,7 +4,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from SDOAIA_dataloader import AIA_GOESDataset
 from models.linear_and_hybrid import HybridIrradianceModel
-from callback import ImagePredictionLogger_SXR
+from callback import unnormalize_sxr
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def predict_log_outputs(model, dataset, batch_size=8):
@@ -37,13 +37,16 @@ def main():
     parser = argparse.ArgumentParser(description='Save raw log-space model outputs')
     parser.add_argument('--ckpt_path', required=True, help='Path to model checkpoint')
     parser.add_argument('--aia_dir', required=True, help='Directory of AIA images')
-    parser.add_argument('--sxr_dir', required=True, help='Directory of target SXR images')
+    parser.add_argument('--sxr_dir', required=True, help='Directory of target SXR data')
+    parser.add_argument('--sxr_norm', required=True, help='Path to SXR normalization parameters (mean, std)')
     parser.add_argument('--output', default='log_predictions.txt',
                         help='Output file for log-space predictions')
     parser.add_argument('--batch-size', type=int, default=8,
                         help='Inference batch size')
 
     args = parser.parse_args()
+
+    sxr_norm = np.load(args.sxr_norm)
 
     # Setup
     state = torch.load(args.ckpt_path, map_location=device, weights_only=False)
@@ -71,7 +74,8 @@ def main():
     with open(args.output, 'w') as f:
         f.write("# Log-space SXR predictions (log10(W/m²))\n")
         for log_pred in predict_log_outputs(model, dataset, args.batch_size):
-            print(log_pred)
+            pred = unnormalize_sxr(log_pred, sxr_norm)
+            print(pred)
 
     print(f"Log-space predictions saved to {args.output}")
     print("These are raw model outputs in log10 space before any exponentiation")
