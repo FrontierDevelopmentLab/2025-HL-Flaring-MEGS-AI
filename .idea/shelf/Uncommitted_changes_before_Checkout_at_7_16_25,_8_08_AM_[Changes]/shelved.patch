@@ -1,0 +1,23 @@
+Index: flaring/vision_transformers/vision_transformer.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>\nimport torch\nimport torch.nn as nn\nimport pytorch_lightning as pl\nfrom timm import create_model\n\nclass VisionTransformerFlaringModel(pl.LightningModule):\n    def __init__(self, d_input=6, d_output=1, eve_norm=(0, 1), lr=1e-4, model_name='vit_base_patch16_224', pretrained=True):\n        super().__init__()\n        self.save_hyperparameters()\n        self.eve_norm = eve_norm\n        self.lr = lr\n        self.vit = create_model(\n            model_name,\n            pretrained=pretrained,\n            in_chans=d_input,\n            num_classes=0,\n            global_pool='avg'\n        )\n        self.regression_head = nn.Linear(self.vit.embed_dim, d_output)\n        self.loss_func = nn.HuberLoss()\n\n    def forward(self, x):\n        x = x.permute(0, 3, 1, 2)\n        features = self.vit(x)\n        output = self.regression_head(features)\n        return output.squeeze(-1)\n\n    def training_step(self, batch, batch_idx):\n        (aia_img, _), sxr_target = batch\n        sxr_pred = self(aia_img)\n        loss = self.loss_func(sxr_pred, sxr_target)\n        self.log('train_loss', loss, prog_bar=True)\n        return loss\n\n    def validation_step(self, batch, batch_idx):\n        (aia_img, _), sxr_target = batch\n        sxr_pred = self(aia_img)\n        loss = self.loss_func(sxr_pred, sxr_target)\n        self.log('valid_loss', loss, prog_bar=True)\n        return loss\n\n    def test_step(self, batch, batch_idx):\n        (aia_img, _), sxr_target = batch\n        sxr_pred = self(aia_img)\n        loss = self.loss_func(sxr_pred, sxr_target)\n        self.log('test_loss', loss, prog_bar=True)\n        return loss\n\n    def configure_optimizers(self):\n        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=0.01)\n        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)\n        return {\n            'optimizer': optimizer,\n            'lr_scheduler': {\n                'scheduler': scheduler,\n                'monitor': 'valid_loss',\n                'interval': 'epoch',\n                'frequency': 1\n            }\n        }\n\n    def predict_step(self, batch, batch_idx, dataloader_idx=0):\n        (aia_img, _), _ = batch\n        sxr_pred = self(aia_img)\n        sxr_pred = sxr_pred * self.eve_norm[1] + self.eve_norm[0]\n        sxr_pred = 10 ** sxr_pred - 1e-8\n        return sxr_pred\n
+===================================================================
+diff --git a/flaring/vision_transformers/vision_transformer.py b/flaring/vision_transformers/vision_transformer.py
+--- a/flaring/vision_transformers/vision_transformer.py	(revision bb90fb79a516910ac93442850698317720adf6d5)
++++ b/flaring/vision_transformers/vision_transformer.py	(date 1752678502848)
+@@ -5,7 +5,7 @@
+ from timm import create_model
+ 
+ class VisionTransformerFlaringModel(pl.LightningModule):
+-    def __init__(self, d_input=6, d_output=1, eve_norm=(0, 1), lr=1e-4, model_name='vit_base_patch16_224', pretrained=True):
++    def __init__(self, d_input=6, d_output=1, eve_norm=(0, 1), lr=1e-4, model_name='vit_small_patch16_224', pretrained=True):
+         super().__init__()
+         self.save_hyperparameters()
+         self.eve_norm = eve_norm
+@@ -66,3 +66,5 @@
+         sxr_pred = sxr_pred * self.eve_norm[1] + self.eve_norm[0]
+         sxr_pred = 10 ** sxr_pred - 1e-8
+         return sxr_pred
++
++

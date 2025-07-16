@@ -39,9 +39,9 @@ def main():
     # Dataset without any output transformation
     dataset = AIA_GOESDataset(
         aia_dir=args.aia_dir,
-        sxr_dir='',  # No SXR files needed
-        sxr_norm=None,  # Skip any normalization
-        transform=None  # No input transforms
+        sxr_dir='',
+        sxr_norm=None,
+        transform=None
     )
 
     # Save log-space predictions
