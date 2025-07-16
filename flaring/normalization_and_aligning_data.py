@@ -5,6 +5,8 @@ import numpy as np
 from astropy.io import fits
 import warnings
 import pandas as pd
+from astropy.visualization import ImageNormalize, AsinhStretch
+
 warnings.filterwarnings('ignore')
 
 import pandas as pd
@@ -74,6 +76,16 @@ wavelength_to_idx = {
     '304': 5
 }
 
+sdo_norms = {0: ImageNormalize(vmin=0, vmax= np.float32(16.560747), stretch=AsinhStretch(0.005), clip=True),
+             1: ImageNormalize(vmin=0, vmax= np.float32(75.84181), stretch=AsinhStretch(0.005), clip=True),
+             2: ImageNormalize(vmin=0, vmax= np.float32(1536.1443), stretch=AsinhStretch(0.005), clip=True),
+             3: ImageNormalize(vmin=0, vmax= np.float32(2288.1), stretch=AsinhStretch(0.005), clip=True),
+             4: ImageNormalize(vmin=0, vmax=np.float32(1163.9178), stretch=AsinhStretch(0.005), clip=True),
+             5: ImageNormalize(vmin=0, vmax=np.float32(401.82352), stretch=AsinhStretch(0.001), clip=True),
+             }
+
+
+
 # Load data for each timestamp and wavelength
 for time_idx, timestamp in enumerate(common_timestamps):
     sxr = goes[goes['time'] == pd.to_datetime(timestamp)]
@@ -91,11 +103,25 @@ for time_idx, timestamp in enumerate(common_timestamps):
     for wavelength, wave_idx in wavelength_to_idx.items():
         filepath = os.path.join(wavelength_dirs[wavelength], f"{timestamp}.fits")
         with fits.open(filepath) as hdul:
-            wavelength_data[wave_idx] = hdul[0].data
+            raw_data = hdul[0].data
+
+            # Apply the appropriate normalization for this wavelength
+            if wave_idx in sdo_norms:
+                # Get the normalizer for this wavelength index
+                normalizer = sdo_norms[wave_idx]
+
+                # Apply normalization and convert to [-1, 1] range
+                normalized_data = normalizer(raw_data)
+                wavelength_data[wave_idx] = normalized_data * 2 - 1
+            else:
+                # Fallback if no normalizer exists for this wavelength
+                print(f"Warning: No normalizer found for wavelength index {wave_idx}")
+                wavelength_data[wave_idx] = raw_data
+
     # Store the wavelength data for this timestamp
-    np.save(f"/mnt/data2/ML-Ready-Data-No-Intensity-Cut/AIA-Data/{timestamp}.npy", wavelength_data)
+    np.save(f"/mnt/data2/ML-Ready/AIA-Data/{timestamp}.npy", wavelength_data)
     # Store the SXR data
-    np.save(f"/mnt/data2/ML-Ready-Data-No-Intensity-Cut/GOES-18-SXR-A/{timestamp}.npy", sxr_a_data)
-    np.save(f"/mnt/data2/ML-Ready-Data-No-Intensity-Cut/GOES-18-SXR-B/{timestamp}.npy", sxr_b_data)
+    np.save(f"/mnt/data2/ML-Ready/GOES-18-SXR-A/{timestamp}.npy", sxr_a_data)
+    np.save(f"/mnt/data2/ML-Ready/GOES-18-SXR-B/{timestamp}.npy", sxr_b_data)
     print(f"Saved data for timestamp {timestamp} to disk.")
     print(f"Percent: {time_idx + 1} / {len(common_timestamps)}")
