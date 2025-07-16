@@ -11,7 +11,7 @@ import torchvision.transforms as transforms
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, Callback
-from torch.nn import HuberLoss
+from torch.nn import HuberLoss, MSELoss
 from SDOAIA_dataloader import AIA_GOESDataModule
 from linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR
@@ -118,7 +118,7 @@ for parameter_set in combined_parameters:
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
         max_epochs=run_config.get('epochs', 10),
-        callbacks=[sxr_callback, checkpoint_callback],
+        callbacks=[sxr_plot_callback, checkpoint_callback],
         logger=wandb_logger,
         log_every_n_steps=10
     )
