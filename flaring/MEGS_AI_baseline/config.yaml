@@ -1,7 +1,6 @@
 
   model:
     architecture:
-      - linear
       - hybrid
     seed:
       - 42

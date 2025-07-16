@@ -1,19 +1,17 @@
 import torch
 import torch.nn as nn
 from torch.nn import HuberLoss
-from models.base_model import BaseModel
+from base
 
 class LinearIrradianceModel(BaseModel):
-    def __init__(self, d_input, d_output, eve_norm, loss_func=HuberLoss(), lr=1e-2):
+    def __init__(self, d_input, d_output, loss_func=HuberLoss(), lr=1e-2):
         self.n_channels = d_input
         self.outSize = d_output
         model = nn.Linear(2 * self.n_channels, self.outSize)
-        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
+        super().__init__(model=model, loss_func=loss_func, lr=lr)
 
-    def forward(self, x, sxr=None, **kwargs):
-        # If x is a tuple (aia_img, sxr_val), extract the AIA image tensor
-        if isinstance(x, (list, tuple)):
-            x = x[0]
+    def forward(self, x, **kwargs):
+
 
         # Debug: Print input shape
         print(f"Input shape to LinearIrradianceModel.forward: {x.shape}")
@@ -44,14 +42,14 @@ class LinearIrradianceModel(BaseModel):
         return self.model(input_features)
 
 class HybridIrradianceModel(BaseModel):
-    def __init__(self, d_input, d_output, eve_norm, cnn_model='resnet', ln_model=True, ln_params=None, lr=1e-4, cnn_dp=0.75, loss_func=HuberLoss()):
-        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
+    def __init__(self, d_input, d_output, cnn_model='resnet', ln_model=True, ln_params=None, lr=1e-4, cnn_dp=0.75, loss_func=HuberLoss()):
+        super().__init__(model=None, loss_func=loss_func, lr=lr)
         self.n_channels = d_input
         self.outSize = d_output
         self.ln_params = ln_params
         self.ln_model = None
         if ln_model:
-            self.ln_model = LinearIrradianceModel(d_input, d_output, eve_norm, loss_func=loss_func, lr=lr)
+            self.ln_model = LinearIrradianceModel(d_input, d_output, loss_func=loss_func, lr=lr)
         if self.ln_params is not None and self.ln_model is not None:
             self.ln_model.model.weight = nn.Parameter(self.ln_params['weight'])
             self.ln_model.model.bias = nn.Parameter(self.ln_params['bias'])

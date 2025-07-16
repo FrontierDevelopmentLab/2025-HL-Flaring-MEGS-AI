@@ -16,33 +16,16 @@ from SDOAIA_dataloader import AIA_GOESDataModule
 from linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR
 
-# SXR Prediction Logger
-# class SXRPredictionLogger(Callback):
-#     def __init__(self, val_samples):
-#         super().__init__()
-#         self.val_samples = val_samples
-#
-#     def on_validation_epoch_end(self, trainer, pl_module):
-#         # val_samples is a list of ((aia, sxr), target)
-#         for (aia, sxr), target in self.val_samples:
-#             aia, sxr, target = aia.to(pl_module.device), sxr.to(pl_module.device), target.to(pl_module.device)
-#             pred = pl_module(aia.unsqueeze(0))  # Add batch dimension
-#             trainer.logger.experiment.log({
-#                 "val_pred_sxr": pred.cpu().numpy(),
-#                 "val_target_sxr": target.cpu().numpy()
-#             })
-
-# Compute SXR normalization
-def compute_sxr_norm(sxr_dir):
-    sxr_values = []
-    for f in Path(sxr_dir).glob("*.npy"):
-        sxr = np.load(f)
-        sxr = np.atleast_1d(sxr).flatten()[0]
-        sxr_values.append(np.log10(sxr + 1e-8))
-    sxr_values = np.array(sxr_values)
-    if len(sxr_values) == 0:
-        raise ValueError(f"No SXR files found in {sxr_dir}")
-    return np.mean(sxr_values), np.std(sxr_values)
+# def compute_sxr_norm(sxr_dir):
+#     sxr_values = []
+#     for f in Path(sxr_dir).glob("*.npy"):
+#         sxr = np.load(f)
+#         sxr = np.atleast_1d(sxr).flatten()[0]
+#         sxr_values.append(np.log10(sxr + 1e-8))
+#     sxr_values = np.array(sxr_values)
+#     if len(sxr_values) == 0:
+#         raise ValueError(f"No SXR files found in {sxr_dir}")
+#     return np.mean(sxr_values), np.std(sxr_values)
 
 # Parser
 parser = argparse.ArgumentParser()
@@ -65,23 +48,11 @@ combined_parameters = list(itertools.product(*dic_values))
 checkpoint_dir = args.checkpoint_dir
 aia_dir = args.aia_dir
 sxr_dir = args.sxr_dir
-if args.sxr_norm:
-    sxr_norm = np.load(args.sxr_norm)
-else:
-    sxr_norm = compute_sxr_norm(sxr_dir)
+
+sxr_norm = np.load(args.sxr_norm)
+print(sxr_norm)
 instrument = args.instrument
 
-# Transforms
-# train_transforms = transforms.Compose([
-#     transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Remove clone/detach
-#     transforms.RandomHorizontalFlip(p=0.5),
-#     transforms.RandomRotation(10),
-# ])
-# val_transforms = transforms.Compose([
-#     transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Remove clone/detach
-# ])
-
-# Training loop
 n = 0
 for parameter_set in combined_parameters:
     run_config = {key: item for key, item in zip(config_data['model'].keys(), parameter_set)}
@@ -92,9 +63,9 @@ for parameter_set in combined_parameters:
     data_loader = AIA_GOESDataModule(
         aia_dir=aia_dir,
         sxr_dir=sxr_dir,
-        sxr_norm=sxr_norm,
         batch_size=64,
         num_workers=os.cpu_count(),
+        sxr_norm=sxr_norm,
         # train_transforms=train_transforms,
         # val_transforms=val_transforms,
         val_split=0.2,
@@ -117,6 +88,7 @@ for parameter_set in combined_parameters:
     # Logging callback
     total_n_valid = len(data_loader.valid_ds)
     plot_data = [data_loader.valid_ds[i] for i in range(0, total_n_valid, max(1, total_n_valid // 4))]
+    print(plot_data[0])  # Print first sample for debugging
     plot_samples = plot_data  # Keep as list of ((aia, sxr), target)
     #sxr_callback = SXRPredictionLogger(plot_samples)
 
@@ -137,15 +109,13 @@ for parameter_set in combined_parameters:
         model = LinearIrradianceModel(
             d_input=6,
             d_output=1,
-            eve_norm=sxr_norm,
-            lr=run_config.get('lr', 1e-4),
+            lr=run_config.get('lr', 1e-5),
             loss_func=MSELoss()
         )
     elif run_config['architecture'] == 'hybrid':
         model = HybridIrradianceModel(
             d_input=6,
             d_output=1,
-            eve_norm=sxr_norm,
             cnn_model=run_config['cnn_model'],
             ln_model=True,
             cnn_dp=run_config.get('cnn_dp', 0.75),

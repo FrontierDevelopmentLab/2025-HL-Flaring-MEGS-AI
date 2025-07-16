@@ -28,13 +28,10 @@ class ImagePredictionLogger_SXR(Callback):
         self.sxr_norm = sxr_norm
 
     def unnormalize_sxr(self, normalized_values):
-
-        print(normalized_values)
-        print(self.sxr_norm)
         if isinstance(normalized_values, torch.Tensor):
             normalized_values = normalized_values.cpu().numpy()
         normalized_values = np.array(normalized_values, dtype=np.float32)
-        return 10 ** (normalized_values * float(self.sxr_norm[1].item()) + float(self.sxr_norm[0].item()))
+        return 10 ** (normalized_values * float(self.sxr_norm[1].item()) + float(self.sxr_norm[0].item())) - 1e-8
 
     def on_validation_epoch_end(self, trainer, pl_module):
 
