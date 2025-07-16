@@ -94,73 +94,56 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 class AIA_GOESDataModule(LightningDataModule):
     """PyTorch Lightning DataModule for AIA and SXR data."""
 
-    def __init__(self, aia_dir, sxr_dir, sxr_norm, batch_size=64, num_workers=4,
+    def __init__(self, aia_train_dir, aia_val_dir,aia_test_dir,sxr_train_dir,sxr_val_dir,sxr_test_dir, sxr_norm, batch_size=64, num_workers=4,
                  train_transforms=None, val_transforms=None, val_split=0.2, test_split=0.1):
         super().__init__()
-        self.aia_dir = aia_dir
-        self.sxr_dir = sxr_dir
+        self.aia_train_dir = aia_train_dir
+        self.aia_val_dir = aia_val_dir
+        self.aia_test_dir = aia_test_dir
+        self.sxr_train_dir = sxr_train_dir
+        self.sxr_val_dir = sxr_val_dir
+        self.sxr_test_dir = sxr_test_dir
         self.sxr_norm = sxr_norm
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.train_transforms = train_transforms
         self.val_transforms = val_transforms
-        self.val_split = val_split
-        self.test_split = test_split
+
 
     def setup(self, stage=None):
-        # Prepare base set just to get indices
-        base_ds = AIA_GOESDataset(
-            aia_dir=self.aia_dir,
-            sxr_dir=self.sxr_dir,
-            transform=None,
-            sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]),
-            target_size=(512, 512)
-        )
 
-        total_size = len(base_ds)
-        test_size = int(self.test_split * total_size)
-        val_size = int(self.val_split * total_size)
-        train_size = total_size - val_size - test_size
-
-        indices = np.random.permutation(total_size)
-        train_idx = indices[:train_size]
-        val_idx = indices[train_size:train_size + val_size]
-        test_idx = indices[train_size + val_size:]
-
-        # Now, re-instantiate with proper transforms for all splits
-        full_train_ds = AIA_GOESDataset(
-            aia_dir=self.aia_dir,
-            sxr_dir=self.sxr_dir,
+        self.train_ds = AIA_GOESDataset(
+            aia_dir=self.aia_train_dir,
+            sxr_dir=self.sxr_train_dir,
             transform=self.train_transforms,
             sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]),
             target_size=(512, 512)
         )
-        self.train_ds = Subset(full_train_ds, train_idx)
 
-        full_val_ds = AIA_GOESDataset(
-            aia_dir=self.aia_dir,
-            sxr_dir=self.sxr_dir,
+        self.val_ds = AIA_GOESDataset(
+            aia_dir=self.aia_val_dir,
+            sxr_dir=self.sxr_val_dir,
             transform=self.val_transforms,
             sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]),
             target_size=(512, 512)
         )
-        self.valid_ds = Subset(full_val_ds, val_idx)
 
-        full_test_ds = AIA_GOESDataset(
-            aia_dir=self.aia_dir,
-            sxr_dir=self.sxr_dir,
+
+        self.test_ds = AIA_GOESDataset(
+            aia_dir=self.aia_test_dir,
+            sxr_dir=self.sxr_test_dir,
             transform=self.val_transforms,
             sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]),
             target_size=(512, 512)
         )
-        self.test_ds = Subset(full_test_ds, test_idx)
+
 
     def train_dataloader(self):
         return DataLoader(self.train_ds, batch_size=self.batch_size,
                           shuffle=True, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.valid_ds, batch_size=self.batch_size,
+        return DataLoader(self.val_ds, batch_size=self.batch_size,
                           shuffle=False, num_workers=self.num_workers)
 
     def test_dataloader(self):
