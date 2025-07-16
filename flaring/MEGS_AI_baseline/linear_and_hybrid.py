@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import HuberLoss
 from base_model import BaseModel
+from torchvision.models import resnet18
 
 class LinearIrradianceModel(BaseModel):
     def __init__(self, d_input, d_output, loss_func=HuberLoss(), lr=1e-2):
@@ -56,17 +57,47 @@ class HybridIrradianceModel(BaseModel):
         self.cnn_model = None
         self.cnn_lambda = 1.
         if cnn_model == 'resnet':
+            # self.cnn_model = nn.Sequential(
+            #     nn.Conv2d(d_input, 64, kernel_size=7, stride=2, padding=3),
+            #     nn.ReLU(),
+            #     nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            #     nn.ReLU(),
+            #     nn.AdaptiveAvgPool2d((1, 1)),
+            #     nn.Flatten(),
+            #     nn.Linear(64, d_output),
+            #     nn.Dropout(cnn_dp)
+            # )
             self.cnn_model = nn.Sequential(
                 nn.Conv2d(d_input, 64, kernel_size=7, stride=2, padding=3),
+                nn.BatchNorm2d(64),  # Add batch normalization
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+
+                # Add more conv layers with increasing channels
+                nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(128),
                 nn.ReLU(),
+                nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+
+                nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+                nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+
                 nn.AdaptiveAvgPool2d((1, 1)),
                 nn.Flatten(),
-                nn.Linear(64, d_output),
-                nn.Dropout(cnn_dp)
+                nn.Linear(256, 128),  # Add intermediate layer
+                nn.ReLU(),
+                nn.Dropout(cnn_dp),
+                nn.Linear(128, d_output)
             )
+
         elif cnn_model.startswith('efficientnet'):
             raise NotImplementedError("EfficientNet requires timm; replace with custom CNN or install timm")
         if self.ln_model is None and self.cnn_model is None:

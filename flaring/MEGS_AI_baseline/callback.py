@@ -24,7 +24,7 @@ class ImagePredictionLogger_SXR(Callback):
         super().__init__()
         self.data_samples = data_samples
         self.val_aia = data_samples[0][0]
-        self.val_sxr = data_samples[0][1]
+        self.val_sxr = data_samples[1]
         self.sxr_norm = sxr_norm
 
     def unnormalize_sxr(self, normalized_values):

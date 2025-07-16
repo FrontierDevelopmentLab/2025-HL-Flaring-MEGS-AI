@@ -13,25 +13,32 @@ class BaseModel(LightningModule):
         return self.model(x)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        scheduler = {
+            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2,
+                                                                    verbose=True),
+            'monitor': 'val_loss',  # name of the metric to monitor
+            'interval': 'epoch',
+        }
+        return {'optimizer': optimizer, 'lr_scheduler': scheduler}
 
     def training_step(self, batch, batch_idx):
         x, target = batch
         pred = self(x)
-        loss = self.loss_func(pred, target)
+        loss = self.loss_func(torch.squeeze(pred), target)
         self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, target = batch
         pred = self(x)
-        loss = self.loss_func(pred, target)
+        loss = self.loss_func(torch.squeeze(pred), target)
         self.log('valid_loss', loss)
         return loss
 
     def test_step(self, batch, batch_idx):
         (x, sxr), target = batch
         pred = self(x)
-        loss = self.loss_func(pred, target)
+        loss = self.loss_func(torch.squeeze(pred), target)
         self.log('test_loss', loss)
         return loss

@@ -16,17 +16,6 @@ from SDOAIA_dataloader import AIA_GOESDataModule
 from linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR
 
-# def compute_sxr_norm(sxr_dir):
-#     sxr_values = []
-#     for f in Path(sxr_dir).glob("*.npy"):
-#         sxr = np.load(f)
-#         sxr = np.atleast_1d(sxr).flatten()[0]
-#         sxr_values.append(np.log10(sxr + 1e-8))
-#     sxr_values = np.array(sxr_values)
-#     if len(sxr_values) == 0:
-#         raise ValueError(f"No SXR files found in {sxr_dir}")
-#     return np.mean(sxr_values), np.std(sxr_values)
-
 # Parser
 parser = argparse.ArgumentParser()
 parser.add_argument('-checkpoint_dir', type=str, required=True, help='Directory to save checkpoints.')
@@ -50,7 +39,6 @@ aia_dir = args.aia_dir
 sxr_dir = args.sxr_dir
 
 sxr_norm = np.load(args.sxr_norm)
-print(sxr_norm)
 instrument = args.instrument
 
 n = 0
@@ -63,7 +51,7 @@ for parameter_set in combined_parameters:
     data_loader = AIA_GOESDataModule(
         aia_dir=aia_dir,
         sxr_dir=sxr_dir,
-        batch_size=64,
+        batch_size=32,
         num_workers=os.cpu_count(),
         sxr_norm=sxr_norm,
         # train_transforms=train_transforms,
@@ -109,7 +97,7 @@ for parameter_set in combined_parameters:
         model = LinearIrradianceModel(
             d_input=6,
             d_output=1,
-            lr=run_config.get('lr', 1e-5),
+            lr=run_config.get('lr', 1e-4),
             loss_func=MSELoss()
         )
     elif run_config['architecture'] == 'hybrid':
