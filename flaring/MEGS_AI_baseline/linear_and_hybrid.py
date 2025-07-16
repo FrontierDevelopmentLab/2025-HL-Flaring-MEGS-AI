@@ -1,22 +1,21 @@
 import torch
 import torch.nn as nn
 from torch.nn import HuberLoss
-from models.base_model import BaseModel
+from base_model import BaseModel
+from torchvision.models import resnet18
 
 class LinearIrradianceModel(BaseModel):
-    def __init__(self, d_input, d_output, eve_norm, loss_func=HuberLoss(), lr=1e-2):
+    def __init__(self, d_input, d_output, loss_func=HuberLoss(), lr=1e-2):
         self.n_channels = d_input
         self.outSize = d_output
         model = nn.Linear(2 * self.n_channels, self.outSize)
-        super().__init__(model=model, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
+        super().__init__(model=model, loss_func=loss_func, lr=lr)
 
-    def forward(self, x, sxr=None, **kwargs):
-        # If x is a tuple (aia_img, sxr_val), extract the AIA image tensor
-        if isinstance(x, (list, tuple)):
-            x = x[0]
+    def forward(self, x, **kwargs):
+
 
         # Debug: Print input shape
-        print(f"Input shape to LinearIrradianceModel.forward: {x.shape}")
+        #print(f"Input shape to LinearIrradianceModel.forward: {x.shape}")
 
         # Expect x shape: (batch_size, H, W, C)
         if len(x.shape) != 4:
@@ -33,10 +32,10 @@ class LinearIrradianceModel(BaseModel):
         std_irradiance = torch.std(x, dim=(2, 3))    # Shape: (batch_size, n_channels)
 
         # Debug: Print shapes after mean and std
-        print(f"mean_irradiance shape: {mean_irradiance.shape}, std_irradiance shape: {std_irradiance.shape}")
+        #print(f"mean_irradiance shape: {mean_irradiance.shape}, std_irradiance shape: {std_irradiance.shape}")
 
         input_features = torch.cat((mean_irradiance, std_irradiance), dim=1)  # Shape: (batch_size, 2 * n_channels)
-        print(f"Input features shape to linear layer: {input_features.shape}")
+        #print(f"Input features shape to linear layer: {input_features.shape}")
 
         if input_features.shape[1] != 2 * self.n_channels:
             raise ValueError(f"Expected {2 * self.n_channels} features, got {input_features.shape[1]}")
@@ -44,31 +43,61 @@ class LinearIrradianceModel(BaseModel):
         return self.model(input_features)
 
 class HybridIrradianceModel(BaseModel):
-    def __init__(self, d_input, d_output, eve_norm, cnn_model='resnet', ln_model=True, ln_params=None, lr=1e-4, cnn_dp=0.75, loss_func=HuberLoss()):
-        super().__init__(model=None, eve_norm=eve_norm, loss_func=loss_func, lr=lr)
+    def __init__(self, d_input, d_output, cnn_model='resnet', ln_model=True, ln_params=None, lr=1e-4, cnn_dp=0.75, loss_func=HuberLoss()):
+        super().__init__(model=None, loss_func=loss_func, lr=lr)
         self.n_channels = d_input
         self.outSize = d_output
         self.ln_params = ln_params
         self.ln_model = None
         if ln_model:
-            self.ln_model = LinearIrradianceModel(d_input, d_output, eve_norm, loss_func=loss_func, lr=lr)
+            self.ln_model = LinearIrradianceModel(d_input, d_output, loss_func=loss_func, lr=lr)
         if self.ln_params is not None and self.ln_model is not None:
             self.ln_model.model.weight = nn.Parameter(self.ln_params['weight'])
             self.ln_model.model.bias = nn.Parameter(self.ln_params['bias'])
         self.cnn_model = None
         self.cnn_lambda = 1.
         if cnn_model == 'resnet':
+            # self.cnn_model = nn.Sequential(
+            #     nn.Conv2d(d_input, 64, kernel_size=7, stride=2, padding=3),
+            #     nn.ReLU(),
+            #     nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            #     nn.ReLU(),
+            #     nn.AdaptiveAvgPool2d((1, 1)),
+            #     nn.Flatten(),
+            #     nn.Linear(64, d_output),
+            #     nn.Dropout(cnn_dp)
+            # )
             self.cnn_model = nn.Sequential(
                 nn.Conv2d(d_input, 64, kernel_size=7, stride=2, padding=3),
+                nn.BatchNorm2d(64),  # Add batch normalization
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+
+                # Add more conv layers with increasing channels
+                nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(128),
                 nn.ReLU(),
+                nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+
+                nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+                nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+
                 nn.AdaptiveAvgPool2d((1, 1)),
                 nn.Flatten(),
-                nn.Linear(64, d_output),
-                nn.Dropout(cnn_dp)
+                nn.Linear(256, 128),  # Add intermediate layer
+                nn.ReLU(),
+                nn.Dropout(cnn_dp),
+                nn.Linear(128, d_output)
             )
+
         elif cnn_model.startswith('efficientnet'):
             raise NotImplementedError("EfficientNet requires timm; replace with custom CNN or install timm")
         if self.ln_model is None and self.cnn_model is None:

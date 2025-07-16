@@ -56,6 +56,21 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
             aia_img = zoom(aia_img, (1,
                                      self.target_size[0]/aia_img.shape[1],
                                      self.target_size[1]/aia_img.shape[2]))
+
+       #Apply cut and normalize:
+        cuts_dict = {
+            0: np.float32(16.560747),
+            1: np.float32(75.84181),
+            2: np.float32(1536.1443),
+            3: np.float32(2288.1),
+            4: np.float32(1163.9178),
+            5: np.float32(401.82352)
+        }
+
+        for channel in range(6):
+            aia_img[channel] = np.clip(aia_img[channel], 0, cuts_dict[channel])
+            aia_img[channel] = aia_img[channel] / cuts_dict[channel]  # Normalize each channel to [0, 1]
+
         # Convert to torch for transforms
         aia_img = torch.tensor(aia_img, dtype=torch.float32) # (6, H, W)
 
@@ -79,7 +94,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 class AIA_GOESDataModule(LightningDataModule):
     """PyTorch Lightning DataModule for AIA and SXR data."""
 
-    def __init__(self, aia_dir, sxr_dir, sxr_norm, batch_size=16, num_workers=4,
+    def __init__(self, aia_dir, sxr_dir, sxr_norm, batch_size=64, num_workers=4,
                  train_transforms=None, val_transforms=None, val_split=0.2, test_split=0.1):
         super().__init__()
         self.aia_dir = aia_dir

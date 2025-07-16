@@ -24,17 +24,14 @@ class ImagePredictionLogger_SXR(Callback):
         super().__init__()
         self.data_samples = data_samples
         self.val_aia = data_samples[0][0]
-        self.val_sxr = data_samples[0][1]
+        self.val_sxr = data_samples[1]
         self.sxr_norm = sxr_norm
 
     def unnormalize_sxr(self, normalized_values):
-
-        print(normalized_values)
-        print(self.sxr_norm)
         if isinstance(normalized_values, torch.Tensor):
             normalized_values = normalized_values.cpu().numpy()
         normalized_values = np.array(normalized_values, dtype=np.float32)
-        return 10 ** (normalized_values * float(self.sxr_norm[1].item()) + float(self.sxr_norm[0].item()))
+        return 10 ** (normalized_values * float(self.sxr_norm[1].item()) + float(self.sxr_norm[0].item())) - 1e-8
 
     def on_validation_epoch_end(self, trainer, pl_module):
 
@@ -55,18 +52,16 @@ class ImagePredictionLogger_SXR(Callback):
 
         true_unorm = self.unnormalize_sxr(true_sxr)
         pred_unnorm = self.unnormalize_sxr(pred_sxr)
-        print("Aia images:", aia_images)
-        print("Sxr images:", true_unorm)
-        print("Sxr images:", pred_unnorm)
-        fig = self.plot_aia_sxr(aia_images,true_unorm, pred_unnorm)
-        trainer.logger.experiment.log({"AIA 94Å Images and Soft X-ray flux plots": wandb.Image(fig)})
-        plt.close(fig)
+        fig1 = self.plot_aia_sxr(aia_images,true_unorm, pred_unnorm)
+        trainer.logger.experiment.log({"Soft X-ray flux plots": wandb.Image(fig1)})
+        plt.close(fig1)
+        fig2 = self.plot_aia_sxr_difference(aia_images, true_unorm, pred_unnorm)
+        trainer.logger.experiment.log({"Soft X-ray flux difference plots": wandb.Image(fig2)})
+        plt.close(fig2)
 
     def plot_aia_sxr(self, val_aia, val_sxr, pred_sxr):
         num_samples = len(val_aia)
-        fig, axes = plt.subplots(num_samples, 2, figsize=(10, 10))
-
-
+        fig, axes = plt.subplots(1, 1, figsize=(5, 2))
 
         for i in range(num_samples):
             axes.scatter(i, val_sxr[i], label='Ground truth' if i == 0 else "", color='blue')

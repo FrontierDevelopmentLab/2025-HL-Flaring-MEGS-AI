@@ -1,7 +1,6 @@
 
   model:
     architecture:
-      - linear
       - hybrid
     seed:
       - 42
@@ -12,7 +11,7 @@
     cnn_dp:
       - 0.75
     epochs:
-      - 10
+      - 100
   wandb:
     entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
     project: MEGS-AI flaring  # Lowercase, no spaces
@@ -21,5 +20,5 @@
       - aia
       - sxr
       - regression
-    name: aia_sxr_run
+    name: flaring_100epoch
     notes: Regression from AIA images (6 channels) to GOES SXR flux
