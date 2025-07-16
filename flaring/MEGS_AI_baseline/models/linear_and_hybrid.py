@@ -108,9 +108,6 @@ class HybridIrradianceModel(BaseModel):
         if isinstance(x, (list, tuple)):
             x = x[0]
 
-        # Debug: Print input shape
-        print(f"Input shape to HybridIrradianceModel.forward: {x.shape}")
-
         # Expect x shape: (batch_size, H, W, C)
         if len(x.shape) != 4:
             raise ValueError(f"Expected 4D input tensor (batch_size, H, W, C), got shape {x.shape}")

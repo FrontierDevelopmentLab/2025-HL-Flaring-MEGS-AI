@@ -11,7 +11,9 @@
     cnn_dp:
       - 0.75
     epochs:
-      - 100
+      - 1
+    save_dictionary:
+      -
   wandb:
     entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
     project: MEGS-AI flaring  # Lowercase, no spaces
