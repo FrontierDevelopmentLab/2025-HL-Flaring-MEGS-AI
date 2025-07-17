@@ -4,26 +4,74 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="fixed split data so that we include AIA and SXR data... we also fixed the config file and bug fixes for data loaders">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="fixed wandb name scheme">
+      <change afterPath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/MEGS_AI_baseline/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/MEGS_AI_baseline/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/MEGS_AI_baseline/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/MEGS_AI_baseline/inference.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/MEGS_AI_baseline/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/MEGS_AI_baseline/train.py" afterDir="false" />
     </list>
-    <list id="c5ffcab1-84ab-496d-b2c1-96698d4dd6dc" name="Changes by aliso" comment="" />
-    <list id="738dbb3e-297a-4a36-b665-72a4eed00b8c" name="Changes by jayantbiradar" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Jupyter Notebook" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "git-widget-placeholder": "flaring",
-    "node.js.selected.package.tslint": "(autodetect)"
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "griffin-goodwin"
   }
 }]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "git@github.com:FrontierDevelopmentLab/2025-HL-Flaring-MEGS-AI.git",
+    "accountId": "8567906e-d80c-4743-940c-49b4cca00ba8"
+  }
+}]]></component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 8
+}]]></component>
+  <component name="ProjectId" id="300pTKGqQDgkIrymxlGIrm6ZrO3" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "WebServerToolWindowPanel.toolwindow.highlight.mappings": "true",
+    "WebServerToolWindowPanel.toolwindow.highlight.symlinks": "true",
+    "WebServerToolWindowPanel.toolwindow.show.date": "false",
+    "WebServerToolWindowPanel.toolwindow.show.permissions": "false",
+    "WebServerToolWindowPanel.toolwindow.show.size": "false",
+    "git-widget-placeholder": "flaring",
+    "junie.onboarding.icon.badge.shown": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-09060db00ec0-JavaScript-PY-251.26927.74" />
+        <option value="bundled-python-sdk-657d8234b839-64d779b69b7a-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.26927.74" />
+      </set>
+    </attachedChunks>
+  </component>
   <component name="TaskManager">
     <task id="LOCAL-00001" summary="right split_data.py">
       <option name="closed" value="true" />
@@ -41,8 +89,27 @@
       <option name="project" value="LOCAL" />
       <updated>1752707289772</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="fixed wandb name scheme">
+      <option name="closed" value="true" />
+      <created>1752707790659</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1752707790659</updated>
+    </task>
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="fixed wandb name scheme" />
+      <created>1752774351420</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1752774351420</updated>
+      <workItem from="1752774352707" duration="1358000" />
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="OPEN_GENERIC_TABS">
@@ -74,6 +141,7 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="right split_data.py" />
     <MESSAGE value="fixed split data so that we include AIA and SXR data... we also fixed the config file and bug fixes for data loaders" />
-    <option name="LAST_COMMIT_MESSAGE" value="fixed split data so that we include AIA and SXR data... we also fixed the config file and bug fixes for data loaders" />
+    <MESSAGE value="fixed wandb name scheme" />
+    <option name="LAST_COMMIT_MESSAGE" value="fixed wandb name scheme" />
   </component>
 </project>

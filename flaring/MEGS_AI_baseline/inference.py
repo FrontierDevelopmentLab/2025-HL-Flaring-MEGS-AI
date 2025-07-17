@@ -1,37 +1,41 @@
 import argparse
+
+import pandas as pd
 import torch
 import numpy as np
+from torch.utils.checkpoint import checkpoint
 from torch.utils.data import DataLoader
 from SDOAIA_dataloader import AIA_GOESDataset
 from models.linear_and_hybrid import HybridIrradianceModel
 from callback import unnormalize_sxr
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-def predict_log_outputs(model, dataset, batch_size=8):
+def predict_log_outputs(model, dataset, batch_size=1, times=None):
+    """Generator yielding raw log-space model outputs"""
     model.eval()
     loader = DataLoader(dataset, batch_size=batch_size)
 
-    # Get device from model
-    device = next(model.parameters()).device
-
     with torch.no_grad():
         for batch in loader:
+            #print(batch)
             # Correct unpacking based on your data structure
             if isinstance(batch, tuple) and len(batch) == 2:
                 # batch = (inputs, targets) where inputs = [aia_imgs, sxr_imgs]
                 aia_imgs = batch[0][0]  # Get aia_imgs from inputs
+                sxr = batch[1]
             else:
                 # Fallback for other formats
                 aia_imgs = batch[0][0] if isinstance(batch[0], list) else batch[0]
+                sxr = batch[1].squeeze()
 
             # Move to device (it's already a tensor)
             aia_imgs = aia_imgs.to(device)
 
             # Get model predictions
-            log_outputs = model(aia_imgs)
+            log_outputs = model(aia_imgs).squeeze()
 
             # Move to CPU and convert to numpy before yielding
-            yield from log_outputs.cpu().numpy()
+            yield (log_outputs.cpu().numpy(), sxr.cpu().numpy())
 
 def main():
     parser = argparse.ArgumentParser(description='Save raw log-space model outputs')
@@ -46,14 +50,16 @@ def main():
 
     args = parser.parse_args()
 
-    sxr_norm = np.load(args.sxr_norm)
-
-    # Setup
     state = torch.load(args.ckpt_path, map_location=device, weights_only=False)
     model = state['model']
     model.to(device)
-    # Assume it's a checkpoint with state_dict
 
+
+    # )
+    # model.to(device)
+
+    # Assume it's a checkpoint with state_dict
+    # checkpoint = torch.load(args.ckpt_path)
     # model = HybridIrradianceModel(6,1)
     # state_dict = checkpoint.get('state_dict', checkpoint)
     #
@@ -66,25 +72,40 @@ def main():
     # Dataset without any output transformation
     dataset = AIA_GOESDataset(
         aia_dir=args.aia_dir,
-<<<<<<< HEAD
-        sxr_dir='',
-        sxr_norm=None,
-        transform=None
-=======
-        sxr_dir=args.sxr_dir,  # No SXR files needed
-        transform=None  # No input transforms
->>>>>>> 22f4a17192a3a77fa4d4fe1ae3a2aa8c0bbdb539
+        sxr_dir=args.sxr_dir,
     )
 
-    # Save log-space predictions
-    with open(args.output, 'w') as f:
-        f.write("# Log-space SXR predictions (log10(W/m²))\n")
-        for log_pred in predict_log_outputs(model, dataset, args.batch_size):
-            pred = unnormalize_sxr(log_pred, sxr_norm)
-            print(pred)
+    df = pd.DataFrame(columns=['Timestamp','Prediction', 'Ground'])# If you have a specific normalization for SXR, load it
 
-    print(f"Log-space predictions saved to {args.output}")
-    print("These are raw model outputs in log10 space before any exponentiation")
+    times = dataset.samples
+    sxr_norm = np.load(args.sxr_norm)
+    # Save log-space predictions
+
+    timestamp = []
+    predictions = []
+    ground = []
+
+    for i, (log_pred, sxr) in enumerate(predict_log_outputs(model, dataset, 1, times)):
+        pred = unnormalize_sxr(log_pred, sxr_norm)
+
+        predictions.append(pred.item() if hasattr(pred, 'item') else float(pred))
+        ground.append(sxr.item() if hasattr(sxr, 'item') else float(sxr))
+        timestamp.append(str(times[i]))
+        print(f"Processed {i+1}/{len(times)}: Timestamp={times[i]}, Prediction={pred}, Ground Truth={sxr}")
+
+
+
+    output_df = pd.DataFrame({
+        'Timestamp': timestamp,
+        'Predictions': predictions,
+        'ground_truth': ground
+    })
+    print(output_df)
+    output_df.to_csv(args.output, index=False)
+
+    #f.write(f"{times[i]},{sxr[0]},{pred[0]}\n")
+    print(f"Predictions saved to {args.output}")
+    # print("These are raw model outputs in log10 space before any exponentiation")
 
 if __name__ == '__main__':
     main()

@@ -15,6 +15,7 @@ from torch.nn import MSELoss
 from SDOAIA_dataloader import AIA_GOESDataModule
 from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR
+from pytorch_lightning.callbacks import Callback
 
 # Parser
 parser = argparse.ArgumentParser()
@@ -83,13 +84,54 @@ for parameter_set in combined_parameters:
     sxr_plot_callback = ImagePredictionLogger_SXR(plot_samples, sxr_norm)
 
 
+    class PTHCheckpointCallback(Callback):
+        def __init__(self, dirpath, monitor='valid_loss', mode='min', save_top_k=1, filename_prefix="model"):
+            self.dirpath = dirpath
+            self.monitor = monitor
+            self.mode = mode
+            self.save_top_k = save_top_k
+            self.filename_prefix = filename_prefix
+            self.best_score = float('inf') if mode == 'min' else float('-inf')
+
+        def on_validation_end(self, trainer, pl_module):
+            current_score = trainer.callback_metrics.get(self.monitor)
+            if current_score is None:
+                return
+
+            is_better = (self.mode == 'min' and current_score < self.best_score) or \
+                        (self.mode == 'max' and current_score > self.best_score)
+
+            if is_better:
+                self.best_score = current_score
+                # Save as .pth file
+                filename = f"{self.filename_prefix}-epoch={trainer.current_epoch:02d}-{self.monitor}={current_score:.4f}.pth"
+                filepath = os.path.join(self.dirpath, filename)
+
+                torch.save({
+                    'model': pl_module,
+                    'epoch': trainer.current_epoch,
+                    'optimizer_state_dict': trainer.optimizers[0].state_dict(),
+                    'loss': current_score,
+                }, filepath)
+
+
+
+
     # Checkpoint callback
     checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
         monitor='valid_loss',
         mode='min',
         save_top_k=1,
-        filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{valid_loss:.4f}}"
+        filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{valid_loss:.4f}}.pth"
+    )
+
+    pth_callback = PTHCheckpointCallback(
+        dirpath=checkpoint_dir,
+        monitor='valid_loss',
+        mode='min',
+        save_top_k=1,
+        filename_prefix=config_data['wandb']['wb_name']
     )
 
     # Model
@@ -107,7 +149,7 @@ for parameter_set in combined_parameters:
             cnn_model=run_config['cnn_model'],
             ln_model=True,
             cnn_dp=run_config.get('cnn_dp', 0.75),
-            lr=run_config.get('lr', 1e-4)
+            lr=run_config['lr'],
         )
     else:
         raise NotImplementedError(f"Architecture {run_config['architecture']} not supported.")
@@ -118,13 +160,10 @@ for parameter_set in combined_parameters:
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
         max_epochs=run_config['epochs'],
-        callbacks=[sxr_plot_callback, checkpoint_callback],
+        callbacks=[sxr_plot_callback, pth_callback],
         logger=wandb_logger,
         log_every_n_steps=10
     )
-
-    # Train
-    trainer.fit(model, data_loader)
 
     # Save checkpoint
     trainer.fit(model, data_loader)
