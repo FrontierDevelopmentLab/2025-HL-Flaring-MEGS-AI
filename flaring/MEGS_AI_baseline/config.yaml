@@ -5,13 +5,13 @@
     seed:
       - 42
     lr:
-      - 0.00001
+      - 0.0001
     cnn_model:
       - resnet
     cnn_dp:
       - 0.75
     epochs:
-      - 75
+      - 100
 
   wandb:
     entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
@@ -21,5 +21,5 @@
       - aia
       - sxr
       - regression
-    wb_name: non-flaring-baseline-hybrid-v1
+    wb_name: mixed-baseline-v2-lr-scheduler
     notes: Regression from AIA images (6 channels) to GOES SXR flux

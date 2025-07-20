@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import HuberLoss
-from base_model import BaseModel
+from models.base_model import BaseModel
 from torchvision.models import resnet18
 
 class LinearIrradianceModel(BaseModel):
@@ -125,8 +125,8 @@ class HybridIrradianceModel(BaseModel):
         elif self.cnn_model is not None:
             return self.cnn_model(x_cnn)
 
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+    # def configure_optimizers(self):
+    #     return torch.optim.Adam(self.parameters(), lr=self.lr)
 
     def set_train_mode(self, mode):
         if mode == 'linear':
