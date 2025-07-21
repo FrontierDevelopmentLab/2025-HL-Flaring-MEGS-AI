@@ -61,8 +61,8 @@ for file in data_list:
     # Copy file to appropriate directory
     src_aia = os.path.join(aia_data_dir, file)
     src_sxr = os.path.join(sxr_data_dir, file)
-    dst_aia = os.path.join(mixed_data_dir, "AIA", split_dir, file)
-    dst_sxr = os.path.join(mixed_data_dir, "SXR", split_dir, file)
+    dst_aia = os.path.join(base_dir, "AIA", split_dir, file)
+    dst_sxr = os.path.join(base_dir, "SXR", split_dir, file)
 
     if not os.path.exists(dst_aia):
         shutil.copy(src_aia, dst_aia)

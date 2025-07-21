@@ -1,7 +1,7 @@
 
 # Base directories - change these to switch datasets
-base_data_dir: "/mnt/data/ML-Ready/non_flares_event_dir"  # Change this line for different datasets
-base_checkpoint_dir: "/mnt/data/ML-Ready/non_flares_event_dir"    # Change this line for different datasets
+base_data_dir: "/mnt/data/ML-Ready/flares_event_dir"  # Change this line for different datasets
+base_checkpoint_dir: "/mnt/data/ML-Ready/flares_event_dir"    # Change this line for different datasets
 
 # Model configuration
 model:
@@ -14,7 +14,7 @@ model:
   cnn_model:
     "resnet"
   cnn_dp:
-    0.75
+    0.5
   epochs:
     100
   batch_size:
@@ -33,11 +33,11 @@ data:
 
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-  project: MEGS-AI flaring  # Lowercase, no spaces
+  project: MEGS-AI Basline Models
   job_type: training
   tags:
     - aia
     - sxr
     - regression
-  wb_name: non_flaring-baseline-v2-lr-scheduler
+  wb_name: flaring-baseline-lr-scheduler
   notes: Regression from AIA images (6 channels) to GOES SXR flux
