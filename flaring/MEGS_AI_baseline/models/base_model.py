@@ -16,7 +16,7 @@ class BaseModel(LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3),
-            'monitor': 'val_loss',  # name of the metric to monitor
+            'monitor': 'valid_loss',  # name of the metric to monitor
             'interval': 'epoch',
         }
         return {'optimizer': optimizer, 'lr_scheduler': scheduler}
