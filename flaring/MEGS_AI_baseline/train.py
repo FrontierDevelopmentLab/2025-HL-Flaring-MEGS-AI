@@ -2,6 +2,7 @@
 import argparse
 import os
 from datetime import datetime
+import re
 
 import yaml
 import itertools
@@ -17,165 +18,195 @@ from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceMode
 from callback import ImagePredictionLogger_SXR
 from pytorch_lightning.callbacks import Callback
 
+
+def resolve_config_variables(config_dict):
+    """Recursively resolve ${variable} references within the config"""
+
+    # Extract variables defined at root level (like base_data_dir, base_checkpoint_dir)
+    variables = {}
+    for key, value in config_dict.items():
+        if isinstance(value, str) and not value.startswith('${'):
+            variables[key] = value
+
+    def substitute_value(value, variables):
+        if isinstance(value, str):
+            # Replace ${var_name} with actual values
+            pattern = r'\$\{([^}]+)\}'
+            for match in re.finditer(pattern, value):
+                var_name = match.group(1)
+                if var_name in variables:
+                    value = value.replace(f'${{{var_name}}}', variables[var_name])
+        return value
+
+    def recursive_substitute(obj, variables):
+        if isinstance(obj, dict):
+            return {k: recursive_substitute(v, variables) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [recursive_substitute(item, variables) for item in obj]
+        else:
+            return substitute_value(obj, variables)
+
+    return recursive_substitute(config_dict, variables)
+
+
 # Parser
 parser = argparse.ArgumentParser()
-parser.add_argument('-checkpoint_dir', type=str, required=True, help='Directory to save checkpoints.')
-parser.add_argument('-model', type=str, default='config.yaml', help='Path to model config YAML.')
-parser.add_argument('-aia_dir', type=str, required=True, help='Path to AIA .npy files.')
-parser.add_argument('-sxr_dir', type=str, required=True, help='Path to SXR .npy files.')
-parser.add_argument('-sxr_norm', type=str, help='Path to SXR normalization (mean, std).')
-parser.add_argument('-instrument', type=str, default='AIA_6', help='Instrument (e.g., AIA_6 for 6 wavelengths).')
+parser.add_argument('-config', type=str, default='config.yaml', required=True, help='Path to config YAML.')
 args = parser.parse_args()
 
-# Load config
-with open(args.model, 'r') as stream:
+# Load config with variable substitution
+with open(args.config, 'r') as stream:
     config_data = yaml.load(stream, Loader=yaml.SafeLoader)
 
-dic_values = [i for i in config_data['model'].values()]
-combined_parameters = list(itertools.product(*dic_values))
+# Resolve variables like ${base_data_dir}
+config_data = resolve_config_variables(config_data)
 
-# Paths and normalization
-checkpoint_dir = args.checkpoint_dir
-aia_dir = args.aia_dir
-sxr_dir = args.sxr_dir
+# Debug: Print resolved paths
+print("Resolved paths:")
+print(f"AIA dir: {config_data['data']['aia_dir']}")
+print(f"SXR dir: {config_data['data']['sxr_dir']}")
+print(f"Checkpoints dir: {config_data['data']['checkpoints_dir']}")
 
-sxr_norm = np.load(args.sxr_norm)
-instrument = args.instrument
+# Debug: Print resolved paths
+print("Resolved paths:")
+print(f"AIA dir: {config_data['data']['aia_dir']}")
+print(f"SXR dir: {config_data['data']['sxr_dir']}")
+print(f"Checkpoints dir: {config_data['data']['checkpoints_dir']}")
+
+sxr_norm = np.load(config_data['data']['sxr_norm_path'])
 
 n = 0
-for parameter_set in combined_parameters:
-    run_config = {key: item for key, item in zip(config_data['model'].keys(), parameter_set)}
-    torch.manual_seed(run_config['seed'])
-    np.random.seed(run_config['seed'])
 
-    # DataModule
-    data_loader = AIA_GOESDataModule(
-        aia_train_dir= aia_dir+"/train",
-        aia_val_dir=aia_dir+"/val",
-        aia_test_dir=aia_dir+"/test",
-        sxr_train_dir=sxr_dir+"/train",
-        sxr_val_dir=sxr_dir+"/val",
-        sxr_test_dir=sxr_dir+"/test",
-        batch_size=32,
-        num_workers=os.cpu_count(),
-        sxr_norm=sxr_norm,
+torch.manual_seed(config_data['model']['seed'])
+np.random.seed(config_data['model']['seed'])
+
+# DataModule
+data_loader = AIA_GOESDataModule(
+    aia_train_dir= config_data['data']['aia_dir']+"/train",
+    aia_val_dir=config_data['data']['aia_dir']+"/val",
+    aia_test_dir=config_data['data']['aia_dir']+"/test",
+    sxr_train_dir=config_data['data']['sxr_dir']+"/train",
+    sxr_val_dir=config_data['data']['sxr_dir']+"/val",
+    sxr_test_dir=config_data['data']['sxr_dir']+"/test",
+    batch_size=config_data['model']['batch_size'],
+    num_workers=os.cpu_count(),
+    sxr_norm=sxr_norm,
+)
+data_loader.setup()
+
+# Logger
+#wb_name = f"{instrument}_{n}" if len(combined_parameters) > 1 else "aia_sxr_model"
+wandb_logger = WandbLogger(
+    entity=config_data['wandb']['entity'],
+    project=config_data['wandb']['project'],
+    job_type=config_data['wandb']['job_type'],
+    tags=config_data['wandb']['tags'],
+    name=config_data['wandb']['wb_name'],
+    notes=config_data['wandb']['notes'],
+    config=config_data['model']
+)
+
+# Logging callback
+total_n_valid = len(data_loader.val_ds)
+plot_data = [data_loader.val_ds[i] for i in range(0, total_n_valid, max(1, total_n_valid // 4))]
+plot_samples = plot_data  # Keep as list of ((aia, sxr), target)
+#sxr_callback = SXRPredictionLogger(plot_samples)
+
+sxr_plot_callback = ImagePredictionLogger_SXR(plot_samples, sxr_norm)
+
+
+class PTHCheckpointCallback(Callback):
+    def __init__(self, dirpath, monitor='valid_loss', mode='min', save_top_k=1, filename_prefix="model"):
+        self.dirpath = dirpath
+        self.monitor = monitor
+        self.mode = mode
+        self.save_top_k = save_top_k
+        self.filename_prefix = filename_prefix
+        self.best_score = float('inf') if mode == 'min' else float('-inf')
+
+    def on_validation_end(self, trainer, pl_module):
+        current_score = trainer.callback_metrics.get(self.monitor)
+        if current_score is None:
+            return
+
+        is_better = (self.mode == 'min' and current_score < self.best_score) or \
+                    (self.mode == 'max' and current_score > self.best_score)
+
+        if is_better:
+            self.best_score = current_score
+            # Save as .pth file
+            filename = f"{self.filename_prefix}-epoch={trainer.current_epoch:02d}-{self.monitor}={current_score:.4f}.pth"
+            filepath = os.path.join(self.dirpath, filename)
+
+            torch.save({
+                'model': pl_module,
+                'epoch': trainer.current_epoch,
+                'optimizer_state_dict': trainer.optimizers[0].state_dict(),
+                'loss': current_score,
+            }, filepath)
+
+
+
+
+# Checkpoint callback
+checkpoint_callback = ModelCheckpoint(
+    dirpath=config_data['data']['checkpoints_dir'],
+    monitor='valid_loss',
+    mode='min',
+    save_top_k=1,
+    filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{valid_loss:.4f}}.pth"
+)
+
+pth_callback = PTHCheckpointCallback(
+    dirpath=config_data['data']['checkpoints_dir'],
+    monitor='valid_loss',
+    mode='min',
+    save_top_k=1,
+    filename_prefix=config_data['wandb']['wb_name']
+)
+
+# Model
+if config_data['model']['architecture'] == 'linear':
+    model = LinearIrradianceModel(
+        d_input=6,
+        d_output=1,
+        lr= config_data['model']['lr'],
+        loss_func=MSELoss()
     )
-    data_loader.setup()
-
-    # Logger
-    #wb_name = f"{instrument}_{n}" if len(combined_parameters) > 1 else "aia_sxr_model"
-    wandb_logger = WandbLogger(
-        entity=config_data['wandb']['entity'],
-        project=config_data['wandb']['project'],
-        job_type=config_data['wandb']['job_type'],
-        tags=config_data['wandb']['tags'],
-        name=config_data['wandb']['wb_name'],
-        notes=config_data['wandb']['notes'],
-        config=run_config
+elif config_data['model']['architecture'] == 'hybrid':
+    model = HybridIrradianceModel(
+        d_input=6,
+        d_output=1,
+        cnn_model=config_data['model']['cnn_model'],
+        ln_model=True,
+        cnn_dp=config_data['model']['cnn_dp'],
+        lr=config_data['model']['lr'],
     )
+else:
+    raise NotImplementedError(f"Architecture {config_data['model']['architecture']} not supported.")
 
-    # Logging callback
-    total_n_valid = len(data_loader.val_ds)
-    plot_data = [data_loader.val_ds[i] for i in range(0, total_n_valid, max(1, total_n_valid // 4))]
-    print(plot_data[0])  # Print first sample for debugging
-    plot_samples = plot_data  # Keep as list of ((aia, sxr), target)
-    #sxr_callback = SXRPredictionLogger(plot_samples)
+# Trainer
+trainer = Trainer(
+    default_root_dir=config_data['data']['checkpoints_dir'],
+    accelerator="gpu" if torch.cuda.is_available() else "cpu",
+    devices=1,
+    max_epochs=config_data['model']['epochs'],
+    callbacks=[sxr_plot_callback, pth_callback],
+    logger=wandb_logger,
+    log_every_n_steps=10
+)
 
-    sxr_plot_callback = ImagePredictionLogger_SXR(plot_samples, sxr_norm)
+# Save checkpoint
+trainer.fit(model, data_loader)
 
-
-    class PTHCheckpointCallback(Callback):
-        def __init__(self, dirpath, monitor='valid_loss', mode='min', save_top_k=1, filename_prefix="model"):
-            self.dirpath = dirpath
-            self.monitor = monitor
-            self.mode = mode
-            self.save_top_k = save_top_k
-            self.filename_prefix = filename_prefix
-            self.best_score = float('inf') if mode == 'min' else float('-inf')
-
-        def on_validation_end(self, trainer, pl_module):
-            current_score = trainer.callback_metrics.get(self.monitor)
-            if current_score is None:
-                return
-
-            is_better = (self.mode == 'min' and current_score < self.best_score) or \
-                        (self.mode == 'max' and current_score > self.best_score)
-
-            if is_better:
-                self.best_score = current_score
-                # Save as .pth file
-                filename = f"{self.filename_prefix}-epoch={trainer.current_epoch:02d}-{self.monitor}={current_score:.4f}.pth"
-                filepath = os.path.join(self.dirpath, filename)
-
-                torch.save({
-                    'model': pl_module,
-                    'epoch': trainer.current_epoch,
-                    'optimizer_state_dict': trainer.optimizers[0].state_dict(),
-                    'loss': current_score,
-                }, filepath)
-
-
-
-
-    # Checkpoint callback
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=checkpoint_dir,
-        monitor='valid_loss',
-        mode='min',
-        save_top_k=1,
-        filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{valid_loss:.4f}}.pth"
-    )
-
-    pth_callback = PTHCheckpointCallback(
-        dirpath=checkpoint_dir,
-        monitor='valid_loss',
-        mode='min',
-        save_top_k=1,
-        filename_prefix=config_data['wandb']['wb_name']
-    )
-
-    # Model
-    if run_config['architecture'] == 'linear':
-        model = LinearIrradianceModel(
-            d_input=6,
-            d_output=1,
-            lr=run_config.get('lr', 1e-4),
-            loss_func=MSELoss()
-        )
-    elif run_config['architecture'] == 'hybrid':
-        model = HybridIrradianceModel(
-            d_input=6,
-            d_output=1,
-            cnn_model=run_config['cnn_model'],
-            ln_model=True,
-            cnn_dp=run_config.get('cnn_dp', 0.75),
-            lr=run_config['lr'],
-        )
-    else:
-        raise NotImplementedError(f"Architecture {run_config['architecture']} not supported.")
-
-    # Trainer
-    trainer = Trainer(
-        default_root_dir=checkpoint_dir,
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=1,
-        max_epochs=run_config['epochs'],
-        callbacks=[sxr_plot_callback, pth_callback],
-        logger=wandb_logger,
-        log_every_n_steps=10
-    )
-
-    # Save checkpoint
-    trainer.fit(model, data_loader)
-
-    # Save final PyTorch checkpoint with model and state_dict
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    final_checkpoint_path = os.path.join(checkpoint_dir, f"{config_data['wandb']['wb_name']}-final-{timestamp}.pth")
-    torch.save({
-        'model': model,
-        'state_dict': model.state_dict()
-    }, final_checkpoint_path)
-    print(f"Saved final PyTorch checkpoint: {final_checkpoint_path}")
-    n += 1
-    # Finalize
-    wandb.finish()
+# Save final PyTorch checkpoint with model and state_dict
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+final_checkpoint_path = os.path.join(config_data['data']['checkpoints_dir'], f"{config_data['wandb']['wb_name']}-final-{timestamp}.pth")
+torch.save({
+    'model': model,
+    'state_dict': model.state_dict()
+}, final_checkpoint_path)
+print(f"Saved final PyTorch checkpoint: {final_checkpoint_path}")
+n += 1
+# Finalize
+wandb.finish()
