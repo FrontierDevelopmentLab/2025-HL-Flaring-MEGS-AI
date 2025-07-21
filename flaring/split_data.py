@@ -29,9 +29,9 @@ for i, row in flare_event.iterrows():
     flaring_eve_list.append((start_time, end_time))
 
 # Define date ranges for splits
-train_range = (datetime(2023, 7, 1), datetime(2023, 7, 25))
-val_range = (datetime(2023, 7, 27), datetime(2023, 7, 31))
-test_range = (datetime(2023, 8, 1), datetime(2023, 8, 15))
+train_range = (datetime(2023, 7, 1,0,0,0), datetime(2023, 7, 25,23,59,59))
+val_range = (datetime(2023, 7, 27,0,0,0), datetime(2023, 7, 31,23,59,59))
+test_range = (datetime(2023, 8, 1,0,0,0), datetime(2023, 8, 15,23,59,59))
 
 # Get list of files in data_dir
 data_list = os.listdir(aia_data_dir)
@@ -61,8 +61,16 @@ for file in data_list:
     # Copy file to appropriate directory
     src_aia = os.path.join(aia_data_dir, file)
     src_sxr = os.path.join(sxr_data_dir, file)
-    dst_aia = os.path.join(mixed_data_dir, "AIA", split_dir , file)
-    dst_sxr = os.path.join(mixed_data_dir, "SXR" , split_dir, file)
-    shutil.copy(src_aia, dst_aia)
-    shutil.copy(src_sxr, dst_sxr)
-    print(f"Copied {file} to {dst_aia} and {dst_sxr}")
+    dst_aia = os.path.join(base_dir, "AIA", split_dir, file)
+    dst_sxr = os.path.join(base_dir, "SXR", split_dir, file)
+
+    if not os.path.exists(dst_aia):
+        shutil.copy(src_aia, dst_aia)
+        print(f"Copied {file} to {dst_aia} and {dst_sxr}")
+    else:
+        print(f"File {dst_aia} already exists, skipping copy.")
+    if not os.path.exists(dst_sxr):
+        shutil.copy(src_sxr, dst_sxr)
+    else:
+        print(f"File {dst_sxr} already exists, skipping copy.")
+
