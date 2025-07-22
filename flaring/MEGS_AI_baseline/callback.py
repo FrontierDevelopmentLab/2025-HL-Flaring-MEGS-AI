@@ -87,7 +87,7 @@ class ImagePredictionLogger_SXR(Callback):
 
 
 class AttentionMapCallback(Callback):
-    def __init__(self, log_every_n_epochs=10, num_samples=4, save_dir="attention_maps"):
+    def __init__(self, log_every_n_epochs=1, num_samples=4, save_dir="attention_maps"):
         """
         Callback to visualize attention maps during training.
 
@@ -125,13 +125,16 @@ class AttentionMapCallback(Callback):
 
             # Visualize attention for each sample
             for sample_idx in range(min(self.num_samples, imgs.size(0))):
-                self._plot_attention_map(
+
+                map = self._plot_attention_map(
                     imgs[sample_idx],
                     attention_weights,
                     sample_idx,
                     trainer.current_epoch,
                     pl_module.model.patch_size
                 )
+                trainer.logger.experiment.log({"Attention plots": wandb.Image(map)})
+                plt.close(map)
 
     def _plot_attention_map(self, image, attention_weights, sample_idx, epoch, patch_size):
         """
@@ -145,11 +148,12 @@ class AttentionMapCallback(Callback):
             patch_size: Size of patches
         """
         # Convert image to numpy for plotting
-        print(image.shape)
         img_np = image.cpu().numpy()
-        print(img_np.shape)
+        # Transpose from [C, H, W] to [H, W, C]
+
         # Normalize image for display
-        img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+        #img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+
 
         # Get attention from the last layer (or you can average across layers)
         last_layer_attention = attention_weights[-1]  # [B, num_heads, seq_len, seq_len]
@@ -166,7 +170,7 @@ class AttentionMapCallback(Callback):
         # Calculate grid size
         H, W = img_np.shape[:2]
         grid_h, grid_w = H // patch_size, W // patch_size
-        print(grid_h, grid_w)
+        #print(grid_h, grid_w)
         # Reshape attention to spatial grid
         attention_map = cls_attention.reshape(grid_h, grid_w)
 
@@ -174,7 +178,7 @@ class AttentionMapCallback(Callback):
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
         # Plot 1: Original image
-        axes[0].imshow(img_np[::0])
+        axes[0].imshow(img_np[:, :, :3])  # only first 3 channels if more than 3
         axes[0].set_title(f'Original Image (Epoch {epoch})')
         axes[0].axis('off')
 
@@ -185,9 +189,10 @@ class AttentionMapCallback(Callback):
         plt.colorbar(im, ax=axes[1])
 
         # Plot 3: Overlay attention on image
-        axes[2].imshow(img_np[::0])
+        axes[2].imshow(img_np[:, :, :3])
 
         # Overlay attention as colored patches
+        max_attention = attention_map.max().numpy()
         for i in range(grid_h):
             for j in range(grid_w):
                 attention_val = attention_map[i, j].item()
@@ -197,7 +202,7 @@ class AttentionMapCallback(Callback):
                     patch_size, patch_size,
                     linewidth=0,
                     facecolor='red',
-                    alpha=attention_val * 0.7  # Scale alpha by attention
+                    alpha=(attention_val/max_attention) * .9
                 )
                 axes[2].add_patch(rect)
 
@@ -213,3 +218,62 @@ class AttentionMapCallback(Callback):
         # plt.savefig(f'{self.save_dir}/attention_epoch_{epoch}_sample_{sample_idx}.png',
         #             dpi=150, bbox_inches='tight')
         # plt.close()
+
+
+class MultiHeadAttentionCallback(AttentionMapCallback):
+    """Extended callback to visualize individual attention heads."""
+
+    def _plot_attention_map(self, image, attention_weights, sample_idx, epoch, patch_size):
+        # Call parent method for average attention
+        super()._plot_attention_map(image, attention_weights, sample_idx, epoch, patch_size)
+
+        # Also plot individual heads
+        self._plot_individual_heads(image, attention_weights, sample_idx, epoch, patch_size)
+
+    def _plot_individual_heads(self, image, attention_weights, sample_idx, epoch, patch_size):
+        """Plot attention maps for individual heads."""
+        img_np = image.cpu().numpy()
+        #img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+
+        last_layer_attention = attention_weights[-1][sample_idx]  # [num_heads, seq_len, seq_len]
+        num_heads = last_layer_attention.size(0)
+
+        # Calculate grid size
+        H, W = img_np.shape[:2]
+        grid_h, grid_w = H // patch_size, W // patch_size
+
+        # Create subplot grid
+        cols = min(4, num_heads)
+        rows = (num_heads + cols - 1) // cols
+
+        fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 4 * rows))
+        if num_heads == 1:
+            axes = [axes]
+        elif rows == 1:
+            axes = axes.reshape(1, -1)
+
+        for head_idx in range(num_heads):
+            row = head_idx // cols
+            col = head_idx % cols
+
+            # Get attention for this head
+            head_attention = last_layer_attention[head_idx, 0, 1:].cpu()  # CLS to patches
+            attention_map = head_attention.reshape(grid_h, grid_w)
+
+            ax = axes[row, col] if rows > 1 else axes[col]
+            im = ax.imshow(attention_map.numpy(), cmap='hot', interpolation='nearest')
+            ax.set_title(f'Head {head_idx}')
+            ax.axis('off')
+            plt.colorbar(im, ax=ax)
+
+        # Hide unused subplots
+        for idx in range(num_heads, rows * cols):
+            row = idx // cols
+            col = idx % cols
+            ax = axes[row, col] if rows > 1 else axes[col]
+            ax.axis('off')
+
+        plt.tight_layout()
+        plt.savefig(f'{self.save_dir}/heads_epoch_{epoch}_sample_{sample_idx}.png',
+                    dpi=150, bbox_inches='tight')
+        plt.close()

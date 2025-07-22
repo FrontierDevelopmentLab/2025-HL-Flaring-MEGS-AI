@@ -29,10 +29,10 @@ vit:
     patch_size: 16
     num_patches: 262144
     hidden_dim: 512
-    num_heads: 8
+    num_heads: 4
     num_layers: 6
     dropout: 0.1
-    lr: .00001
+    lr: .0001
 
 # Data paths (automatically constructed from base directories)
 data:
