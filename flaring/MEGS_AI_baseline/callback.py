@@ -11,6 +11,9 @@ import numpy as np
 from pytorch_lightning.callbacks import Callback
 from PIL import Image
 import matplotlib.patches as patches
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
+from scipy.ndimage import zoom
 
 # Custom Callback
 sdoaia94 = matplotlib.colormaps['sdoaia94']
@@ -148,29 +151,28 @@ class AttentionMapCallback(Callback):
             patch_size: Size of patches
         """
         # Convert image to numpy for plotting
+        # Convert image to numpy and transpose
         img_np = image.cpu().numpy()
-        # Transpose from [C, H, W] to [H, W, C]
-
-        # Normalize image for display
-        #img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+        if len(img_np.shape) == 3 and img_np.shape[0] in [1, 3]:  # Check if channels first
+            img_np = np.transpose(img_np, (1, 2, 0))
 
 
-        # Get attention from the last layer (or you can average across layers)
+        # Get attention from the last layer
         last_layer_attention = attention_weights[-1]  # [B, num_heads, seq_len, seq_len]
 
         # Extract attention for this sample
         sample_attention = last_layer_attention[sample_idx]  # [num_heads, seq_len, seq_len]
 
-        # Average across heads (or you can visualize individual heads)
+        # Average across heads
         avg_attention = sample_attention.mean(dim=0)  # [seq_len, seq_len]
 
         # Get attention from CLS token to patches (exclude CLS->CLS)
         cls_attention = avg_attention[0, 1:].cpu()  # [num_patches]
 
-        # Calculate grid size
-        H, W = img_np.shape[:2]
+        # Calculate grid size - NOW USING CORRECT DIMENSIONS
+        H, W = img_np.shape[:2]  # Now this is correct after transpose
         grid_h, grid_w = H // patch_size, W // patch_size
-        #print(grid_h, grid_w)
+
         # Reshape attention to spatial grid
         attention_map = cls_attention.reshape(grid_h, grid_w)
 
@@ -178,46 +180,52 @@ class AttentionMapCallback(Callback):
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
         # Plot 1: Original image
-        axes[0].imshow((img_np[:, :,0]+1)/2)
+        # if img_np.shape[2] == 1:  # Grayscale
+        #     img_display = (img_np[:, :, 0] + 1) / 2
+        #     axes[0].imshow(img_display, cmap='gray')
+        # elif img_np.shape[2] == 3:  # RGB
+        #     # Normalize RGB image properly
+        #     img_display = (img_np + 1) / 2  # Assuming images are in [-1, 1] range
+        #     img_display = np.clip(img_display, 0, 1)  # Ensure valid range
+        #     axes[0].imshow(img_display)
+        # else:  # Multi-channel (6 channels in your case)
+        #     # Option 1: Display first channel as grayscale
+        #     img_display = (img_np[:, :, 0] + 1) / 2
+        #     axes[0].imshow(img_display, cmap='gray')
+
+            # Option 2: Create RGB composite from 3 channels (uncomment if preferred)
+        rgb_channels = [0, 2, 4]  # Select which channels to use for R, G, B
+        img_display = np.stack([(img_np[:, :, i] + 1) / 2 for i in rgb_channels], axis=2)
+        img_display = np.clip(img_display, 0, 1)
+        axes[0].imshow(img_display)
         axes[0].set_title(f'Original Image (Epoch {epoch})')
         axes[0].axis('off')
 
         # Plot 2: Attention heatmap
-        im = axes[1].imshow(attention_map.numpy(), cmap='hot', interpolation='nearest')
+        attention_np = np.log1p(attention_map.numpy())
+        # Resize attention map to match image size
+        attention_resized = zoom(attention_np, (H / grid_h, W / grid_w), order=1)
+
+        # Create colormap for attention - FIX: Use the scalar values, not RGB
+        im = axes[1].imshow(attention_resized, cmap='hot')
         axes[1].set_title(f'Attention Map (Sample {sample_idx})')
         axes[1].axis('off')
+        # FIXED: Create colorbar from the scalar image, not RGB
         plt.colorbar(im, ax=axes[1])
 
         # Plot 3: Overlay attention on image
-        axes[2].imshow((img_np[:, :,0]+1)/2)
+        #img_display_overlay = (img_np[:, :, 0] + 1) / 2
+        axes[2].imshow(img_display)
 
-        # Overlay attention as colored patches
-        max_attention = attention_map.max().numpy()
-        for i in range(grid_h):
-            for j in range(grid_w):
-                attention_val = attention_map[i, j].item()
-                # Create a colored rectangle with alpha based on attention
-                rect = patches.Rectangle(
-                    (j * patch_size, i * patch_size),
-                    patch_size, patch_size,
-                    linewidth=0,
-                    facecolor='red',
-                    alpha=(attention_val/max_attention) * .9
-                )
-                axes[2].add_patch(rect)
-
-        axes[2].set_title(f'Attention Overlay (Sample {sample_idx})')
+        # Overlay attention with proper alpha blending
+        axes[2].imshow(attention_resized, cmap='hot', alpha=0.5)
+        axes[2].set_title(f'Log-Scaled Attention Overlay (Sample {sample_idx})')
         axes[2].axis('off')
 
         plt.tight_layout()
-        return fig
 
-        # Save the plot
-        # import os
-        # os.makedirs(self.save_dir, exist_ok=True)
-        # plt.savefig(f'{self.save_dir}/attention_epoch_{epoch}_sample_{sample_idx}.png',
-        #             dpi=150, bbox_inches='tight')
-        # plt.close()
+        plt.tight_layout()
+        return fig
 
 
 class MultiHeadAttentionCallback(AttentionMapCallback):

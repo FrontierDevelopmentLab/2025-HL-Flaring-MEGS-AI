@@ -79,8 +79,8 @@ sxr_norm = np.load(config_data['data']['sxr_norm_path'])
 
 n = 0
 
-torch.manual_seed(config_data['model']['seed'])
-np.random.seed(config_data['model']['seed'])
+torch.manual_seed(config_data['megsai']['seed'])
+np.random.seed(config_data['megsai']['seed'])
 
 # DataModule
 data_loader = AIA_GOESDataModule(
@@ -90,7 +90,7 @@ data_loader = AIA_GOESDataModule(
     sxr_train_dir=config_data['data']['sxr_dir']+"/train",
     sxr_val_dir=config_data['data']['sxr_dir']+"/val",
     sxr_test_dir=config_data['data']['sxr_dir']+"/test",
-    batch_size=config_data['model']['batch_size'],
+    batch_size=config_data['batch_size'],
     num_workers=os.cpu_count(),
     sxr_norm=sxr_norm,
 )
@@ -105,7 +105,7 @@ wandb_logger = WandbLogger(
     tags=config_data['wandb']['tags'],
     name=config_data['wandb']['wb_name'],
     notes=config_data['wandb']['notes'],
-    config=config_data['model']
+    config=config_data['megsai']
 )
 
 # Logging callback
@@ -155,7 +155,7 @@ class PTHCheckpointCallback(Callback):
 # Checkpoint callback
 checkpoint_callback = ModelCheckpoint(
     dirpath=config_data['data']['checkpoints_dir'],
-    monitor='valid_loss',
+    monitor='val_loss',
     mode='min',
     save_top_k=1,
     filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{valid_loss:.4f}}.pth"
@@ -187,12 +187,6 @@ elif config_data['selected_model'] == 'hybrid':
         lr=config_data['model']['lr'],
     )
 elif config_data['selected_model'] == 'ViT':
-    print("Using ViT")
-#     model = ViT(embed_dim=config_data['vit']['embed_dim'], hidden_dim=config_data['vit']['hidden_dim'],
-#                 num_channels=config_data['vit']['num_channels'],num_heads=config_data['vit']['num_heads'],
-#                 num_layers=config_data['vit']['num_layers'], num_classes=config_data['vit']['num_classes'],
-#                 patch_size=config_data['vit']['patch_size'], num_patches=config_data['vit']['num_patches'],
-#                 dropout=config_data['vit']['dropout'], lr=config_data['vit']['lr'])
     model = ViT(model_kwargs=config_data['vit'])
 else:
     raise NotImplementedError(f"Architecture {config_data['selected_model']} not supported.")
@@ -202,8 +196,8 @@ trainer = Trainer(
     default_root_dir=config_data['data']['checkpoints_dir'],
     accelerator="gpu" if torch.cuda.is_available() else "cpu",
     devices=1,
-    max_epochs=config_data['model']['epochs'],
-    callbacks=[attention, pth_callback],
+    max_epochs=config_data['epochs'],
+    callbacks=[attention, pth_callback,checkpoint_callback],
     logger=wandb_logger,
     log_every_n_steps=10
 )

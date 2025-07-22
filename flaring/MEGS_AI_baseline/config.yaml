@@ -5,8 +5,9 @@ base_checkpoint_dir: "/mnt/data/ML-Ready/mixed_data"    # Change this line for d
 
 # Model configuration
 selected_model: "ViT"  # Options: "cnn", "vit",
-
-model:
+batch_size:    64
+epochs:        100
+megsai:
   architecture:
     "cnn"
   seed:
@@ -17,20 +18,16 @@ model:
     "resnet"
   cnn_dp:
     0.5
-  epochs:
-    100
-  batch_size:
-    16
 
 vit:
-    embed_dim: 512
+    embed_dim: 256
     num_channels: 6  # AIA has 6 channels
     num_classes: 1  # Regression task, predicting SXR flux
-    patch_size: 16
-    num_patches: 1024
-    hidden_dim: 512
-    num_heads: 4
-    num_layers: 4
+    patch_size: 32
+    num_patches: 256
+    hidden_dim: 256
+    num_heads: 1
+    num_layers: 1
     dropout: 0.25
     lr: .0001
 
@@ -68,5 +65,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: flaring-vit-lr-scheduler
+  wb_name: mixed-vit-lr-scheduler
   notes: Regression from AIA images (6 channels) to GOES SXR flux
