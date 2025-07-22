@@ -120,7 +120,7 @@ attention = AttentionMapCallback()
 
 
 class PTHCheckpointCallback(Callback):
-    def __init__(self, dirpath, monitor='valid_loss', mode='min', save_top_k=1, filename_prefix="model"):
+    def __init__(self, dirpath, monitor='val_loss', mode='min', save_top_k=1, filename_prefix="model"):
         self.dirpath = dirpath
         self.monitor = monitor
         self.mode = mode
@@ -163,7 +163,7 @@ checkpoint_callback = ModelCheckpoint(
 
 pth_callback = PTHCheckpointCallback(
     dirpath=config_data['data']['checkpoints_dir'],
-    monitor='valid_loss',
+    monitor='val_loss',
     mode='min',
     save_top_k=1,
     filename_prefix=config_data['wandb']['wb_name']
@@ -197,7 +197,7 @@ trainer = Trainer(
     accelerator="gpu" if torch.cuda.is_available() else "cpu",
     devices=1,
     max_epochs=config_data['epochs'],
-    callbacks=[attention, pth_callback,checkpoint_callback],
+    callbacks=[attention, pth_callback],
     logger=wandb_logger,
     log_every_n_steps=10
 )

@@ -19,30 +19,30 @@ megsai:
   cnn_dp:
     0.5
 
+#vit:
+#    embed_dim: 256
+#    num_channels: 6  # AIA has 6 channels
+#    num_classes: 1  # Regression task, predicting SXR flux
+#    patch_size: 32
+#    num_patches: 256
+#    hidden_dim: 256
+#    num_heads: 1
+#    num_layers: 1
+#    dropout: 0.25
+#    lr: .0001
+
+
 vit:
-    embed_dim: 256
+    embed_dim: 512
     num_channels: 6  # AIA has 6 channels
     num_classes: 1  # Regression task, predicting SXR flux
     patch_size: 32
     num_patches: 256
-    hidden_dim: 256
-    num_heads: 1
-    num_layers: 1
+    hidden_dim: 512
+    num_heads: 4
+    num_layers: 4
     dropout: 0.25
     lr: .0001
-
-
-#vit:
-#    embed_dim: 512
-#    num_channels: 6  # AIA has 6 channels
-#    num_classes: 1  # Regression task, predicting SXR flux
-#    patch_size: 8
-#    num_patches: 4096
-#    hidden_dim: 512
-#    num_heads: 2
-#    num_layers: 3
-#    dropout: 0.25
-#    lr: .0001
 
 
 
@@ -65,5 +65,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: mixed-vit-lr-scheduler
+  wb_name: mixed-vit-aia-sxr-regression
   notes: Regression from AIA images (6 channels) to GOES SXR flux
