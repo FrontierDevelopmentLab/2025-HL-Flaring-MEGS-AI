@@ -94,7 +94,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         if self.sxr_transform:
             sxr_val = self.sxr_transform(sxr_val)
 
-        return (aia_img, torch.tensor(sxr_val, dtype=torch.float32)), torch.tensor(sxr_val, dtype=torch.float32)
+        return aia_img, torch.tensor(sxr_val, dtype=torch.float32)
 
 class AIA_GOESDataModule(LightningDataModule):
     """PyTorch Lightning DataModule for AIA and SXR data."""

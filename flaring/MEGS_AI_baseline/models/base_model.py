@@ -36,7 +36,7 @@ class BaseModel(LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        (x, sxr), target = batch
+        x, target = batch
         pred = self(x)
         loss = self.loss_func(torch.squeeze(pred), target)
         self.log('test_loss', loss)
