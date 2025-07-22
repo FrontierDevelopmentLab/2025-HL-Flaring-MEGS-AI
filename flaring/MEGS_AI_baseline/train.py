@@ -203,7 +203,7 @@ trainer = Trainer(
     accelerator="gpu" if torch.cuda.is_available() else "cpu",
     devices=1,
     max_epochs=config_data['model']['epochs'],
-    callbacks=[sxr_plot_callback, attention, pth_callback],
+    callbacks=[attention, pth_callback],
     logger=wandb_logger,
     log_every_n_steps=10
 )

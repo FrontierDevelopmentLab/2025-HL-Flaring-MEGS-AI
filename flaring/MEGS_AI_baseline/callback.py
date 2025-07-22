@@ -28,7 +28,7 @@ class ImagePredictionLogger_SXR(Callback):
     def __init__(self, data_samples, sxr_norm):
         super().__init__()
         self.data_samples = data_samples
-        self.val_aia = data_samples[0][0]
+        self.val_aia = data_samples[0]
         self.val_sxr = data_samples[1]
         self.sxr_norm = sxr_norm
 
@@ -178,7 +178,7 @@ class AttentionMapCallback(Callback):
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
         # Plot 1: Original image
-        axes[0].imshow(img_np[:, :, :3])  # only first 3 channels if more than 3
+        axes[0].imshow((img_np[:, :,0]+1)/2)
         axes[0].set_title(f'Original Image (Epoch {epoch})')
         axes[0].axis('off')
 
@@ -189,7 +189,7 @@ class AttentionMapCallback(Callback):
         plt.colorbar(im, ax=axes[1])
 
         # Plot 3: Overlay attention on image
-        axes[2].imshow(img_np[:, :, :3])
+        axes[2].imshow((img_np[:, :,0]+1)/2)
 
         # Overlay attention as colored patches
         max_attention = attention_map.max().numpy()

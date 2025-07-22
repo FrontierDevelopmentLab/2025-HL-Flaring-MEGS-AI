@@ -19,20 +19,27 @@ class ViT(pl.LightningModule):
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
 
-    def forward(self, x, return_attention=False):
+    def forward(self, x, return_attention=True):
         return self.model(x, return_attention=return_attention)
 
     def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=self.lr)
-        lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.1)
-        return [optimizer], [lr_scheduler]
+        # optimizer = optim.AdamW(self.parameters(), lr=self.lr)
+        # lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.1)
+        # return [optimizer], [lr_scheduler]
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        scheduler = {
+            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3),
+            'monitor': 'val_loss',  # name of the metric to monitor
+            'interval': 'epoch',
+        }
+        return {'optimizer': optimizer, 'lr_scheduler': scheduler}
 
     def _calculate_loss(self, batch, mode="train"):
         imgs, sxr = batch
         preds = self.model(imgs)
 
         # Change loss function for regression
-        loss = F.huber_loss(torch.squeeze(preds), sxr)  # or F.l1_loss() or F.huber_loss()
+        loss = F.mse_loss(torch.squeeze(preds), sxr)  # or F.l1_loss() or F.huber_loss()
 
         # Change accuracy to a regression metric
         mae = F.l1_loss(torch.squeeze(preds), sxr)  # Mean Absolute Error
