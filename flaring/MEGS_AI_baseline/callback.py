@@ -33,7 +33,7 @@ class ImagePredictionLogger_SXR(Callback):
         true_sxr = []
         pred_sxr = []
         # print(self.val_samples)
-        for (aia, _), target in self.data_samples:
+        for aia, target in self.data_samples:
             #device = torch.device("cuda:0")
             aia = aia.to(pl_module.device).unsqueeze(0)
             # Get prediction

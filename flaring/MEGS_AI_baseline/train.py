@@ -14,6 +14,7 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.nn import MSELoss
 from SDOAIA_dataloader import AIA_GOESDataModule
+from models.vision_transformer_custom import ViT
 from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR
 from pytorch_lightning.callbacks import Callback
@@ -166,14 +167,14 @@ pth_callback = PTHCheckpointCallback(
 )
 
 # Model
-if config_data['model']['architecture'] == 'linear':
+if config_data['selected_model'] == 'linear':
     model = LinearIrradianceModel(
         d_input=6,
         d_output=1,
         lr= config_data['model']['lr'],
         loss_func=MSELoss()
     )
-elif config_data['model']['architecture'] == 'hybrid':
+elif config_data['selected_model'] == 'hybrid':
     model = HybridIrradianceModel(
         d_input=6,
         d_output=1,
@@ -182,8 +183,16 @@ elif config_data['model']['architecture'] == 'hybrid':
         cnn_dp=config_data['model']['cnn_dp'],
         lr=config_data['model']['lr'],
     )
+elif config_data['selected_model'] == 'ViT':
+    print("Using ViT")
+#     model = ViT(embed_dim=config_data['vit']['embed_dim'], hidden_dim=config_data['vit']['hidden_dim'],
+#                 num_channels=config_data['vit']['num_channels'],num_heads=config_data['vit']['num_heads'],
+#                 num_layers=config_data['vit']['num_layers'], num_classes=config_data['vit']['num_classes'],
+#                 patch_size=config_data['vit']['patch_size'], num_patches=config_data['vit']['num_patches'],
+#                 dropout=config_data['vit']['dropout'], lr=config_data['vit']['lr'])
+    model = ViT(model_kwargs=config_data['vit'])
 else:
-    raise NotImplementedError(f"Architecture {config_data['model']['architecture']} not supported.")
+    raise NotImplementedError(f"Architecture {config_data['selected_model']} not supported.")
 
 # Trainer
 trainer = Trainer(

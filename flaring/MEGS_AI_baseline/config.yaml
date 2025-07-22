@@ -4,9 +4,11 @@ base_data_dir: "/mnt/data/ML-Ready/flares_event_dir"  # Change this line for dif
 base_checkpoint_dir: "/mnt/data/ML-Ready/flares_event_dir"    # Change this line for different datasets
 
 # Model configuration
+selected_model: "ViT"  # Options: "cnn", "vit",
+
 model:
   architecture:
-    "hybrid"
+    "cnn"
   seed:
     42
   lr:
@@ -19,6 +21,18 @@ model:
     100
   batch_size:
     64
+
+vit:
+    embed_dim: 512
+    num_channels: 6  # AIA has 6 channels
+    num_classes: 1  # Regression task, predicting SXR flux
+    patch_size: 16
+    num_patches: 262144
+    hidden_dim: 512
+    num_heads: 8
+    num_layers: 6
+    dropout: 0.1
+    lr: .00001
 
 # Data paths (automatically constructed from base directories)
 data:
@@ -33,11 +47,11 @@ data:
 
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-  project: MEGS-AI Basline Models
+  project: MEGS-AI ViT Testing Griffin
   job_type: training
   tags:
     - aia
     - sxr
     - regression
-  wb_name: flaring-baseline-lr-scheduler
+  wb_name: flaring-vit-lr-scheduler
   notes: Regression from AIA images (6 channels) to GOES SXR flux
