@@ -19,8 +19,8 @@ class ViT(pl.LightningModule):
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x, return_attention=False):
+        return self.model(x, return_attention=return_attention)
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)
@@ -56,16 +56,16 @@ class ViT(pl.LightningModule):
 
 class VisionTransformer(nn.Module):
     def __init__(
-        self,
-        embed_dim,
-        hidden_dim,
-        num_channels,
-        num_heads,
-        num_layers,
-        num_classes,
-        patch_size,
-        num_patches,
-        dropout=0.0,
+            self,
+            embed_dim,
+            hidden_dim,
+            num_channels,
+            num_heads,
+            num_layers,
+            num_classes,
+            patch_size,
+            num_patches,
+            dropout=0.0,
     ):
         """Vision Transformer.
 
@@ -88,10 +88,13 @@ class VisionTransformer(nn.Module):
         self.patch_size = patch_size
 
         # Layers/Networks
-        self.input_layer = nn.Linear(num_channels * (patch_size**2), embed_dim)
-        self.transformer = nn.Sequential(
-            *(AttentionBlock(embed_dim, hidden_dim, num_heads, dropout=dropout) for _ in range(num_layers))
-        )
+        self.input_layer = nn.Linear(num_channels * (patch_size ** 2), embed_dim)
+
+        self.transformer_blocks = nn.ModuleList([
+            AttentionBlock(embed_dim, hidden_dim, num_heads, dropout=dropout)
+            for _ in range(num_layers)
+        ])
+
         self.mlp_head = nn.Sequential(nn.LayerNorm(embed_dim), nn.Linear(embed_dim, num_classes))
         self.dropout = nn.Dropout(dropout)
 
@@ -99,9 +102,8 @@ class VisionTransformer(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
         self.pos_embedding = nn.Parameter(torch.randn(1, 1 + num_patches, embed_dim))
 
-    def forward(self, x):
+    def forward(self, x, return_attention=False):
         # Preprocess input
-        #x = x[0]
         x = img_to_patch(x, self.patch_size)
         B, T, _ = x.shape
         x = self.input_layer(x)
@@ -111,15 +113,27 @@ class VisionTransformer(nn.Module):
         x = torch.cat([cls_token, x], dim=1)
         x = x + self.pos_embedding[:, : T + 1]
 
-        # Apply Transforrmer
+        # Apply Transformer blocks
         x = self.dropout(x)
-        x = x.transpose(0, 1)
-        x = self.transformer(x)
+        x = x.transpose(0, 1)  # [T+1, B, embed_dim]
+
+        attention_weights = []
+        for block in self.transformer_blocks:
+            if return_attention:
+                x, attn_weights = block(x, return_attention=True)
+                attention_weights.append(attn_weights)
+            else:
+                x = block(x)
 
         # Perform classification prediction
-        cls = x[0]
+        cls = x[0]  # Take CLS token
         out = self.mlp_head(cls)
-        return out
+
+        if return_attention:
+            return out, attention_weights
+        else:
+            return out
+
 
 class AttentionBlock(nn.Module):
     def __init__(self, embed_dim, hidden_dim, num_heads, dropout=0.0):
@@ -136,7 +150,7 @@ class AttentionBlock(nn.Module):
         super().__init__()
 
         self.layer_norm_1 = nn.LayerNorm(embed_dim)
-        self.attn = nn.MultiheadAttention(embed_dim, num_heads)
+        self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=False)
         self.layer_norm_2 = nn.LayerNorm(embed_dim)
         self.linear = nn.Sequential(
             nn.Linear(embed_dim, hidden_dim),
@@ -146,11 +160,20 @@ class AttentionBlock(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(self, x):
+    def forward(self, x, return_attention=False):
         inp_x = self.layer_norm_1(x)
-        x = x + self.attn(inp_x, inp_x, inp_x)[0]
-        x = x + self.linear(self.layer_norm_2(x))
-        return x
+
+        if return_attention:
+            attn_output, attn_weights = self.attn(inp_x, inp_x, inp_x, average_attn_weights=False)
+            x = x + attn_output
+            x = x + self.linear(self.layer_norm_2(x))
+            return x, attn_weights
+        else:
+            attn_output = self.attn(inp_x, inp_x, inp_x)[0]
+            x = x + attn_output
+            x = x + self.linear(self.layer_norm_2(x))
+            return x
+
 
 def img_to_patch(x, patch_size, flatten_channels=True):
     """

@@ -9,6 +9,7 @@ import itertools
 import wandb
 import torch
 import numpy as np
+from docutils.nodes import attention
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -16,7 +17,7 @@ from torch.nn import MSELoss
 from SDOAIA_dataloader import AIA_GOESDataModule
 from models.vision_transformer_custom import ViT
 from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
-from callback import ImagePredictionLogger_SXR
+from callback import ImagePredictionLogger_SXR, AttentionMapCallback
 from pytorch_lightning.callbacks import Callback
 
 
@@ -114,6 +115,8 @@ plot_samples = plot_data  # Keep as list of ((aia, sxr), target)
 #sxr_callback = SXRPredictionLogger(plot_samples)
 
 sxr_plot_callback = ImagePredictionLogger_SXR(plot_samples, sxr_norm)
+# Attention map callback
+attention = AttentionMapCallback()
 
 
 class PTHCheckpointCallback(Callback):
@@ -200,7 +203,7 @@ trainer = Trainer(
     accelerator="gpu" if torch.cuda.is_available() else "cpu",
     devices=1,
     max_epochs=config_data['model']['epochs'],
-    callbacks=[sxr_plot_callback, pth_callback],
+    callbacks=[sxr_plot_callback, attention, pth_callback],
     logger=wandb_logger,
     log_every_n_steps=10
 )
