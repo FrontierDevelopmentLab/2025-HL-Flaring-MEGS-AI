@@ -1,93 +1,69 @@
-from itipy.data.dataset import BaseDataset
-from itipy.data.editor import LoadMapEditor, NormalizeRadiusEditor, MapToDataEditor, AIAPrepEditor
+import collections.abc
+collections.Iterable = collections.abc.Iterable
+collections.Mapping = collections.abc.Mapping
+collections.MutableSet = collections.abc.MutableSet
+collections.MutableMapping = collections.abc.MutableMapping
+# Now import hyper
+import numpy as np
+from astropy.visualization import ImageNormalize, AsinhStretch
+from itipy.data.dataset import SDODataset, StackDataset, get_intersecting_files, AIADataset
+from itipy.data.editor import LoadMapEditor, NormalizeRadiusEditor, MapToDataEditor, AIAPrepEditor, \
+    BrightestPixelPatchEditor
 import os
 import glob
-from astropy.io import fits
-from astropy.io.fits import Header, PrimaryHDU
+from multiprocessing import Pool, cpu_count
 import tqdm as tqdm
 import multiprocessing as mp
 from functools import partial
 
 # Configuration for all wavelengths to process
 wavelengths = [94, 131, 171, 193, 211, 304]
-base_input_folder = '/mnt/data/SDO-AIA'
-output_folder = '/mnt/data2/AIA_processed_data'
+base_input_folder = '/mnt/data2/SDO-AIA'
+output_folder = '/mnt/data2/AIA_processed'
 os.makedirs(output_folder, exist_ok=True)
 
+sdo_norms = {
+    '94': ImageNormalize(vmin=0, vmax=np.float32(16.560747), stretch=AsinhStretch(0.005), clip=True),
+    '131': ImageNormalize(vmin=0, vmax=np.float32(75.84181), stretch=AsinhStretch(0.005), clip=True),
+    '171': ImageNormalize(vmin=0, vmax=np.float32(1536.1443), stretch=AsinhStretch(0.005), clip=True),
+    '193': ImageNormalize(vmin=0, vmax=np.float32(2288.1), stretch=AsinhStretch(0.005), clip=True),
+    '211': ImageNormalize(vmin=0, vmax=np.float32(1163.9178), stretch=AsinhStretch(0.005), clip=True),
+    '304': ImageNormalize(vmin=0, vmax=np.float32(401.82352), stretch=AsinhStretch(0.001), clip=True),
+}
 
-def process_file(fits_file, wavelength, resolution=512):
-    """Process a single FITS file with the specified wavelength and resolution."""
-    try:
-        editors = [
-            LoadMapEditor(),
-            NormalizeRadiusEditor(resolution),
-            AIAPrepEditor(calibration='auto'),
-            MapToDataEditor()
-        ]
+class SDODataset_flaring(StackDataset):
+    """
+    Dataset for SDO data
 
-        dataset = BaseDataset([fits_file], editors=editors, ext='.fits',
-                              wavelength=wavelength, resolution=resolution)
-
-        data, meta = dataset.convertData([fits_file])
-        meta_header = meta['header']
-        del meta_header['keycomments']
-
-        # Create wavelength subfolder
-        wavelength_folder = os.path.join(output_folder, str(wavelength))
-        os.makedirs(wavelength_folder, exist_ok=True)
-
-        output_file = os.path.join(wavelength_folder, os.path.basename(fits_file))
-        fits.writeto(output_file, data, header=Header(meta_header), overwrite=True)
-        return output_file
-    except Exception as e:
-        pass
-
-
-def process_wavelength(wavelength):
-    """Process files for a specific wavelength."""
-    input_folder = os.path.join(base_input_folder, str(wavelength))
-
-    # 🔎 Collect all .fits files
-    fits_files = glob.glob(os.path.join(input_folder, '*.fits'))
-
-    files_to_process = []
-    skipped_count = 0
-
-    for fits_file in fits_files:
-        # Generate expected output filename (adjust this logic based on your process_file function)
-        base_name = os.path.splitext(os.path.basename(fits_file))[0]
-        output_file = os.path.join(output_folder, str(wavelength), f"{base_name}.fits")
-
-        # Check if output file already exists
-        if os.path.exists(output_file):
-            skipped_count += 1
+    Args:
+        data: Data
+        patch_shape (tuple): Patch shape
+        wavelengths (list): List of wavelengths
+        resolution (int): Resolution
+        ext (str): File extension
+        **kwargs: Additional arguments
+    """
+    def __init__(self, data, patch_shape=None, wavelengths=None, resolution=2048, ext='.fits', **kwargs):
+        wavelengths = [171, 193, 211, 304, 6173, ] if wavelengths is None else wavelengths
+        if isinstance(data, list):
+            paths = data
         else:
-            files_to_process.append(fits_file)
+            paths = get_intersecting_files(data, wavelengths, ext=ext, **kwargs)
+        ds_mapping = {94:AIADataset, 131: AIADataset, 171: AIADataset, 193: AIADataset, 211: AIADataset, 304: AIADataset}
+        data_sets = [ds_mapping[wl_id](files, wavelength=wl_id, resolution=resolution, ext=ext)
+                     for wl_id, files in zip(wavelengths, paths)]
+        super().__init__(data_sets, **kwargs)
+        if patch_shape is not None:
+            self.addEditor(BrightestPixelPatchEditor(patch_shape))
 
-    print(f"Found {len(files_to_process)} files for wavelength {wavelength}")
-    print(f"Skipping {skipped_count} already processed files")
-    print(f"Processing {len(files_to_process)} remaining files...")
+aia_dataset = SDODataset_flaring(data=base_input_folder, wavelengths=wavelengths, resolution=512)
 
-    if not files_to_process:
-        print("All files already processed!")
-        return []
+def save_sample(i):
+    data = aia_dataset[i]
+    file_path = os.path.join(output_folder, aia_dataset.getId(i)) + '.npy'
+    if os.path.exists(file_path):
+        return  # Skip if file already exists
+    np.save(file_path, data)
 
-    print(f"Processing {len(fits_files)} files for wavelength {wavelength}...")
-
-    # Create partial function with wavelength parameter fixed
-    process_func = partial(process_file, wavelength=wavelength)
-
-    # Process files with multiprocessing
-    with mp.Pool(processes=mp.cpu_count()) as pool:
-        results = list(tqdm.tqdm(
-            pool.imap(process_func, files_to_process),
-            total=len(files_to_process),
-            desc=f"Processing {wavelength}Å files"
-        ))
-
-    return results
-
-
-# Process all wavelengths
-for wavelength in wavelengths:
-    process_wavelength(wavelength)
+with Pool(processes=90) as pool:
+    list(tqdm.tqdm(pool.imap(save_sample, range(len(aia_dataset))), total=len(aia_dataset)))
