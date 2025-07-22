@@ -18,7 +18,7 @@ class FlareDownloadProcessor:
         self.SDODownloader = SDODownloader
         self.SXRDownloader = SXRDownloader
 
-    def process_download(self, time_before_start=timedelta(minutes=60), time_after_end=timedelta(minutes=0)):
+    def process_download(self, time_before_start=timedelta(minutes=15), time_after_end=timedelta(minutes=0)):
 
         fl_events = self.FlareEventDownloader.download_events()
         print(fl_events)
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     # end_date = args.end_date
     # cadence = args.cadence
     download_dir = "/mnt/data"
-    start_date = "2012-01-01"
+    start_date = "2014-02-01"
     end_date = "2023-01-01"
     chunk_size = 180  # days per chunk
     # Parse start and end dates
