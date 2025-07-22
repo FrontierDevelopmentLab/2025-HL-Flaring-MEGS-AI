@@ -25,27 +25,44 @@ for wl in wavelengths:
 npy_files = sorted(glob.glob(f"{data_dir}/*.npy"))
 print(f"Found {len(npy_files)} .npy files.")
 
-corrupted_files = []
-def load_npy(filepath):
-    try:
-        return np.load(filepath, allow_pickle=True)
-    except Exception as e:
-        print(f"Skipping corrupt file: {filepath} — {e}")
-        corrupted_files.append((filepath, str(e)))
+## Function to remove corrupted files with os.remove
+def remove_np_file(filepath):
+    """
+    Remove a .npy file if it is corrupted or cannot be loaded.
+    Parameters
+    ----------
+    filepath
 
-def save_corrupted_files_to_csv(csv_path=output_base+"/corrupted_files.csv"):
-    if corrupted_files:
-        with open(csv_path, mode='w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["Filepath", "Error"])
-            writer.writerows(corrupted_files)
-        print(f"\nSaved {len(corrupted_files)} corrupted file entries to {csv_path}")
-    else:
-        print("\nNo corrupted files to save.")
+    Returns
+    -------
+
+    """
+    try:
+        data = np.load(filepath, allow_pickle=True)
+        return data
+    except Exception as e:
+        print(f"Error loading file '{filepath}': {e}")
+        print("File appears to be corrupted. Removing it.")
+        try:
+            os.remove(filepath)
+            print(f"Deleted corrupted file: {filepath}")
+        except Exception as delete_error:
+            print(f"Failed to delete file: {delete_error}")
+        return None
 
 ## Process single file
 def process_file(fpath):
-    file = load_npy(fpath)
+    """
+    Process a single .npy file, visualize the AIA frames, and save them as images.
+    Parameters
+    ----------
+    fpath
+
+    Returns
+    -------
+
+    """
+    file = np.load(fpath)
     fig,ax = plt.subplots(1,1,figsize = (10, 10), dpi=300)
     for ch in range(len(wavelengths)):
         wl = wavelengths[ch]
@@ -56,8 +73,10 @@ def process_file(fpath):
         plt.title(fpath.split('.')[0].split('/')[4], fontsize = 15)
         plt.savefig(os.path.join(output_base, str(wl), fpath.split('.')[0].split('/')[4])+ ".jpg") ## Modified the code logic
     plt.close()
-    save_corrupted_files_to_csv()
 ## Main function
 if __name__ == "__main__":
+    #for i in tqdm(range(53314, len(npy_files))):
+    #    npy_files[i] = remove_np_file(npy_files[i])
     with Pool(processes=90) as pool:
+        # Remove corrupted files
         list(tqdm(pool.imap(process_file, npy_files), total=len(npy_files), desc="Saving AIA frames", ncols=100))
