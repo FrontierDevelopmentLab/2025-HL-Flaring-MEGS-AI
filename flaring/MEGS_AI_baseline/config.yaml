@@ -1,25 +1,43 @@
 
-  model:
-    architecture:
-      - hybrid
-    seed:
-      - 42
-    lr:
-      - 0.0001
-    cnn_model:
-      - resnet
-    cnn_dp:
-      - 0.75
-    epochs:
-      - 100
+# Base directories - change these to switch datasets
+base_data_dir: "/mnt/data/ML-Ready/flares_event_dir"  # Change this line for different datasets
+base_checkpoint_dir: "/mnt/data/ML-Ready/flares_event_dir"    # Change this line for different datasets
 
-  wandb:
-    entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-    project: MEGS-AI flaring  # Lowercase, no spaces
-    job_type: training
-    tags:
-      - aia
-      - sxr
-      - regression
-    wb_name: mixed-baseline-v2-lr-scheduler
-    notes: Regression from AIA images (6 channels) to GOES SXR flux
+# Model configuration
+model:
+  architecture:
+    "hybrid"
+  seed:
+    42
+  lr:
+    0.00001
+  cnn_model:
+    "resnet"
+  cnn_dp:
+    0.5
+  epochs:
+    100
+  batch_size:
+    64
+
+# Data paths (automatically constructed from base directories)
+data:
+  aia_dir:
+    "${base_data_dir}/AIA"
+  sxr_dir:
+    "${base_data_dir}/SXR"
+  sxr_norm_path:
+    "${base_data_dir}/SXR/normalized_sxr.npy"
+  checkpoints_dir:
+    "${base_checkpoint_dir}/checkpoints"
+
+wandb:
+  entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
+  project: MEGS-AI Basline Models
+  job_type: training
+  tags:
+    - aia
+    - sxr
+    - regression
+  wb_name: flaring-baseline-lr-scheduler
+  notes: Regression from AIA images (6 channels) to GOES SXR flux

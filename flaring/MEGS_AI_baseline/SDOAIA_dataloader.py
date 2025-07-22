@@ -47,15 +47,20 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         sxr_path = self.sxr_dir / f"{timestamp}.npy"
 
         # Load AIA image as (6, H, W)
-        aia_img = np.load(aia_path)
+        try:
+            aia_img = np.load(aia_path)
+        except:
+            print(f"Error loading AIA image from {aia_path}. Skipping sample.")
+            return None
+
         if aia_img.shape[0] != 6:
             raise ValueError(f"AIA image has {aia_img.shape[0]} channels, expected 6")
 
         # Resize if needed (operates on (6, H, W))
-        if aia_img.shape[1:3] != self.target_size:
-            aia_img = zoom(aia_img, (1,
-                                     self.target_size[0]/aia_img.shape[1],
-                                     self.target_size[1]/aia_img.shape[2]))
+        # if aia_img.shape[1:3] != self.target_size:
+        #     aia_img = zoom(aia_img, (1,
+        #                              self.target_size[0]/aia_img.shape[1],
+        #                              self.target_size[1]/aia_img.shape[2]))
 
        # #Apply cut and normalize:
        #  cuts_dict = {
