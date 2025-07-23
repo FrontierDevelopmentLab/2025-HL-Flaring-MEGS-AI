@@ -116,7 +116,7 @@ def main():
     output_df.to_csv(config_data['output_path'], index=False)
 
     #f.write(f"{times[i]},{sxr[0]},{pred[0]}\n")
-    print(f"Predictions saved to {args.output}")
+    print(f"Predictions saved to {config_data['output_path']}")
     # print("These are raw model outputs in log10 space before any exponentiation")
 
 if __name__ == '__main__':
