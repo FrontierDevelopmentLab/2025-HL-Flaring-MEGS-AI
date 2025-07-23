@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from os import cpu_count
 
 from download import download_sdo as sdo
-import flare_event_downloader as fed
-import sxr_downloader as sxr
+from download import flare_event_downloader as fed
+from download import sxr_downloader as sxr
 
 class FlareDownloadProcessor:
     def __init__(self, FlareEventDownloader, SDODownloader, SXRDownloader):
@@ -41,23 +41,21 @@ class FlareDownloadProcessor:
 
 
 if __name__ == '__main__':
-    # parser = argparse.ArgumentParser(description='Download SDO data from JSOC with quality check and fallback for flare data')
-    # parser.add_argument('--download_dir', type=str, help='path to the download directory.')
-    # parser.add_argument('--email', type=str, help='registered email address for JSOC.')
-    # parser.add_argument('--start_date', type=str, help='start date in format YYYY-MM-DD.')
-    # parser.add_argument('--end_date', type=str, help='end date in format YYYY-MM-DD.', required=False,
-    #                      default=str(datetime.now()).split(' ')[0])
-    # parser.add_argument('--time_before_start', type=int, help='', required=False)
-    #
-    # args = parser.parse_args()
-    # download_dir = args.download_dir
-    # start_date = args.start_date
-    # end_date = args.end_date
-    # cadence = args.cadence
-    download_dir = "/mnt/data"
-    start_date = "2014-02-01"
-    end_date = "2023-01-01"
-    chunk_size = 180  # days per chunk
+    parser = argparse.ArgumentParser(description='Download flare events and associated SDO data.')
+    parser.add_argument('--start_date', type=str, default='2014-06-01',
+                        help='Start date for downloading flare events (YYYY-MM-DD)')
+    parser.add_argument('--end_date', type=str, default='2019-01-01',
+                        help='End date for downloading flare events (YYYY-MM-DD)')
+    parser.add_argument('--chunk_size', type=int, default=180,
+                        help='Number of days per chunk for processing (default: 180)')
+    parser.add_argument('--download_dir', type=str, default='/mnt/data',
+                        help='Directory to save downloaded data (default: /mnt/data)')
+    args = parser.parse_args()
+
+    download_dir = args.download_dir
+    start_date = args.start_date
+    end_date = args.end_date
+    chunk_size = args.chunk_size
     # Parse start and end dates
     start = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d")
