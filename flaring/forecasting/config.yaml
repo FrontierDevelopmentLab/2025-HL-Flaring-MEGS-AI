@@ -32,7 +32,7 @@ megsai:
 #    lr: .0001
 
 
-vit:
+vit_custom:
     embed_dim: 512
     num_channels: 6  # AIA has 6 channels
     num_classes: 1  # Regression task, predicting SXR flux
@@ -43,6 +43,8 @@ vit:
     num_layers: 4
     dropout: 0.25
     lr: .0001
+
+
 
 
 

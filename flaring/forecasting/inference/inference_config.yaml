@@ -2,6 +2,7 @@
 base_data_dir: "/mnt/data/ML-Ready/mixed_data"  # Change this line for different datasets
 output_path: "${base_data_dir}/outputs/deep-vit.csv"
 checkpoint: "mixed-vit-deep-model-epoch=19-val_loss=0.1484.pth"
+weight_path: "${base_data_dir}/weights/"
 # Data paths (automatically constructed from base directories)
 data:
   aia_dir:
