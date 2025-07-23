@@ -32,7 +32,7 @@ class BaseModel(LightningModule):
         x, target = batch
         pred = self(x)
         loss = self.loss_func(torch.squeeze(pred), target)
-        self.log('valid_loss', loss)
+        self.log('val_loss', loss)
         return loss
 
     def test_step(self, batch, batch_idx):

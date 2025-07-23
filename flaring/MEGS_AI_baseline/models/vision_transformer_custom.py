@@ -39,15 +39,16 @@ class ViT(pl.LightningModule):
         preds = self.model(imgs)
 
         # Change loss function for regression
-        loss = F.mse_loss(torch.squeeze(preds), sxr)  # or F.l1_loss() or F.huber_loss()
+        loss = F.huber_loss(torch.squeeze(preds), sxr)  # or F.l1_loss() or F.huber_loss()
 
         # Change accuracy to a regression metric
-        mae = F.l1_loss(torch.squeeze(preds), sxr)  # Mean Absolute Error
         # OR use RMSE:
         # rmse = torch.sqrt(F.mse_loss(preds, labels))
 
         self.log(f"{mode}_loss", loss)
-        self.log(f"{mode}_mae", mae)  # or f"{mode}_rmse" if using RMSE
+        self.log('learning_rate', self.lr, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
+        #self.log(f"{mode}_mae", mae)  # or f"{mode}_rmse" if using RMSE
         return loss
 
     def training_step(self, batch, batch_idx):
