@@ -5,16 +5,14 @@ from datetime import datetime
 import re
 
 import yaml
-import itertools
 import wandb
 import torch
 import numpy as np
-from docutils.nodes import attention
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.nn import MSELoss
-from SDOAIA_dataloader import AIA_GOESDataModule
+from flaring.forecasting.data_loaders.SDOAIA_dataloader import AIA_GOESDataModule
 from models.vision_transformer_custom import ViT
 from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR, AttentionMapCallback

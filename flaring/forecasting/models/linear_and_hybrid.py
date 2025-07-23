@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import HuberLoss
-from models.base_model import BaseModel
+from flaring.forecasting.models.base_model import BaseModel
 from torchvision.models import resnet18
 
 class LinearIrradianceModel(BaseModel):
