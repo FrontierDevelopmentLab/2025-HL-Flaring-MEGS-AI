@@ -18,6 +18,8 @@ from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceMode
 from callback import ImagePredictionLogger_SXR, AttentionMapCallback
 from pytorch_lightning.callbacks import Callback
 
+from flaring.forecasting.models.FastSpectralNet import FastViTFlaringModel
+
 
 def resolve_config_variables(config_dict):
     """Recursively resolve ${variable} references within the config"""
@@ -184,8 +186,12 @@ elif config_data['selected_model'] == 'hybrid':
         cnn_dp=config_data['model']['cnn_dp'],
         lr=config_data['model']['lr'],
     )
-elif config_data['selected_model'] == 'ViT':
-    model = ViT(model_kwargs=config_data['vit'])
+elif config_data['selected_model'] == 'ViT Custom':
+    model = ViT(model_kwargs=config_data['vit_custom'])
+
+elif config_data['selected_model'] == 'ViT Fast':
+    model = FastViTFlaringModel(model_kwargs=config_data['vit_fast'])
+
 else:
     raise NotImplementedError(f"Architecture {config_data['selected_model']} not supported.")
 
