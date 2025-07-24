@@ -1,17 +1,12 @@
 import glob
 import os
-import re
-from collections import defaultdict
+import time
+import warnings
 from datetime import datetime
+from multiprocessing import Pool, cpu_count
 
 import numpy as np
-from astropy.io import fits
-import warnings
 import pandas as pd
-from astropy.visualization import ImageNormalize, AsinhStretch
-from multiprocessing import Pool, cpu_count
-from functools import partial
-import time
 from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
