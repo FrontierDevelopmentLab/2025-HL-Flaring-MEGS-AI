@@ -13,8 +13,8 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.nn import MSELoss
 from flaring.forecasting.data_loaders.SDOAIA_dataloader import AIA_GOESDataModule
-from models.vision_transformer_custom import ViT
-from models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
+from flaring.forecasting.models.vision_transformer_custom import ViT
+from flaring.forecasting.models.linear_and_hybrid import LinearIrradianceModel, HybridIrradianceModel
 from callback import ImagePredictionLogger_SXR, AttentionMapCallback
 from pytorch_lightning.callbacks import Callback
 

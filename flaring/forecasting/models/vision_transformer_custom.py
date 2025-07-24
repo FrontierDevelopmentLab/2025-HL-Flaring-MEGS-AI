@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,7 +9,7 @@ import torchvision
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from torchvision import transforms
 import pytorch_lightning as pl
-
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 class ViT(pl.LightningModule):
     def __init__(self, model_kwargs):
@@ -23,32 +24,78 @@ class ViT(pl.LightningModule):
         return self.model(x, return_attention=return_attention)
 
     def configure_optimizers(self):
-        # optimizer = optim.AdamW(self.parameters(), lr=self.lr)
-        # lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.1)
-        # return [optimizer], [lr_scheduler]
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = {
-            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3),
-            'monitor': 'val_loss',  # name of the metric to monitor
-            'interval': 'epoch',
+        # Use AdamW with weight decay for better regularization
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.lr,
+            weight_decay=0.01,  # Add weight decay
+            betas=(0.9, 0.95)  # Better betas for ViT
+        )
+
+        # Option 1: ReduceLROnPlateau (your current approach, fixed)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        #     optimizer,
+        #     mode='min',
+        #     factor=0.5,
+        #     patience=5,  # Increased patience
+        #     min_lr=1e-7,  # Set minimum LR
+        # )
+
+        # return {
+        #     'optimizer': optimizer,
+        #     'lr_scheduler': {
+        #         'scheduler': scheduler,
+        #         'monitor': 'val_loss',
+        #         'interval': 'epoch',
+        #         'frequency': 1,
+        #         'strict': True,
+        #         'name': 'learning_rate'  # This helps with logging
+        #     }
+        # }
+
+        # Option 2: Cosine Annealing with Warmup (recommended)
+        # Uncomment this section and comment out the above return statement to use
+
+
+        scheduler = CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=10,  # Restart every 10 epochs
+            T_mult=2,  # Double the cycle length after each restart
+            eta_min=1e-7  # Minimum learning rate
+        )
+
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'interval': 'epoch',
+                'frequency': 1,
+                'name': 'learning_rate'
+            }
         }
-        return {'optimizer': optimizer, 'lr_scheduler': scheduler}
+
 
     def _calculate_loss(self, batch, mode="train"):
         imgs, sxr = batch
         preds = self.model(imgs)
 
-        # Change loss function for regression
-        loss = F.huber_loss(torch.squeeze(preds), sxr)  # or F.l1_loss() or F.huber_loss()
+        # Use Huber loss for robust regression
+        loss = F.huber_loss(torch.squeeze(preds), sxr, delta=1.0)
 
-        # Change accuracy to a regression metric
-        # OR use RMSE:
-        # rmse = torch.sqrt(F.mse_loss(preds, labels))
+        # Calculate additional metrics
+        mae = F.l1_loss(torch.squeeze(preds), sxr)
+        mse = F.mse_loss(torch.squeeze(preds), sxr)
 
-        self.log(f"{mode}_loss", loss)
-        self.log('learning_rate', self.lr, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        # Log metrics
+        self.log(f"{mode}_loss", loss, prog_bar=True)
+        self.log(f"{mode}_mae", mae)
+        self.log(f"{mode}_mse", mse)
 
-        #self.log(f"{mode}_mae", mae)  # or f"{mode}_rmse" if using RMSE
+        # FIXED: Log current learning rate from optimizer
+        if mode == "train":
+            current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+            self.log('learning_rate', current_lr, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -60,6 +107,38 @@ class ViT(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         self._calculate_loss(batch, mode="test")
+
+    # Optional: Add learning rate warmup
+    def on_train_epoch_start(self):
+        # Warmup for first 5 epochs
+        if self.current_epoch < 5:
+            warmup_lr = self.lr * (self.current_epoch + 1) / 5
+            for param_group in self.trainer.optimizers[0].param_groups:
+                param_group['lr'] = warmup_lr
+
+
+# Alternative: Custom LR Scheduler with Warmup
+class WarmupCosineScheduler:
+    def __init__(self, optimizer, warmup_epochs, max_epochs, min_lr=1e-7):
+        self.optimizer = optimizer
+        self.warmup_epochs = warmup_epochs
+        self.max_epochs = max_epochs
+        self.base_lr = optimizer.param_groups[0]['lr']
+        self.min_lr = min_lr
+
+    def step(self, epoch):
+        if epoch < self.warmup_epochs:
+            # Linear warmup
+            lr = self.base_lr * (epoch + 1) / self.warmup_epochs
+        else:
+            # Cosine annealing
+            progress = (epoch - self.warmup_epochs) / (self.max_epochs - self.warmup_epochs)
+            lr = self.min_lr + (self.base_lr - self.min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
+
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+
+        return lr
 
 
 class VisionTransformer(nn.Module):

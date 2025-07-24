@@ -61,15 +61,16 @@ def predict_log_outputs_batch(model, dataset, batch_size=8, times=None, config_d
                     # Reshape CLS attention to spatial grid
                     attention_map = cls_attention.reshape(grid_h, grid_w)  # [64, 64]
 
+                    #attention_map_upsampled = attention_map
                     # Upsample attention map from 64x64 to 512x512 to match image size
-                    attention_map_upsampled = F.interpolate(
-                        attention_map.unsqueeze(0).unsqueeze(0),  # Add batch and channel dims
-                        size=(512, 512),
-                        mode='bilinear',
-                        align_corners=False
-                    ).squeeze()  # Remove batch and channel dims
+                    # attention_map_upsampled = F.interpolate(
+                    #     attention_map.unsqueeze(0).unsqueeze(0),  # Add batch and channel dims
+                    #     size=(512, 512),
+                    #     mode='bilinear',
+                    #     align_corners=False
+                    # ).squeeze()  # Remove batch and channel dims
 
-                    batch_weights.append(attention_map_upsampled.numpy())
+                    batch_weights.append(attention_map.numpy())
 
                 # Save all weights in this batch at once
                 if config_data:

@@ -4,8 +4,8 @@ base_data_dir: "/mnt/data/ML-Ready/mixed_data"  # Change this line for different
 base_checkpoint_dir: "/mnt/data/ML-Ready/mixed_data"    # Change this line for different datasets
 
 # Model configuration
-selected_model: "ViT"  # Options: "cnn", "vit",
-batch_size:    16
+selected_model: "ViT Custom"  # Options: "cnn", "vit",
+batch_size:    4
 epochs:        100
 megsai:
   architecture:
@@ -34,15 +34,15 @@ megsai:
 
 vit_custom:
     embed_dim: 512
-    num_channels: 6  # AIA has 6 channels
-    num_classes: 1  # Regression task, predicting SXR flux
+    num_channels: 6
+    num_classes: 1
     patch_size: 8
     num_patches: 4096
     hidden_dim: 512
-    num_heads: 4
-    num_layers: 4
-    dropout: 0.25
-    lr: .0001
+    num_heads: 8
+    num_layers: 6
+    dropout: 0.1
+    lr: 0.0001
 
 
 
@@ -67,5 +67,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: mixed-vit-deep-model
+  wb_name: mixed-vit-lrschedule-annealing-deep-model
   notes: Regression from AIA images (6 channels) to GOES SXR flux
