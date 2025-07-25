@@ -20,6 +20,8 @@ from pytorch_lightning.callbacks import Callback
 
 from flaring.forecasting.models.FastSpectralNet import FastViTFlaringModel
 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+os.environ["NCCL_DEBUG"] = "WARN"
 
 def resolve_config_variables(config_dict):
     """Recursively resolve ${variable} references within the config"""
@@ -203,7 +205,7 @@ trainer = Trainer(
     max_epochs=config_data['epochs'],
     callbacks=[attention, pth_callback],
     logger=wandb_logger,
-    log_every_n_steps=10
+    log_every_n_steps=10,
 )
 
 # Save checkpoint

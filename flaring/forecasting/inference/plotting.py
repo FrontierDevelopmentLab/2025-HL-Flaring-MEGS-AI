@@ -14,8 +14,8 @@ import time
 
 # Config
 aia_dir = "/mnt/data/ML-Ready/mixed_data/AIA/test/"
-weight_path = "/mnt/data/ML-Ready/mixed_data/weights2/"
-sxr_data_path = "/mnt/data/ML-Ready/mixed_data/outputs/deep-vit.csv"
+weight_path = "/mnt/data/ML-Ready/mixed_data/weights/"
+sxr_data_path = "/mnt/data/ML-Ready/mixed_data/outputs/deep-vit-weighted.csv"
 output_dir = "/mnt/data/ML-Ready/mixed_data/movie/"
 output_video = "aia_attention_sxr_movie.mp4"
 os.makedirs(output_dir, exist_ok=True)

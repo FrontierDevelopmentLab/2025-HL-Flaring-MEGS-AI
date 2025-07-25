@@ -145,12 +145,12 @@ class AIA_GOESDataModule(LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_ds, batch_size=self.batch_size,
-                          shuffle=True, num_workers=self.num_workers)
+                          shuffle=True, num_workers=self.num_workers, prefetch_factor= 4)
 
     def val_dataloader(self):
         return DataLoader(self.val_ds, batch_size=self.batch_size,
-                          shuffle=False, num_workers=self.num_workers)
+                          shuffle=False, num_workers=self.num_workers, prefetch_factor= 4)
 
     def test_dataloader(self):
         return DataLoader(self.test_ds, batch_size=self.batch_size,
-                          shuffle=False, num_workers=self.num_workers)
+                          shuffle=False, num_workers=self.num_workers, prefetch_factor= 1)
