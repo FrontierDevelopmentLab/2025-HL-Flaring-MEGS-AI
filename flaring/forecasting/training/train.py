@@ -90,7 +90,9 @@ class SequenceViTWrapper(LightningModule):
             # Get output dimension from a dummy forward pass
             with torch.no_grad():
                 dummy_input = torch.randn(1, 512, 512, 6)
-                dummy_output = self.model(dummy_input)
+                dummy_output = self.model(dummy_input, return_attention=False)  # Disable attention for init
+                if isinstance(dummy_output, tuple):  # Handle both cases
+                    dummy_output = dummy_output[0]
                 output_dim = dummy_output.shape[-1]
 
             self.temporal_proj = nn.Linear(sequence_length, 1)
@@ -100,7 +102,6 @@ class SequenceViTWrapper(LightningModule):
             self.feature_proj = None
 
     def forward(self, x: torch.Tensor, return_attention: bool = False):
-        # Handle both sequence and single-frame cases
         if return_attention:
             # For attention visualization, always use single frame
             if self.sequence_length > 1 and x.dim() == 5:
@@ -108,13 +109,13 @@ class SequenceViTWrapper(LightningModule):
                 attn_frame = x[:, 0] if x.size(0) > 1 else x[0:1, 0]
                 # Get attention weights
                 _, attn = self.model(attn_frame, return_attention=True)
+                preds = self._forward_predictions(x)
+                return preds, attn
             else:
                 # Single frame case
                 _, attn = self.model(x, return_attention=True)
-
-            # Get predictions for full input
-            preds = self._forward_predictions(x)
-            return preds, attn
+                preds = self._forward_predictions(x)
+                return preds, attn
         else:
             return self._forward_predictions(x)
 
@@ -212,7 +213,7 @@ def train():
     sequence_length = config_data['training']['sequence']['length'] if use_sequences else 1
 
     if use_sequences:
-        print("Training with Sequence Data")
+        print("Training with Sequence lenght :", sequence_length)
         data_loader = AIA_GOESSequenceDataModule(
             aia_train_dir=os.path.join(config_data['data']['paths']['aia'], "train"),
             aia_val_dir=os.path.join(config_data['data']['paths']['aia'], "val"),
@@ -296,26 +297,49 @@ def train():
         ),
         ImagePredictionLogger_SXR(
             data_samples=[data_loader.val_ds[i] for i in range(0, min(4, len(data_loader.val_ds)))],
-            sxr_norm=np.load(config_data['data']['paths']['sxr_norm'])
+            sxr_norm=np.load(config_data['data']['paths']['sxr_norm']
+                             )
         )
     ]
 
     if model_type == 'ViT':
-        callbacks.append(AttentionMapCallback())
+        callbacks.append(AttentionMapCallback(log_every_n_epochs=1,
+                                              num_samples=4)
+                         )
 
-    # Initialize trainer
     trainer = Trainer(
         default_root_dir=config_data['data']['paths']['checkpoints'],
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=1,
+        accelerator="gpu",
+        devices=4,
+        strategy="ddp_find_unused_parameters_false",  # More efficient than vanilla DDP
+        precision="bf16-mixed",
         max_epochs=config_data['training']['epochs'],
         logger=wandb_logger,
         callbacks=callbacks,
-        log_every_n_steps=10
+        log_every_n_steps=10,
+        gradient_clip_val=1.0,  # Prevent exploding gradients
+        accumulate_grad_batches=4,  # Effective batch size of 8 (4GPUs * batch_size 4 * accumulate 2)
     )
 
-    # Train and save final model
-    trainer.fit(model, data_loader)
+    # Add memory debugging
+    print("\n===== Memory Status Before Training =====")
+    print(f"PyTorch sees {torch.cuda.device_count()} GPUs")
+    for i in range(torch.cuda.device_count()):
+        print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+        print(f"Allocated: {torch.cuda.memory_allocated(i)/1e9:.2f}GB")
+        print(f"Cached:    {torch.cuda.memory_reserved(i)/1e9:.2f}GB\n")
+
+    # Clear cache before training
+    torch.cuda.empty_cache()
+
+    try:
+        trainer.fit(model, data_loader)
+    except RuntimeError as e:
+        if "out of memory" in str(e).lower():
+            print("\n!!! OOM Error Occurred !!!")
+            raise
+        else:
+            raise
 
     # Save final model
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -329,4 +353,6 @@ def train():
     wandb.finish()
 
 if __name__ == "__main__":
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    os.environ["NCCL_DEBUG"] = "WARN"
     train()

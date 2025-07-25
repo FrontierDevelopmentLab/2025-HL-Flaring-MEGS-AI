@@ -1,69 +1,81 @@
+# Base directories
+base_data_dir: "/mnt/data2/non_flares_event_dir"
+base_checkpoint_dir: "/mnt/data2/non_flares_event_dir"
 
-# Base directories - change these to switch datasets
-base_data_dir: "/mnt/data/ML-Ready/mixed_data"  # Change this line for different datasets
-base_checkpoint_dir: "/mnt/data/ML-Ready/mixed_data"    # Change this line for different datasets
+# Training configuration
+training:
+  batch_size: 2
+  epochs: 50
+  seed: 42
+  sequence:
+    enabled: true
+    length: 6   # Number of frames in sequence
+    stride: 1      # Step between sequence starts
 
-# Model configuration
-selected_model: "ViT"  # Options: "cnn", "vit",
-batch_size:    16
-epochs:        100
-megsai:
+# Model selection
+model:
+  type: "ViT"       # Options: ["ViT", "FastViT"]
+
+# ViT Configuration
+ViT:
+  # Architecture parameters
   architecture:
-    "cnn"
-  seed:
-    42
-  lr:
-    0.00001
-  cnn_model:
-    "resnet"
-  cnn_dp:
-    0.5
-
-#vit:
-#    embed_dim: 256
-#    num_channels: 6  # AIA has 6 channels
-#    num_classes: 1  # Regression task, predicting SXR flux
-#    patch_size: 32
-#    num_patches: 256
-#    hidden_dim: 256
-#    num_heads: 1
-#    num_layers: 1
-#    dropout: 0.25
-#    lr: .0001
-
-
-vit:
     embed_dim: 512
-    num_channels: 6  # AIA has 6 channels
-    num_classes: 1  # Regression task, predicting SXR flux
+    num_channels: 6
+    num_classes: 1
     patch_size: 8
     num_patches: 4096
     hidden_dim: 512
     num_heads: 4
     num_layers: 4
     dropout: 0.25
-    lr: .0001
 
+  # Training parameters
+  training:
+    lr: 0.0001
+    optimizer: "adamw"
+    weight_decay: 0.01
+    lr_scheduler: "cosine"
+    warmup_epochs: 5
 
+# FastViT Configuration
+FastViT:
+  # Architecture parameters
+  architecture:
+    embed_dim: 512
+    num_heads: 8
+    depth: 6
+    mlp_ratio: 4
+    qkv_bias: true
+    drop_rate: 0.1
+    attn_drop_rate: 0.1
 
-# Data paths (automatically constructed from base directories)
+  # Training parameters
+  training:
+    lr: 0.0001
+    optimizer: "adamw"
+    weight_decay: 0.01
+    lr_scheduler: "cosine"
+    warmup_epochs: 5
+
+# Data configuration
 data:
-  aia_dir:
-    "${base_data_dir}/AIA"
-  sxr_dir:
-    "${base_data_dir}/SXR"
-  sxr_norm_path:
-    "${base_data_dir}/SXR/normalized_sxr.npy"
-  checkpoints_dir:
-    "${base_checkpoint_dir}/checkpoints"
+  paths:
+    aia: "${base_data_dir}/AIA"
+    sxr: "${base_data_dir}/SXR"
+    sxr_norm: "${base_data_dir}/SXR/normalized_sxr.npy"
+    checkpoints: "${base_checkpoint_dir}/checkpoints"
 
+# Weights & Biases configuration
 wandb:
-  entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-  project: MEGS-AI ViT Testing Griffin
-  job_type: training
+  entity: "jayantbiradar619-university-of-arizona"
+  project: "MEGS-AI-ViT-Sequence-modelling"
+  job_type: "training"
   tags:
-    - aia
-    - sxr
-    - regression
-  wb_name: mixed-vit-deep-model
-  notes: Regression from AIA images (6 channels) to GOES SXR flux
+    - "aia"
+    - "sxr"
+    - "regression"
+    - "vit"          # Will be updated dynamically in code
+    - "sequence"     # Will be updated dynamically in code
+  run_name: "vit-seq12"  # Will be updated dynamically in code
+  notes: "Regression from AIA images to GOES SXR flux"
