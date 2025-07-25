@@ -17,7 +17,7 @@ aia_dir = "/mnt/data/ML-Ready/mixed_data/AIA/test/"
 weight_path = "/mnt/data/ML-Ready/mixed_data/weights/"
 sxr_data_path = "/mnt/data/ML-Ready/mixed_data/outputs/deep-vit-weighted.csv"
 output_dir = "/mnt/data/ML-Ready/mixed_data/movie/"
-output_video = "aia_attention_sxr_movie.mp4"
+output_video = "aia_attention_sxr_movie2.mp4"
 os.makedirs(output_dir, exist_ok=True)
 
 # Global variables for worker processes
@@ -179,9 +179,9 @@ def generate_frame_worker(timestamp):
 
 def main():
     # Generate timestamps
-    start_time = datetime(2023, 8, 5)
-    end_time = datetime(2023, 8, 8)
-    interval = timedelta(minutes=1)
+    start_time = datetime(2023, 8, 1)
+    end_time = datetime(2023, 8, 14)
+    interval = timedelta(minutes=60)
     timestamps = []
     while start_time <= end_time:
         timestamps.append(start_time.strftime("%Y-%m-%dT%H:%M:%S"))

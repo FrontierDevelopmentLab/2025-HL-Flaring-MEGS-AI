@@ -4,17 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="refactor model configuration and training scripts; update weight paths, batch size, and learning rate scheduler; add plotting functionality for attention maps">
-      <change afterPath="$PROJECT_DIR$/flaring/notebook_tests/loading_chkpt.ipynb" afterDir="false" />
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/data_loaders/SDOAIA_dataloader.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/data_loaders/SDOAIA_dataloader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/plotting.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/plotting.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/train.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -122,7 +114,7 @@
       <workItem from="1752774352707" duration="28648000" />
       <workItem from="1752962518515" duration="2550000" />
       <workItem from="1753306014729" duration="13973000" />
-      <workItem from="1753374480667" duration="31094000" />
+      <workItem from="1753374480667" duration="37922000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -236,7 +228,15 @@
       <option name="project" value="LOCAL" />
       <updated>1753380808931</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points">
+      <option name="closed" value="true" />
+      <created>1753454404812</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1753454404812</updated>
+    </task>
+    <option name="localTasksCounter" value="19" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -287,7 +287,8 @@
     <MESSAGE value="added plotly graphs for inference" />
     <MESSAGE value="add FastViT model for solar flare prediction; update configuration files and optimize inference batch processing" />
     <MESSAGE value="refactor model configuration and training scripts; update weight paths, batch size, and learning rate scheduler; add plotting functionality for attention maps" />
-    <option name="LAST_COMMIT_MESSAGE" value="refactor model configuration and training scripts; update weight paths, batch size, and learning rate scheduler; add plotting functionality for attention maps" />
+    <MESSAGE value="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points" />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
