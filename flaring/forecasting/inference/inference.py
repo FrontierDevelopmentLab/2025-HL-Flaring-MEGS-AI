@@ -8,6 +8,7 @@ from torch.utils.checkpoint import checkpoint
 from torch.utils.data import DataLoader
 from flaring.forecasting.data_loaders.SDOAIA_dataloader import AIA_GOESDataset
 import flaring.forecasting.models as models
+from flaring.forecasting.models.vision_transformer_custom import ViT
 from flaring.forecasting.training.callback import unnormalize_sxr
 import yaml
 import torch.nn.functional as F
@@ -53,7 +54,7 @@ def predict_log_outputs_batch(model, dataset, batch_size=8, times=None, config_d
                     cls_attention = avg_attention[0, 1:].cpu()  # [num_patches] - 1D array
 
                     # Calculate grid size based on patch size (assuming 8x8 patches)
-                    patch_size = 8
+                    patch_size = 16
                     grid_h, grid_w = 512 // patch_size, 512 // patch_size  # Should be 64, 64
 
                     #print(f"CLS attention shape: {cls_attention.shape}, Expected grid: {grid_h}x{grid_w}")
@@ -61,15 +62,16 @@ def predict_log_outputs_batch(model, dataset, batch_size=8, times=None, config_d
                     # Reshape CLS attention to spatial grid
                     attention_map = cls_attention.reshape(grid_h, grid_w)  # [64, 64]
 
+                    #attention_map_upsampled = attention_map
                     # Upsample attention map from 64x64 to 512x512 to match image size
-                    attention_map_upsampled = F.interpolate(
-                        attention_map.unsqueeze(0).unsqueeze(0),  # Add batch and channel dims
-                        size=(512, 512),
-                        mode='bilinear',
-                        align_corners=False
-                    ).squeeze()  # Remove batch and channel dims
+                    # attention_map_upsampled = F.interpolate(
+                    #     attention_map.unsqueeze(0).unsqueeze(0),  # Add batch and channel dims
+                    #     size=(512, 512),
+                    #     mode='bilinear',
+                    #     align_corners=False
+                    # ).squeeze()  # Remove batch and channel dims
 
-                    batch_weights.append(attention_map_upsampled.numpy())
+                    batch_weights.append(attention_map.numpy())
 
                 # Save all weights in this batch at once
                 if config_data:
@@ -160,9 +162,16 @@ def main():
 
     # Load model
     print("Loading model...")
-    state = torch.load(config_data['data']['checkpoint_path'], map_location=device, weights_only=False)
-    model = state['model']
-    model.to(device)
+    if ".ckpt" in config_data['data']['checkpoint_path']:
+        model = ViT.load_from_checkpoint(
+            config_data['data']['checkpoint_path']
+        )
+        model.eval()
+        model.to(device)
+    else:
+        state = torch.load(config_data['data']['checkpoint_path'], map_location=device, weights_only=False)
+        model = state['model']
+        model.to(device)
 
     # Enable optimizations
     model.eval()

@@ -4,9 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="added some nice animations and plots for analysis to plotting_test_results.ipynb">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/plotting.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/plotting.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -16,6 +16,7 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
+        <option value="Python Script" />
         <option value="Jupyter Notebook" />
       </list>
     </option>
@@ -58,12 +59,16 @@
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;Jupyter Settings&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;configurable.group.language&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/flaring/forecasting/training" />
+      <recent name="$PROJECT_DIR$/flaring/forecasting/models" />
+      <recent name="$PROJECT_DIR$/flaring/forecasting/data_loaders" />
+      <recent name="$PROJECT_DIR$/flaring/Forecasting/inference" />
       <recent name="$PROJECT_DIR$" />
     </key>
   </component>
@@ -108,6 +113,8 @@
       <updated>1752774351420</updated>
       <workItem from="1752774352707" duration="28648000" />
       <workItem from="1752962518515" duration="2550000" />
+      <workItem from="1753306014729" duration="13973000" />
+      <workItem from="1753374480667" duration="37922000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -133,7 +140,103 @@
       <option name="project" value="LOCAL" />
       <updated>1752847020229</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Implement Vision Transformer model (custom) and update configuration for model selection + changed data loader outputs (it was partially redundant)">
+      <option name="closed" value="true" />
+      <created>1753201034025</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1753201034025</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Working on attention callbacks">
+      <option name="closed" value="true" />
+      <created>1753203631078</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1753203631078</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Refactor attention map callback to log attention plots and add multi-head visualization">
+      <option name="closed" value="true" />
+      <created>1753205974581</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1753205974581</updated>
+    </task>
+    <task id="LOCAL-00010" summary="refactor model configuration and callbacks; update data paths and loss functions">
+      <option name="closed" value="true" />
+      <created>1753216904168</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1753216904168</updated>
+    </task>
+    <task id="LOCAL-00011" summary="refactor attention visualization; update callback to log attention maps and adjust model configuration">
+      <option name="closed" value="true" />
+      <created>1753221151466</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1753221151466</updated>
+    </task>
+    <task id="LOCAL-00012" summary="refactor model configuration; update vit parameters and checkpoint callback monitor">
+      <option name="closed" value="true" />
+      <created>1753223740556</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1753223740556</updated>
+    </task>
+    <task id="LOCAL-00013" summary="refactor model configuration and loss functions; update batch size, patch size, and logging metrics">
+      <option name="closed" value="true" />
+      <created>1753280393483</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1753280393483</updated>
+    </task>
+    <task id="LOCAL-00014" summary="refactor file structure; rename and reorganize model, callback, and configuration files; added configuration file for inference">
+      <option name="closed" value="true" />
+      <created>1753285792536</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1753285792536</updated>
+    </task>
+    <task id="LOCAL-00015" summary="added plotly graphs for inference">
+      <option name="closed" value="true" />
+      <created>1753290195559</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1753290195559</updated>
+    </task>
+    <task id="LOCAL-00016" summary="add FastViT model for solar flare prediction; update configuration files and optimize inference batch processing">
+      <option name="closed" value="true" />
+      <created>1753303152301</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1753303152301</updated>
+    </task>
+    <task id="LOCAL-00017" summary="refactor model configuration and training scripts; update weight paths, batch size, and learning rate scheduler; add plotting functionality for attention maps">
+      <option name="closed" value="true" />
+      <created>1753380808931</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1753380808931</updated>
+    </task>
+    <task id="LOCAL-00018" summary="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points">
+      <option name="closed" value="true" />
+      <created>1753454404812</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1753454404812</updated>
+    </task>
+    <option name="localTasksCounter" value="19" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -173,6 +276,29 @@
     <MESSAGE value="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints" />
     <MESSAGE value="added requirements.txt" />
     <MESSAGE value="added some nice animations and plots for analysis to plotting_test_results.ipynb" />
-    <option name="LAST_COMMIT_MESSAGE" value="added some nice animations and plots for analysis to plotting_test_results.ipynb" />
+    <MESSAGE value="Implement Vision Transformer model (custom) and update configuration for model selection + changed data loader outputs (it was partially redundant)" />
+    <MESSAGE value="Working on attention callbacks" />
+    <MESSAGE value="Refactor attention map callback to log attention plots and add multi-head visualization" />
+    <MESSAGE value="refactor model configuration and callbacks; update data paths and loss functions" />
+    <MESSAGE value="refactor attention visualization; update callback to log attention maps and adjust model configuration" />
+    <MESSAGE value="refactor model configuration; update vit parameters and checkpoint callback monitor" />
+    <MESSAGE value="refactor model configuration and loss functions; update batch size, patch size, and logging metrics" />
+    <MESSAGE value="refactor file structure; rename and reorganize model, callback, and configuration files; added configuration file for inference" />
+    <MESSAGE value="added plotly graphs for inference" />
+    <MESSAGE value="add FastViT model for solar flare prediction; update configuration files and optimize inference batch processing" />
+    <MESSAGE value="refactor model configuration and training scripts; update weight paths, batch size, and learning rate scheduler; add plotting functionality for attention maps" />
+    <MESSAGE value="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points" />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb</url>
+          <line>607</line>
+          <option name="timeStamp" value="4" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

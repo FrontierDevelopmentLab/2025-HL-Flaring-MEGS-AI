@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,7 +9,12 @@ import torchvision
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from torchvision import transforms
 import pytorch_lightning as pl
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
+norm = np.load("/mnt/data/ML-Ready/mixed_data/SXR/normalized_sxr.npy")
+
+def unnormalize_sxr(normalized_values, sxr_norm):
+    return 10 ** (normalized_values * float(sxr_norm[1].item()) + float(sxr_norm[0].item())) - 1e-8
 
 class ViT(pl.LightningModule):
     def __init__(self, model_kwargs):
@@ -23,32 +29,167 @@ class ViT(pl.LightningModule):
         return self.model(x, return_attention=return_attention)
 
     def configure_optimizers(self):
-        # optimizer = optim.AdamW(self.parameters(), lr=self.lr)
-        # lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.1)
-        # return [optimizer], [lr_scheduler]
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = {
-            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3),
-            'monitor': 'val_loss',  # name of the metric to monitor
-            'interval': 'epoch',
+        # Use AdamW with weight decay for better regularization
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.lr,
+            weight_decay=0.01,  # Add weight decay
+            betas=(0.9, 0.95)  # Better betas for ViT
+        )
+
+        # Option 1: ReduceLROnPlateau (your current approach, fixed)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        #     optimizer,
+        #     mode='min',
+        #     factor=0.5,
+        #     patience=5,  # Increased patience
+        #     min_lr=1e-7,  # Set minimum LR
+        # )
+
+        # return {
+        #     'optimizer': optimizer,
+        #     'lr_scheduler': {
+        #         'scheduler': scheduler,
+        #         'monitor': 'val_loss',
+        #         'interval': 'epoch',
+        #         'frequency': 1,
+        #         'strict': True,
+        #         'name': 'learning_rate'  # This helps with logging
+        #     }
+        # }
+
+        # Option 2: Cosine Annealing with Warmup (recommended)
+        # Uncomment this section and comment out the above return statement to use
+
+
+        scheduler = CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=10,  # Restart every 10 epochs
+            T_mult=2,  # Double the cycle length after each restart
+            eta_min=1e-7  # Minimum learning rate
+        )
+
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'interval': 'epoch',
+                'frequency': 1,
+                'name': 'learning_rate'
+            }
         }
-        return {'optimizer': optimizer, 'lr_scheduler': scheduler}
+
+    # M/X Class Flare Detection Optimized Weights
 
     def _calculate_loss(self, batch, mode="train"):
-        imgs, sxr = batch
-        preds = self.model(imgs)
+        imgs, sxr = batch  # sxr is normalized
+        preds = self.model(imgs)  # preds are also normalized (model trained on normalized data)
+        preds_squeezed = torch.squeeze(preds)
 
-        # Change loss function for regression
-        loss = F.huber_loss(torch.squeeze(preds), sxr)  # or F.l1_loss() or F.huber_loss()
+        # Calculate base loss (on normalized values)
+        base_loss = F.huber_loss(preds_squeezed, sxr, delta=1.0, reduction='none')
 
-        # Change accuracy to a regression metric
-        # OR use RMSE:
-        # rmse = torch.sqrt(F.mse_loss(preds, labels))
+        # ===== UNNORMALIZE FOR THRESHOLD COMPARISONS =====
+        sxr_un = unnormalize_sxr(sxr,norm)  # Convert to actual flux values
 
-        self.log(f"{mode}_loss", loss)
-        self.log('learning_rate', self.lr, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        preds_squeezed_un = unnormalize_sxr(preds_squeezed,norm)  # Convert predictions too
 
-        #self.log(f"{mode}_mae", mae)  # or f"{mode}_rmse" if using RMSE
+        # ===== M/X CLASS FLARE SPECIFIC THRESHOLDS =====
+        # GOES SXR flux thresholds for flare classes (in original units):
+        c_class_threshold = 1e-6  # C-class flares
+        m_class_threshold = 1e-5  # M-class flares
+        x_class_threshold = 1e-4  # X-class flares
+
+        # ===== STRATIFIED FLUX WEIGHTING =====
+        # Much more aggressive weighting for M/X class events
+        flux_weights = torch.ones_like(sxr_un)
+        flux_weights = torch.where(sxr_un >= c_class_threshold, 2.0, flux_weights)  # C-class: 2x
+        flux_weights = torch.where(sxr_un >= m_class_threshold, 10.0, flux_weights)  # M-class: 10x
+        flux_weights = torch.where(sxr_un >= x_class_threshold, 10.0, flux_weights)  # X-class: 25x
+
+        # ===== PREDICTION-BASED WEIGHTING FOR M/X =====
+        # Heavy penalty when model fails to predict M/X class flares
+        pred_weights = torch.ones_like(preds_squeezed_un)
+
+        # If actual is M/X but prediction is too low → massive penalty
+        missed_m_flares = (sxr_un >= m_class_threshold) & (preds_squeezed_un < m_class_threshold * 0.5)
+        missed_x_flares = (sxr_un >= x_class_threshold) & (preds_squeezed_un < x_class_threshold * 0.5)
+
+        pred_weights = torch.where(missed_m_flares, 10.0, pred_weights)  # 15x penalty for missed M
+        pred_weights = torch.where(missed_x_flares, 10.0, pred_weights)  # 50x penalty for missed X
+
+        # If prediction is M/X class → moderate penalty to reduce false positives
+        pred_weights = torch.where(preds_squeezed_un >= m_class_threshold, 3.0, pred_weights)
+
+        # ===== FALSE ALARM REDUCTION =====
+        # Penalize false alarms (predicting M/X when actual is lower)
+        false_m_alarms = (preds_squeezed_un >= m_class_threshold) & (sxr_un < c_class_threshold)
+        false_x_alarms = (preds_squeezed_un >= x_class_threshold) & (sxr_un < m_class_threshold)
+
+        false_alarm_weights = torch.ones_like(sxr_un)
+        false_alarm_weights = torch.where(false_m_alarms, 5.0, false_alarm_weights)  # 5x penalty for false M
+        false_alarm_weights = torch.where(false_x_alarms, 5.0, false_alarm_weights)  # 8x penalty for false X
+
+
+        # ===== COMBINE ALL WEIGHTS =====
+        total_weights = flux_weights * pred_weights * false_alarm_weights
+
+        # Cap maximum weight to prevent training instability
+        total_weights = torch.clamp(total_weights, min=1.0, max=100.0)
+
+        # Apply weights to loss
+        weighted_loss = base_loss * total_weights
+        loss = weighted_loss.mean()
+
+        # ===== M/X CLASS SPECIFIC METRICS =====
+        # Track performance specifically on M/X class events (using unnormalized values)
+        m_class_mask = sxr_un >= m_class_threshold
+        x_class_mask = sxr_un >= x_class_threshold
+
+        if m_class_mask.any():
+            m_class_mae = F.l1_loss(preds_squeezed[m_class_mask], sxr[m_class_mask])
+            self.log(f"{mode}_m_class_mae", m_class_mae, sync_dist=True)
+
+            # M-class detection rate (did we predict >= M when actual >= M?)
+            # FIXED: Use unnormalized predictions for threshold comparison
+            m_detection_rate = (preds_squeezed_un[m_class_mask] >= m_class_threshold).float().mean()
+            self.log(f"{mode}_m_detection_rate", m_detection_rate, sync_dist=True)
+
+        if x_class_mask.any():
+            x_class_mae = F.l1_loss(preds_squeezed[x_class_mask], sxr[x_class_mask])
+            self.log(f"{mode}_x_class_mae", x_class_mae, sync_dist=True)
+
+            # X-class detection rate
+            # FIXED: Use unnormalized predictions for threshold comparison
+            x_detection_rate = (preds_squeezed_un[x_class_mask] >= x_class_threshold).float().mean()
+            self.log(f"{mode}_x_detection_rate", x_detection_rate, sync_dist=True)
+
+        # False alarm rates
+        # FIXED: Use unnormalized values for threshold comparisons
+        quiet_mask = sxr_un < c_class_threshold
+        if quiet_mask.any():
+            false_m_rate = (preds_squeezed_un[quiet_mask] >= m_class_threshold).float().mean()
+            false_x_rate = (preds_squeezed_un[quiet_mask] >= x_class_threshold).float().mean()
+            self.log(f"{mode}_false_m_rate", false_m_rate, sync_dist=True)
+            self.log(f"{mode}_false_x_rate", false_x_rate, sync_dist=True)
+
+        # Calculate standard metrics (on normalized values)
+        mae = F.l1_loss(preds_squeezed, sxr)
+        mse = F.mse_loss(preds_squeezed, sxr)
+
+        # Log all metrics
+        self.log(f"{mode}_loss", loss, prog_bar=True, sync_dist=True)
+        self.log(f"{mode}_mae", mae, sync_dist=True)
+        self.log(f"{mode}_mse", mse, sync_dist=True)
+        self.log(f"{mode}_avg_weight", total_weights.mean(), sync_dist=True)
+        self.log(f"{mode}_max_weight", total_weights.max(), sync_dist=True)
+        self.log(f"{mode}_mx_flare_ratio", (sxr_un >= m_class_threshold).float().mean(), sync_dist=True)  # FIXED: Use unnormalized
+
+        # FIXED: Log current learning rate from optimizer
+        if mode == "train":
+            current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+            self.log('learning_rate', current_lr, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -60,6 +201,15 @@ class ViT(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         self._calculate_loss(batch, mode="test")
+
+    # Optional: Add learning rate warmup
+    def on_train_epoch_start(self):
+        # Warmup for first 5 epochs
+        if self.current_epoch < 5:
+            warmup_lr = self.lr * (self.current_epoch + 1) / 5
+            for param_group in self.trainer.optimizers[0].param_groups:
+                param_group['lr'] = warmup_lr
+
 
 
 class VisionTransformer(nn.Module):
