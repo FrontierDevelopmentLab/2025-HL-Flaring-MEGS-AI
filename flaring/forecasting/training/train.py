@@ -160,7 +160,7 @@ checkpoint_callback = ModelCheckpoint(
     monitor='val_loss',
     mode='min',
     save_top_k=1,
-    filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{valid_loss:.4f}}.pth"
+    filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{val_loss:.4f}}"
 )
 
 pth_callback = PTHCheckpointCallback(
@@ -203,7 +203,7 @@ trainer = Trainer(
     accelerator="gpu" if torch.cuda.is_available() else "cpu",
     devices=1,
     max_epochs=config_data['epochs'],
-    callbacks=[attention, pth_callback],
+    callbacks=[attention, checkpoint_callback],
     logger=wandb_logger,
     log_every_n_steps=10,
 )

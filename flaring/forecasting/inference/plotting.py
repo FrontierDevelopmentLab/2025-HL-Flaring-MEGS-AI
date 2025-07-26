@@ -3,13 +3,11 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import AsinhNorm
-from sunpy.visualization.colormaps import color_tables as ct
 from datetime import datetime, timedelta
 import imageio.v2 as imageio
 import pandas as pd
 from scipy.ndimage import zoom
 from multiprocessing import Pool, cpu_count
-from functools import partial
 import time
 
 # Config
