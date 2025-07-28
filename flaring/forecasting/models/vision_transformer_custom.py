@@ -1,3 +1,5 @@
+from collections import deque
+
 import math
 import numpy as np
 import torch
@@ -24,6 +26,7 @@ class ViT(pl.LightningModule):
         filtered_kwargs = dict(model_kwargs)
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
+        self.dynamic_loss = SXRRegressionDynamicLoss(window_size=50)
 
     def forward(self, x, return_attention=True):
         return self.model(x, return_attention=return_attention)
@@ -82,97 +85,29 @@ class ViT(pl.LightningModule):
     # M/X Class Flare Detection Optimized Weights
 
     def _calculate_loss(self, batch, mode="train"):
-        imgs, sxr = batch  # sxr is normalized
-        preds = self.model(imgs)  # preds are also normalized (model trained on normalized data)
+        imgs, sxr = batch
+        preds = self.model(imgs)
         preds_squeezed = torch.squeeze(preds)
 
-        # Calculate base loss (on normalized values)
-        base_loss = F.huber_loss(preds_squeezed, sxr, delta=1.0, reduction='none')
+        # Unnormalize
+        sxr_un = unnormalize_sxr(sxr, norm)
+        preds_squeezed_un = unnormalize_sxr(preds_squeezed, norm)
 
-        # ===== UNNORMALIZE FOR THRESHOLD COMPARISONS =====
-        sxr_un = unnormalize_sxr(sxr,norm)  # Convert to actual flux values
+        # Use regression-focused dynamic loss
+        loss, weights = self.dynamic_loss.calculate_loss(
+            preds_squeezed, sxr, sxr_un, preds_squeezed_un,
+            epoch=self.current_epoch
+        )
 
-        preds_squeezed_un = unnormalize_sxr(preds_squeezed,norm)  # Convert predictions too
-
-        # ===== M/X CLASS FLARE SPECIFIC THRESHOLDS =====
-        # GOES SXR flux thresholds for flare classes (in original units):
-        c_class_threshold = 1e-6  # C-class flares
-        m_class_threshold = 1e-5  # M-class flares
-        x_class_threshold = 1e-4  # X-class flares
-
-        # ===== STRATIFIED FLUX WEIGHTING =====
-        # Much more aggressive weighting for M/X class events
-        flux_weights = torch.ones_like(sxr_un)
-        flux_weights = torch.where(sxr_un >= c_class_threshold, 2.0, flux_weights)  # C-class: 2x
-        flux_weights = torch.where(sxr_un >= m_class_threshold, 10.0, flux_weights)  # M-class: 10x
-        flux_weights = torch.where(sxr_un >= x_class_threshold, 10.0, flux_weights)  # X-class: 25x
-
-        # ===== PREDICTION-BASED WEIGHTING FOR M/X =====
-        # Heavy penalty when model fails to predict M/X class flares
-        pred_weights = torch.ones_like(preds_squeezed_un)
-
-        # If actual is M/X but prediction is too low → massive penalty
-        missed_m_flares = (sxr_un >= m_class_threshold) & (preds_squeezed_un < m_class_threshold * 0.5)
-        missed_x_flares = (sxr_un >= x_class_threshold) & (preds_squeezed_un < x_class_threshold * 0.5)
-
-        pred_weights = torch.where(missed_m_flares, 10.0, pred_weights)  # 15x penalty for missed M
-        pred_weights = torch.where(missed_x_flares, 10.0, pred_weights)  # 50x penalty for missed X
-
-        # If prediction is M/X class → moderate penalty to reduce false positives
-        pred_weights = torch.where(preds_squeezed_un >= m_class_threshold, 3.0, pred_weights)
-
-        # ===== FALSE ALARM REDUCTION =====
-        # Penalize false alarms (predicting M/X when actual is lower)
-        false_m_alarms = (preds_squeezed_un >= m_class_threshold) & (sxr_un < c_class_threshold)
-        false_x_alarms = (preds_squeezed_un >= x_class_threshold) & (sxr_un < m_class_threshold)
-
-        false_alarm_weights = torch.ones_like(sxr_un)
-        false_alarm_weights = torch.where(false_m_alarms, 5.0, false_alarm_weights)  # 5x penalty for false M
-        false_alarm_weights = torch.where(false_x_alarms, 5.0, false_alarm_weights)  # 8x penalty for false X
-
-
-        # ===== COMBINE ALL WEIGHTS =====
-        total_weights = flux_weights * pred_weights * false_alarm_weights
-
-        # Cap maximum weight to prevent training instability
-        total_weights = torch.clamp(total_weights, min=1.0, max=100.0)
-
-        # Apply weights to loss
-        weighted_loss = base_loss * total_weights
-        loss = weighted_loss.mean()
-
-        # ===== M/X CLASS SPECIFIC METRICS =====
-        # Track performance specifically on M/X class events (using unnormalized values)
-        m_class_mask = sxr_un >= m_class_threshold
-        x_class_mask = sxr_un >= x_class_threshold
-
-        if m_class_mask.any():
-            m_class_mae = F.l1_loss(preds_squeezed[m_class_mask], sxr[m_class_mask])
-            self.log(f"{mode}_m_class_mae", m_class_mae, sync_dist=True)
-
-            # M-class detection rate (did we predict >= M when actual >= M?)
-            # FIXED: Use unnormalized predictions for threshold comparison
-            m_detection_rate = (preds_squeezed_un[m_class_mask] >= m_class_threshold).float().mean()
-            self.log(f"{mode}_m_detection_rate", m_detection_rate, sync_dist=True)
-
-        if x_class_mask.any():
-            x_class_mae = F.l1_loss(preds_squeezed[x_class_mask], sxr[x_class_mask])
-            self.log(f"{mode}_x_class_mae", x_class_mae, sync_dist=True)
-
-            # X-class detection rate
-            # FIXED: Use unnormalized predictions for threshold comparison
-            x_detection_rate = (preds_squeezed_un[x_class_mask] >= x_class_threshold).float().mean()
-            self.log(f"{mode}_x_detection_rate", x_detection_rate, sync_dist=True)
-
-        # False alarm rates
-        # FIXED: Use unnormalized values for threshold comparisons
-        quiet_mask = sxr_un < c_class_threshold
-        if quiet_mask.any():
-            false_m_rate = (preds_squeezed_un[quiet_mask] >= m_class_threshold).float().mean()
-            false_x_rate = (preds_squeezed_un[quiet_mask] >= x_class_threshold).float().mean()
-            self.log(f"{mode}_false_m_rate", false_m_rate, sync_dist=True)
-            self.log(f"{mode}_false_x_rate", false_x_rate, sync_dist=True)
-
+        # Log performance info
+        if mode == "train" and self.global_step % 200 == 0:
+            perf_info = self.dynamic_loss.get_performance_info()
+            for key, value in perf_info['range_multipliers'].items():
+                self.log(f"regression/{key}", value)
+            if 'recent_relative_error' in perf_info:
+                self.log("regression/relative_error", perf_info['recent_relative_error'])
+            if 'recent_bias' in perf_info:
+                self.log("regression/bias", perf_info['recent_bias'])
         # Calculate standard metrics (on normalized values)
         mae = F.l1_loss(preds_squeezed, sxr)
         mse = F.mse_loss(preds_squeezed, sxr)
@@ -181,9 +116,9 @@ class ViT(pl.LightningModule):
         self.log(f"{mode}_loss", loss, prog_bar=True, sync_dist=True)
         self.log(f"{mode}_mae", mae, sync_dist=True)
         self.log(f"{mode}_mse", mse, sync_dist=True)
-        self.log(f"{mode}_avg_weight", total_weights.mean(), sync_dist=True)
-        self.log(f"{mode}_max_weight", total_weights.max(), sync_dist=True)
-        self.log(f"{mode}_mx_flare_ratio", (sxr_un >= m_class_threshold).float().mean(), sync_dist=True)  # FIXED: Use unnormalized
+        #self.log(f"{mode}_avg_weight", total_weights.mean(), sync_dist=True)
+        #self.log(f"{mode}_max_weight", total_weights.max(), sync_dist=True)
+        #self.log(f"{mode}_mx_flare_ratio", (sxr_un >= m_class_threshold).float().mean(), sync_dist=True)  # FIXED: Use unnormalized
 
         # FIXED: Log current learning rate from optimizer
         if mode == "train":
@@ -349,3 +284,250 @@ def img_to_patch(x, patch_size, flatten_channels=True):
     if flatten_channels:
         x = x.flatten(2, 4)  # [B, H'*W', C*p_H*p_W]
     return x
+
+
+class SXRRegressionDynamicLoss:
+    """
+    Dynamic weighted loss for SXR flux regression from EUV images
+    Focuses on prediction accuracy across the full flux range with adaptive emphasis
+    """
+
+    def __init__(self, window_size=50):
+        # SXR flux ranges for context (but we're predicting continuous values)
+        self.quiet_level = 1e-9  # Typical background
+        self.c_threshold = 1e-6  # C-class reference
+        self.m_threshold = 1e-5  # M-class reference
+        self.x_threshold = 1e-4  # X-class reference
+
+        # Performance tracking for different flux ranges
+        self.window_size = window_size
+        self.quiet_errors = deque(maxlen=window_size)  # < 1e-6
+        self.moderate_errors = deque(maxlen=window_size)  # 1e-6 to 1e-5
+        self.high_errors = deque(maxlen=window_size)  # 1e-5 to 1e-4
+        self.extreme_errors = deque(maxlen=window_size)  # > 1e-4
+
+        # Relative error tracking (more important for regression)
+        self.relative_errors = deque(maxlen=window_size)
+
+        # Trend tracking (are we consistently under/over predicting?)
+        self.bias_tracking = deque(maxlen=window_size)
+
+        self.epoch = 0
+
+    def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un, epoch=None):
+        """
+        Calculate adaptive regression loss for SXR prediction
+
+        Args:
+            preds_squeezed: Normalized predictions
+            sxr: Normalized targets
+            sxr_un: Unnormalized targets (actual SXR flux)
+            preds_squeezed_un: Unnormalized predictions (actual SXR flux)
+            epoch: Current epoch
+        """
+        if epoch is not None:
+            self.epoch = epoch
+
+        # Base regression loss
+        base_loss = F.huber_loss(preds_squeezed, sxr, delta=1.0, reduction='none')
+
+        # Calculate adaptive weights based on flux ranges and recent performance
+        adaptive_weights = self._calculate_regression_weights(
+            sxr_un, preds_squeezed_un, base_loss
+        )
+
+        # Update performance tracking
+        self._update_regression_tracking(sxr_un, preds_squeezed_un, base_loss)
+
+        # Apply weights
+        weighted_loss = base_loss * adaptive_weights
+        loss = weighted_loss.mean()
+
+        return loss, adaptive_weights
+
+    def _calculate_regression_weights(self, sxr_un, preds_squeezed_un, base_loss):
+        """Calculate weights for regression focusing on flux magnitude and recent performance"""
+
+        # 1. Flux-magnitude based weighting (logarithmic importance)
+        flux_weights = self._get_flux_magnitude_weights(sxr_un)
+
+        # 2. Error-magnitude based weighting (focus on large errors)
+        error_weights = self._get_error_magnitude_weights(sxr_un, preds_squeezed_un)
+
+        # 3. Adaptive range-based weighting (based on recent performance per flux range)
+        range_weights = self._get_adaptive_range_weights(sxr_un)
+
+        # 4. Bias correction weights (fix systematic under/over prediction)
+        bias_weights = self._get_bias_correction_weights(sxr_un, preds_squeezed_un)
+
+        # 5. Curriculum weighting (gradually focus on harder examples)
+        curriculum_weights = self._get_curriculum_weights(base_loss)
+
+        # Combine all weights
+        total_weights = (flux_weights *
+                         error_weights *
+                         range_weights *
+                         bias_weights *
+                         curriculum_weights)
+
+        # Clamp to reasonable range
+        total_weights = torch.clamp(total_weights, min=0.5, max=20.0)
+
+        return total_weights
+
+    def _get_flux_magnitude_weights(self, sxr_un):
+        """Weight based on flux magnitude - higher flux = higher importance"""
+
+        # Logarithmic weighting: higher flux values get more attention
+        # But not too extreme to avoid ignoring quiet periods
+        log_flux = torch.log10(sxr_un + 1e-10)  # Add small constant to avoid log(0)
+
+        # Normalize to reasonable range
+        # quiet (~1e-9) → log ≈ -9 → weight ≈ 1.0
+        # C-class (1e-6) → log ≈ -6 → weight ≈ 1.3
+        # M-class (1e-5) → log ≈ -5 → weight ≈ 1.4
+        # X-class (1e-4) → log ≈ -4 → weight ≈ 1.5
+        normalized_log = (log_flux + 9) / 5  # Shift and scale
+        flux_weights = 1.0 + 0.5 * torch.clamp(normalized_log, 0, 1)
+
+        return flux_weights
+
+    def _get_error_magnitude_weights(self, sxr_un, preds_squeezed_un):
+        """Weight based on prediction error magnitude - larger errors get more attention"""
+
+        # Relative error is more meaningful for flux prediction
+        relative_error = torch.abs(sxr_un - preds_squeezed_un) / (sxr_un + 1e-10)
+
+        # Focus more on samples with large relative errors
+        error_percentile_75 = torch.quantile(relative_error, 0.75)
+        error_percentile_90 = torch.quantile(relative_error, 0.90)
+
+        error_weights = torch.ones_like(relative_error)
+        error_weights = torch.where(relative_error > error_percentile_75, 1.5, error_weights)
+        error_weights = torch.where(relative_error > error_percentile_90, 2.0, error_weights)
+
+        return error_weights
+
+    def _get_adaptive_range_weights(self, sxr_un):
+        """Adaptive weights based on recent performance in different flux ranges"""
+
+        range_weights = torch.ones_like(sxr_un)
+
+        # Get performance multipliers for different ranges
+        quiet_mult = self._get_range_performance_multiplier(self.quiet_errors)
+        moderate_mult = self._get_range_performance_multiplier(self.moderate_errors)
+        high_mult = self._get_range_performance_multiplier(self.high_errors)
+        extreme_mult = self._get_range_performance_multiplier(self.extreme_errors)
+
+        # Apply multipliers based on flux range
+        range_weights = torch.where(sxr_un < self.c_threshold, quiet_mult, range_weights)
+        range_weights = torch.where((sxr_un >= self.c_threshold) & (sxr_un < self.m_threshold),
+                                    moderate_mult, range_weights)
+        range_weights = torch.where((sxr_un >= self.m_threshold) & (sxr_un < self.x_threshold),
+                                    high_mult, range_weights)
+        range_weights = torch.where(sxr_un >= self.x_threshold, extreme_mult, range_weights)
+
+        return range_weights
+
+    def _get_range_performance_multiplier(self, error_history):
+        """Get multiplier based on recent performance in a flux range"""
+        if len(error_history) < 5:
+            return 1.0
+
+        recent_avg_error = np.mean(list(error_history))
+
+        # If recent errors are high, increase weight for this range
+        if recent_avg_error > 2.0:  # High error
+            return 2.0
+        elif recent_avg_error > 1.0:  # Moderate error
+            return 1.5
+        else:
+            return 1.0  # Good performance
+
+    def _get_bias_correction_weights(self, sxr_un, preds_squeezed_un):
+        """Correct for systematic bias (consistent under/over prediction)"""
+
+        bias_weights = torch.ones_like(sxr_un)
+
+        if len(self.bias_tracking) < 10:
+            return bias_weights
+
+        recent_bias = np.mean(list(self.bias_tracking))
+
+        # If we're systematically under-predicting, boost weight when actual > pred
+        if recent_bias < -0.2:  # Consistent under-prediction
+            under_pred_mask = preds_squeezed_un < sxr_un
+            bias_weights = torch.where(under_pred_mask, 1.5, bias_weights)
+
+        # If we're systematically over-predicting, boost weight when actual < pred
+        elif recent_bias > 0.2:  # Consistent over-prediction
+            over_pred_mask = preds_squeezed_un > sxr_un
+            bias_weights = torch.where(over_pred_mask, 1.5, bias_weights)
+
+        return bias_weights
+
+    def _get_curriculum_weights(self, base_loss):
+        """Curriculum learning for regression - gradually focus on harder examples"""
+
+        if self.epoch < 10:
+            # Early training: focus on easier examples (smaller losses)
+            curriculum_factor = 0.5
+        elif self.epoch < 30:
+            # Mid training: gradual transition
+            curriculum_factor = 0.5 + 0.5 * (self.epoch - 10) / 20
+        else:
+            # Late training: focus on all examples equally
+            curriculum_factor = 1.0
+
+        # Harder examples = higher loss values
+        loss_difficulty = (base_loss - base_loss.min()) / (base_loss.max() - base_loss.min() + 1e-8)
+        curriculum_weights = 1.0 + curriculum_factor * loss_difficulty
+
+        return curriculum_weights
+
+    def _update_regression_tracking(self, sxr_un, preds_squeezed_un, base_loss):
+        """Update performance tracking for different flux ranges"""
+
+        # Track errors by flux range
+        quiet_mask = sxr_un < self.c_threshold
+        moderate_mask = (sxr_un >= self.c_threshold) & (sxr_un < self.m_threshold)
+        high_mask = (sxr_un >= self.m_threshold) & (sxr_un < self.x_threshold)
+        extreme_mask = sxr_un >= self.x_threshold
+
+        # Calculate relative errors for each range
+        relative_errors = torch.abs(sxr_un - preds_squeezed_un) / (sxr_un + 1e-10)
+
+        if quiet_mask.any():
+            self.quiet_errors.append(relative_errors[quiet_mask].mean().item())
+        if moderate_mask.any():
+            self.moderate_errors.append(relative_errors[moderate_mask].mean().item())
+        if high_mask.any():
+            self.high_errors.append(relative_errors[high_mask].mean().item())
+        if extreme_mask.any():
+            self.extreme_errors.append(relative_errors[extreme_mask].mean().item())
+
+        # Track overall relative error
+        self.relative_errors.append(relative_errors.mean().item())
+
+        # Track prediction bias (positive = over-prediction, negative = under-prediction)
+        bias = torch.log10(preds_squeezed_un + 1e-10) - torch.log10(sxr_un + 1e-10)
+        self.bias_tracking.append(bias.mean().item())
+
+    def get_performance_info(self):
+        """Get current performance info for logging"""
+        info = {
+            'epoch': self.epoch,
+            'range_multipliers': {
+                'quiet_mult': self._get_range_performance_multiplier(self.quiet_errors),
+                'moderate_mult': self._get_range_performance_multiplier(self.moderate_errors),
+                'high_mult': self._get_range_performance_multiplier(self.high_errors),
+                'extreme_mult': self._get_range_performance_multiplier(self.extreme_errors)
+            }
+        }
+
+        if len(self.relative_errors) > 0:
+            info['recent_relative_error'] = np.mean(list(self.relative_errors))
+        if len(self.bias_tracking) > 0:
+            info['recent_bias'] = np.mean(list(self.bias_tracking))
+
+        return info
