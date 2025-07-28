@@ -1,8 +1,8 @@
 # Base directories - change these to switch datasets
 base_data_dir: "/mnt/data/ML-Ready/mixed_data"  # Change this line for different datasets
-output_path: "${base_data_dir}/outputs/deep-vit-weighted.csv"
-checkpoint: "mixed-vit-deep-model-epoch=19-val_loss=0.1484.pth"
-weight_path: "${base_data_dir}/weights/"
+output_path: "${base_data_dir}/outputs/deep-vit-weighted-clean.csv"
+#checkpoint: "mixed-vit-deep-model-epoch=19-val_loss=0.1484.pth"
+weight_path: "${base_data_dir}/weights2/"
 # Data paths (automatically constructed from base directories)
 data:
   aia_dir:
@@ -13,5 +13,5 @@ data:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoint_path:
     #"${base_data_dir}/checkpoints/${checkpoint}"
-    "/home/griffingoodwin/2025-HL-Flaring-MEGS-AI/flaring/forecasting/training/MEGS-AI ViT Testing Griffin/hztj5skd/checkpoints/epoch=89-step=101250.ckpt"
+    "/mnt/data/ML-Ready/mixed_data/checkpoints/mixed-vit-weighted-loss-cleanish-data-epoch=83-valid_loss=0.0000.pth.ckpt"
 

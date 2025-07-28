@@ -159,7 +159,7 @@ checkpoint_callback = ModelCheckpoint(
     dirpath=config_data['data']['checkpoints_dir'],
     monitor='val_loss',
     mode='min',
-    save_top_k=1,
+    save_top_k=4,
     filename=f"{config_data['wandb']['wb_name']}-{{epoch:02d}}-{{val_loss:.4f}}"
 )
 
