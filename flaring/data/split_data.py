@@ -3,11 +3,11 @@ import pandas as pd
 import shutil
 from datetime import datetime
 
-aia_data_dir = "/mnt/data/ML-Ready/AIA-Data/"
-sxr_data_dir = "/mnt/data/ML-Ready/GOES-18-SXR-B/"
-flares_event_dir = "/mnt/data/ML-Ready/flares_event_dir/"
-non_flares_event_dir = "/mnt/data/ML-Ready/non_flares_event_dir/"
-mixed_data_dir = "/mnt/data/ML-Ready/mixed_data/"
+aia_data_dir = "/mnt/data2/AIA_processed/"
+sxr_data_dir = "/mnt/data2/ML-Ready_clean/GOES-18-SXR-B/"
+flares_event_dir = "/mnt/data2/ML-Ready_clean/flares_event_dir/"
+non_flares_event_dir = "/mnt/data2/ML-Ready_clean/non_flares_event_dir/"
+mixed_data_dir = "/mnt/data2/ML-Ready_clean/mixed_data/"
 flare_events_csv = "/mnt/data/flare_list/flare_events_2023-07-01_2023-08-15.csv"
 
 # Create train, val, test subdirectories under flaring and non-flaring
@@ -29,9 +29,9 @@ for i, row in flare_event.iterrows():
     flaring_eve_list.append((start_time, end_time))
 
 # Define date ranges for splits
-train_range = (datetime(2023, 7, 1,0,0,0), datetime(2023, 7, 25,23,59,59))
-val_range = (datetime(2023, 7, 27,0,0,0), datetime(2023, 7, 31,23,59,59))
-test_range = (datetime(2023, 8, 1,0,0,0), datetime(2023, 8, 15,23,59,59))
+train_range = (datetime(2023, 7, 1, 0, 0, 0), datetime(2023, 7, 25, 23, 59, 59))
+val_range = (datetime(2023, 7, 27, 0, 0, 0), datetime(2023, 7, 31, 23, 59, 59))
+test_range = (datetime(2023, 8, 1, 0, 0, 0), datetime(2023, 8, 15, 23, 59, 59))
 
 # Get list of files in data_dir
 data_list = os.listdir(aia_data_dir)
