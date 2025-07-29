@@ -84,7 +84,7 @@ class SDODownloader:
 
         logging.info('Start download: %s' % id)
         # query Magnetogram
-        time_param = '%sZ' % date.isoformat('_', timespec='seconds')
+        #time_param = '%sZ' % date.isoformat('_', timespec='seconds')
         #ds_hmi = 'hmi.M_720s[%s]{magnetogram}' % time_param
         #keys_hmi = self.drms_client.keys(ds_hmi)
         #header_hmi, segment_hmi = self.drms_client.query(ds_hmi, key=','.join(keys_hmi), seg='magnetogram')
