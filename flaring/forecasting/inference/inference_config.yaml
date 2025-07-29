@@ -1,7 +1,7 @@
 # Base directories - change these to switch datasets
-base_data_dir: "/mnt/data/ML-Ready/mixed_data"  # Change this line for different datasets
-output_path: "${base_data_dir}/outputs/deep-vit.csv"
-checkpoint: "mixed-vit-deep-model-epoch=19-val_loss=0.1484.pth"
+base_data_dir: "/mnt/data2/non_flares_event_dir"  # Change this line for different datasets
+output_path: "${base_data_dir}/output/deep-vit8000-1.csv"
+checkpoint: "/ViT-final-20250726_000801.pt"
 # Data paths (automatically constructed from base directories)
 data:
   aia_dir:
@@ -12,4 +12,5 @@ data:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoint_path:
     "${base_data_dir}/checkpoints/${checkpoint}"
+
 
