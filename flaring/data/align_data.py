@@ -8,6 +8,7 @@ from multiprocessing import Pool, cpu_count
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import re
 
 warnings.filterwarnings('ignore')
 
@@ -64,7 +65,28 @@ def main():
 
     # Load GOES data
     print("Loading GOES data...")
-    goes = pd.read_csv("/mnt/data2/goes_combined/combined_g18_avg1m_20230701_20230815.csv")
+    # Directory containing GOES files
+    directory = "/mnt/data2/goes_combined"
+
+    # Regex to match filenames and extract G-number
+    pattern = re.compile(r"combined_g(\d+)_avg1m_\d+_\d+\.csv")
+
+    # Find all files matching the pattern and extract G-numbers
+    goes_files = []
+    for fname in os.listdir(directory):
+        match = pattern.match(fname)
+        if match:
+            g_number = int(match.group(1))
+            goes_files.append((g_number, fname))
+
+    if not goes_files:
+        raise FileNotFoundError("No GOES CSV files found in directory.")
+
+    # Select file with highest G-number
+    goes_files.sort(reverse=True)  # Highest G-number first
+    _, selected_file = goes_files[0]
+
+    goes = pd.read_csv(os.path.join(directory, selected_file))
     goes['time'] = pd.to_datetime(goes['time'], format='%Y-%m-%d %H:%M:%S')
 
     # Create output directories if they don't exist
@@ -77,7 +99,7 @@ def main():
         aia_files_split.append(file.split('/')[4].split('.')[0])
 
     common_timestamps = [
-        datetime.fromisoformat(date_str).strftime('%Y-%m-%d %H:%M:%S')
+        datetime.fromisoformat(date_str).strftime('%Y-%m-%dT%H:%M:%S')
         for date_str in aia_files_split]
 
     # Use all available CPU cores
