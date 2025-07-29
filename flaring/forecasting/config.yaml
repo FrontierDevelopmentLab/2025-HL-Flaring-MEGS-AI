@@ -1,20 +1,21 @@
 # Base directories
-base_data_dir: "/mnt/data2/non_flares_event_dir"
-base_checkpoint_dir: "/mnt/data2/non_flares_event_dir"
+base_data_dir: "/mnt/data3/ML-Ready_clean/non_flares_event_dir/"
+base_checkpoint_dir: "/mnt/data3/ML-Ready_clean/non_flares_event_dir/c"
 
 # Training configuration
 training:
   batch_size: 2
-  epochs: 50
+  epochs: 100
   seed: 42
   sequence:
     enabled: true
-    length: 6   # Number of frames in sequence
-    stride: 1      # Step between sequence starts
+    input_length: 6    # Changed from in_length to input_length
+    output_length: 6   # Changed from out_lenght to output_length
+    stride: 1          # Step between sequence starts
 
 # Model selection
 model:
-  type: "ViT"       # Options: ["ViT", "FastViT"]
+  type: "ViT"         # Options: ["ViT", "FastViT"]
 
 # ViT Configuration
 ViT:
@@ -69,7 +70,7 @@ data:
 # Weights & Biases configuration
 wandb:
   entity: "jayantbiradar619-university-of-arizona"
-  project: "MEGS-AI-ViT-Sequence-modelling"
+  project: "non-flaring-ViT-Sequence-modelling"
   job_type: "training"
   tags:
     - "aia"
@@ -77,5 +78,5 @@ wandb:
     - "regression"
     - "vit"          # Will be updated dynamically in code
     - "sequence"     # Will be updated dynamically in code
-  run_name: "vit-seq12"  # Will be updated dynamically in code
-  notes: "Regression from AIA images to GOES SXR flux"
+  run_name: "vit-seq6"  # Updated to reflect sequence length
+  notes: "Sequence-to-sequence regression from AIA images to GOES SXR flux"

@@ -28,14 +28,11 @@ from models.FastSpectralNet import FastViTFlaringModel
 
 # Import data modules
 from data_loaders.SDOAIA_dataloader import (
-    AIA_GOESDataModule,
     AIA_GOESSequenceDataModule
 )
 
 # Import callbacks
-from callback import ImagePredictionLogger_SXR, AttentionMapCallback
-
-
+from training.callback import ImagePredictionLogger_SXR, AttentionMapCallback
 
 # --------------------------
 # Utility Functions
@@ -68,15 +65,18 @@ def resolve_config_variables(config_dict):
     return recursive_substitute(config_dict, variables)
 
 # --------------------------
-# Model Wrappers
+# Model Wrappers (Modified for Seq2Seq)
 # --------------------------
 
-class SequenceViTWrapper(LightningModule):
-    """Wrapper for ViT to handle sequence input"""
-    def __init__(self, model_kwargs: Dict[str, Any], sequence_length: int = 12):
+class Seq2SeqViTWrapper(LightningModule):
+    """Wrapper for ViT to handle sequence-to-sequence prediction"""
+    def __init__(self, model_kwargs: Dict[str, Any],
+                 input_sequence_length: int = 6,
+                 output_sequence_length: int = 6):
         super().__init__()
         self.save_hyperparameters()
-        self.sequence_length = sequence_length
+        self.input_sequence_length = input_sequence_length
+        self.output_sequence_length = output_sequence_length
 
         # Filter out training-specific parameters
         transformer_kwargs = {
@@ -85,34 +85,31 @@ class SequenceViTWrapper(LightningModule):
         }
         self.model = ViT(transformer_kwargs)
 
-        # Add temporal processing
-        if sequence_length > 1:
-            # Get output dimension from a dummy forward pass
-            with torch.no_grad():
-                dummy_input = torch.randn(1, 512, 512, 6)
-                dummy_output = self.model(dummy_input, return_attention=False)  # Disable attention for init
-                if isinstance(dummy_output, tuple):  # Handle both cases
-                    dummy_output = dummy_output[0]
-                output_dim = dummy_output.shape[-1]
+        # Add temporal processing for sequence output
+        # Get output dimension from a dummy forward pass
+        with torch.no_grad():
+            dummy_input = torch.randn(1, 512, 512, 6)
+            dummy_output = self.model(dummy_input, return_attention=False)
+            if isinstance(dummy_output, tuple):
+                dummy_output = dummy_output[0]
+            output_dim = dummy_output.shape[-1]
 
-            self.temporal_proj = nn.Linear(sequence_length, 1)
-            self.feature_proj = nn.Linear(output_dim, output_dim)
-        else:
-            self.temporal_proj = None
-            self.feature_proj = None
+        # Temporal decoder for sequence output
+        self.temporal_decoder = nn.Sequential(
+            nn.Linear(output_dim, output_dim * 2),
+            nn.ReLU(),
+            nn.Linear(output_dim * 2, output_sequence_length)
+        )
 
     def forward(self, x: torch.Tensor, return_attention: bool = False):
         if return_attention:
-            # For attention visualization, always use single frame
-            if self.sequence_length > 1 and x.dim() == 5:
-                # Get first frame from sequence
+            # For attention visualization, use first frame
+            if x.dim() == 5:  # [B, T, H, W, C]
                 attn_frame = x[:, 0] if x.size(0) > 1 else x[0:1, 0]
-                # Get attention weights
                 _, attn = self.model(attn_frame, return_attention=True)
                 preds = self._forward_predictions(x)
                 return preds, attn
             else:
-                # Single frame case
                 _, attn = self.model(x, return_attention=True)
                 preds = self._forward_predictions(x)
                 return preds, attn
@@ -120,37 +117,48 @@ class SequenceViTWrapper(LightningModule):
             return self._forward_predictions(x)
 
     def _forward_predictions(self, x: torch.Tensor) -> torch.Tensor:
-        """Helper method to process predictions"""
-        if self.sequence_length > 1 and x.dim() == 5:
-            B, T, H, W, C = x.shape
-            x = x.reshape(B*T, H, W, C)
-            preds = self.model(x, return_attention=False)
-            preds = preds.reshape(B, T, -1)
+        """Process input sequence and return output sequence"""
+        B, T_in, H, W, C = x.shape
 
-            if self.feature_proj is not None:
-                preds = self.feature_proj(preds)
-            return self.temporal_proj(preds.transpose(1, 2)).squeeze(-1)
-        else:
-            return self.model(x, return_attention=False)
+        # Process each frame independently
+        x = x.reshape(B*T_in, H, W, C)
+        features = self.model(x, return_attention=False)
+        features = features.reshape(B, T_in, -1)
 
+        # Average features across input sequence
+        features = features.mean(dim=1)  # [B, D]
 
+        # Decode to output sequence
+        return self.temporal_decoder(features)  # [B, T_out]
 
     def configure_optimizers(self):
-        return self.model.configure_optimizers()
+        optimizer = optim.AdamW(self.parameters(),
+                                lr=self.hparams.model_kwargs.get('lr', 1e-4),
+                                weight_decay=self.hparams.model_kwargs.get('weight_decay', 0.01))
+
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=self.hparams.model_kwargs.get('warmup_epochs', 5),
+            eta_min=1e-6
+        )
+        return [optimizer], [scheduler]
 
     def _calculate_loss(self, batch, mode="train"):
-        imgs, sxr = batch
-        preds = self(imgs)
+        imgs, targets = batch  # targets shape: [B, T_out]
+        preds = self(imgs)  # preds shape: [B, T_out]
 
         # Ensure predictions and targets have same shape
         if isinstance(preds, tuple):  # When return_attention=True
-            preds = preds[0]  # Take only the predictions
+            preds = preds[0]
 
-        if preds.dim() > 1 and preds.shape[-1] == 1:
-            preds = preds.squeeze(-1)
+        # Calculate loss for each timestep
+        loss = F.huber_loss(preds, targets)
 
-        loss = F.huber_loss(preds, sxr)
+        # Log overall loss and per-timestep losses
         self.log(f"{mode}_loss", loss)
+        for t in range(self.output_sequence_length):
+            self.log(f"{mode}_loss_t{t}", F.huber_loss(preds[:, t], targets[:, t]))
+
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -162,36 +170,36 @@ class SequenceViTWrapper(LightningModule):
     def test_step(self, batch, batch_idx):
         return self._calculate_loss(batch, mode="test")
 
-class SequenceFastViTWrapper(FastViTFlaringModel):
-    """Extended FastViT for sequence input"""
-    def __init__(self, *args, sequence_length: int = 12, **kwargs):
+class Seq2SeqFastViTWrapper(FastViTFlaringModel):
+    """Extended FastViT for sequence-to-sequence prediction"""
+    def __init__(self, *args,
+                 input_sequence_length: int = 6,
+                 output_sequence_length: int = 6,
+                 **kwargs):
         super().__init__(*args, **kwargs)
-        self.sequence_length = sequence_length
-        if sequence_length > 1:
-            # Add temporal attention
-            self.temporal_attention = nn.MultiheadAttention(
-                embed_dim=self.hparams.embed_dim,
-                num_heads=self.hparams.num_heads,
-                batch_first=True
+        self.input_sequence_length = input_sequence_length
+        self.output_sequence_length = output_sequence_length
+
+        # Replace final regression head with sequence decoder
+        if hasattr(self, 'regression_head'):
+            self.regression_head = nn.Sequential(
+                nn.Linear(self.hparams.embed_dim, self.hparams.embed_dim * 2),
+                nn.ReLU(),
+                nn.Linear(self.hparams.embed_dim * 2, output_sequence_length)
             )
-            self.temporal_norm = nn.LayerNorm(self.hparams.embed_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x shape: [B, T, H, W, C]
-        if self.sequence_length > 1:
-            B, T, H, W, C = x.shape
-            # Process each frame
-            x = x.reshape(B*T, H, W, C)
-            x = super().forward(x)
-            x = x.reshape(B, T, -1)
+        # x shape: [B, T_in, H, W, C]
+        B, T_in, H, W, C = x.shape
+        x = x.reshape(B*T_in, H, W, C)
+        x = super().forward_features(x)  # Get features before regression head
+        x = x.reshape(B, T_in, -1)
 
-            # Temporal attention
-            x = self.temporal_norm(x)
-            x, _ = self.temporal_attention(x, x, x)
-            x = x.mean(dim=1)  # Aggregate temporal dimension
-            return self.regression_head(x).squeeze(-1)
-        else:
-            return super().forward(x)
+        # Aggregate temporal information
+        x = x.mean(dim=1)  # [B, D]
+
+        # Decode to output sequence
+        return self.regression_head(x)  # [B, T_out]
 
 # --------------------------
 # Training Script
@@ -208,38 +216,26 @@ def train():
         config_data = yaml.safe_load(stream)
     config_data = resolve_config_variables(config_data)
 
-    # Initialize data module
-    use_sequences = config_data['training']['sequence']['enabled']
-    sequence_length = config_data['training']['sequence']['length'] if use_sequences else 1
+    # Initialize data module for seq2seq
+    input_seq_length = config_data['training']['sequence']['input_length']
+    output_seq_length = config_data['training']['sequence']['output_length']
+    stride = config_data['training']['sequence']['stride']
 
-    if use_sequences:
-        print("Training with Sequence lenght :", sequence_length)
-        data_loader = AIA_GOESSequenceDataModule(
-            aia_train_dir=os.path.join(config_data['data']['paths']['aia'], "train"),
-            aia_val_dir=os.path.join(config_data['data']['paths']['aia'], "val"),
-            aia_test_dir=os.path.join(config_data['data']['paths']['aia'], "test"),
-            sxr_train_dir=os.path.join(config_data['data']['paths']['sxr'], "train"),
-            sxr_val_dir=os.path.join(config_data['data']['paths']['sxr'], "val"),
-            sxr_test_dir=os.path.join(config_data['data']['paths']['sxr'], "test"),
-            batch_size=config_data['training']['batch_size'],
-            num_workers=os.cpu_count(),
-            sxr_norm=np.load(config_data['data']['paths']['sxr_norm']),
-            sequence_length=sequence_length,
-            stride=config_data['training']['sequence']['stride']
-        )
-    else:
-        print("Training one to one regressor")
-        data_loader = AIA_GOESDataModule(
-            aia_train_dir=os.path.join(config_data['data']['paths']['aia'], "train"),
-            aia_val_dir=os.path.join(config_data['data']['paths']['aia'], "val"),
-            aia_test_dir=os.path.join(config_data['data']['paths']['aia'], "test"),
-            sxr_train_dir=os.path.join(config_data['data']['paths']['sxr'], "train"),
-            sxr_val_dir=os.path.join(config_data['data']['paths']['sxr'], "val"),
-            sxr_test_dir=os.path.join(config_data['data']['paths']['sxr'], "test"),
-            batch_size=config_data['training']['batch_size'],
-            num_workers=os.cpu_count(),
-            sxr_norm=np.load(config_data['data']['paths']['sxr_norm'])
-        )
+    print(f"Training Seq2Seq model with input length {input_seq_length}, output length {output_seq_length}, stride {stride}")
+
+    data_loader = AIA_GOESSequenceDataModule(
+        aia_train_dir=os.path.join(config_data['data']['paths']['aia'], "train"),
+        aia_val_dir=os.path.join(config_data['data']['paths']['aia'], "val"),
+        aia_test_dir=os.path.join(config_data['data']['paths']['aia'], "test"),
+        sxr_train_dir=os.path.join(config_data['data']['paths']['sxr'], "train"),
+        sxr_val_dir=os.path.join(config_data['data']['paths']['sxr'], "val"),
+        sxr_test_dir=os.path.join(config_data['data']['paths']['sxr'], "test"),
+        sxr_norm=np.load(config_data['data']['paths']['sxr_norm']),
+        sequence_length=input_seq_length,  # Using input length for sequence
+        stride=stride,
+        batch_size=config_data['training']['batch_size'],
+        num_workers=os.cpu_count()
+    )
     data_loader.setup()
 
     # Initialize model
@@ -249,25 +245,24 @@ def train():
             **config_data['ViT']['architecture'],
             **config_data['ViT']['training']
         }
-        if use_sequences:
-            model = SequenceViTWrapper(
-                model_kwargs=vit_kwargs,
-                sequence_length=sequence_length
-            )
-        else:
-            model = ViT(vit_kwargs)
+        model = Seq2SeqViTWrapper(
+            model_kwargs=vit_kwargs,
+            input_sequence_length=input_seq_length,
+            output_sequence_length=output_seq_length
+        )
     elif model_type == 'FastViT':
         fastvit_kwargs = {
             **config_data['FastViT']['architecture'],
             **config_data['FastViT']['training']
         }
-        model = SequenceFastViTWrapper(
+        model = Seq2SeqFastViTWrapper(
             d_input=6,
-            d_output=1,
+            d_output=output_seq_length,
             eve_norm=tuple(np.load(config_data['data']['paths']['sxr_norm'])),
             image_size=512,
             patch_size=32,
-            sequence_length=sequence_length,
+            input_sequence_length=input_seq_length,
+            output_sequence_length=output_seq_length,
             **fastvit_kwargs
         )
     else:
@@ -275,13 +270,13 @@ def train():
 
     # Initialize logger and callbacks
     wandb_tags = config_data['wandb']['tags'].copy()
-    wandb_tags[3] = model_type.lower()  # Update model type tag
-    wandb_tags[4] = "sequence" if use_sequences else "single-frame"  # Update sequence tag
+    wandb_tags[3] = model_type.lower()
+    wandb_tags[4] = f"seq2seq_{input_seq_length}to{output_seq_length}"
 
     wandb_logger = WandbLogger(
         entity=config_data['wandb']['entity'],
         project=config_data['wandb']['project'],
-        name=f"{model_type.lower()}-seq{sequence_length}" if use_sequences else f"{model_type.lower()}-single",
+        name=f"{model_type.lower()}-seq2seq-{input_seq_length}to{output_seq_length}",
         tags=wandb_tags,
         config=config_data
     )
@@ -293,35 +288,38 @@ def train():
             monitor='val_loss',
             save_top_k=1,
             mode='min',
-            filename=f"{model_type}-{{epoch:02d}}-{{val_loss:.4f}}"
+            filename=f"{model_type}-seq2seq-{{epoch:02d}}-{{val_loss:.4f}}"
         ),
         ImagePredictionLogger_SXR(
             data_samples=[data_loader.val_ds[i] for i in range(0, min(4, len(data_loader.val_ds)))],
-            sxr_norm=np.load(config_data['data']['paths']['sxr_norm']
-                             )
+            sxr_norm=np.load(config_data['data']['paths']['sxr_norm']),
+            log_every_n_epochs=1
+
         )
     ]
 
     if model_type == 'ViT':
-        callbacks.append(AttentionMapCallback(log_every_n_epochs=1,
-                                              num_samples=4)
-                         )
+        callbacks.append(AttentionMapCallback(
+            log_every_n_epochs=1,
+            num_samples=4,
+
+        ))
 
     trainer = Trainer(
         default_root_dir=config_data['data']['paths']['checkpoints'],
         accelerator="gpu",
         devices=4,
-        strategy="ddp_find_unused_parameters_false",  # More efficient than vanilla DDP
+        strategy="ddp_find_unused_parameters_false",
         precision="bf16-mixed",
         max_epochs=config_data['training']['epochs'],
         logger=wandb_logger,
         callbacks=callbacks,
         log_every_n_steps=10,
-        gradient_clip_val=1.0,  # Prevent exploding gradients
-        accumulate_grad_batches=4,  # Effective batch size of 8 (4GPUs * batch_size 4 * accumulate 2)
+        gradient_clip_val=1.0,
+        accumulate_grad_batches=4,
     )
 
-    # Add memory debugging
+    # Memory debugging
     print("\n===== Memory Status Before Training =====")
     print(f"PyTorch sees {torch.cuda.device_count()} GPUs")
     for i in range(torch.cuda.device_count()):
@@ -329,7 +327,6 @@ def train():
         print(f"Allocated: {torch.cuda.memory_allocated(i)/1e9:.2f}GB")
         print(f"Cached:    {torch.cuda.memory_reserved(i)/1e9:.2f}GB\n")
 
-    # Clear cache before training
     torch.cuda.empty_cache()
 
     try:
@@ -345,7 +342,7 @@ def train():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_path = os.path.join(
         config_data['data']['paths']['checkpoints'],
-        f"{model_type}-final-{timestamp}.pt"
+        f"{model_type}-seq2seq-final-{timestamp}.pt"
     )
     torch.save(model.state_dict(), model_path)
     print(f"Saved final model to: {model_path}")

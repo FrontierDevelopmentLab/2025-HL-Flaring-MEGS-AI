@@ -10,6 +10,14 @@ from scipy.ndimage import zoom
 import matplotlib
 matplotlib.use('Agg')
 
+def unnormalize_sxr(y, eve_norm):
+    eve_norm = torch.tensor(eve_norm).float()
+    norm_mean = eve_norm[0]
+    norm_stdev = eve_norm[1]
+    y= torch.tensor(y)
+    y = y * norm_stdev[None] + norm_mean[None]
+    return y
+
 class AttentionMapCallback(Callback):
     def __init__(self, log_every_n_epochs=1, num_samples=4):
         super().__init__()
@@ -97,22 +105,74 @@ class AttentionMapCallback(Callback):
             }, commit=True)
             plt.close(fig)
 
-    def _create_attention_figure(self, trainer, image, attn_weights, sample_idx, epoch, patch_size):
-        """Create 3-panel attention visualization"""
+class AttentionMapCallback(Callback):
+    def __init__(self, log_every_n_epochs=1, num_samples=4):
+        super().__init__()
+        self.log_every_n_epochs = max(1, log_every_n_epochs)
+        self.num_samples = max(1, min(num_samples, 4))
+        print(f"Initialized AttentionMapCallback with log_every_n_epochs={self.log_every_n_epochs}, num_samples={self.num_samples}")
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        # Skip during validation sanity check or if not logging epoch
+        if trainer.sanity_checking or trainer.current_epoch % self.log_every_n_epochs != 0:
+            return
+
+        # Only log on main process in DDP
+        if trainer.global_rank != 0:
+            return
+
         try:
-            # Convert and validate image
+            # Get validation data
+            val_loader = trainer.val_dataloaders[0] if isinstance(trainer.val_dataloaders, list) else trainer.val_dataloaders
+            batch = next(iter(val_loader))
+            imgs, _ = batch
+            imgs = imgs[:self.num_samples].to(pl_module.device)
+
+            # Handle sequence inputs - use first frame for visualization
+            if imgs.ndim == 5:  # [B, T, H, W, C]
+                print(f"Processing sequence input, using first frame for attention visualization")
+                imgs = imgs[:, 0]  # Take first frame [B, H, W, C]
+
+            # Get attention weights
+            with torch.no_grad():
+                outputs = pl_module(imgs, return_attention=True)
+                if isinstance(outputs, tuple):
+                    preds, attn_weights = outputs
+                else:
+                    raise ValueError("Model didn't return attention weights despite return_attention=True")
+
+            # Process samples
+            for idx in range(min(self.num_samples, len(imgs))):
+                fig = self._create_attention_figure(
+                    image=imgs[idx],
+                    attn_weights=attn_weights[:, idx] if attn_weights.dim() == 5 else attn_weights,
+                    sample_idx=idx,
+                    epoch=trainer.current_epoch,
+                    patch_size=getattr(pl_module.model, 'patch_size', 8)
+                )
+                trainer.logger.experiment.log({
+                    f"Attention/E{trainer.current_epoch}_S{idx}": wandb.Image(fig)
+                }, commit=False)
+                plt.close(fig)
+
+            # Commit all logged images
+            trainer.logger.experiment.log({}, commit=True)
+
+        except Exception as e:
+            print(f"⚠️ AttentionMapCallback error: {str(e)}")
+            fig = self._create_error_figure()
+            trainer.logger.experiment.log({
+                f"Attention/Error_E{trainer.current_epoch}": wandb.Image(fig)
+            }, commit=True)
+            plt.close(fig)
+
+    def _create_attention_figure(self, image, attn_weights, sample_idx, epoch, patch_size):
+        """Create attention visualization figure"""
+        try:
+            # Convert image to numpy and handle different formats
             img_np = image.detach().cpu().numpy()
-            if img_np.ndim == 4:  # [T,C,H,W] sequence
-                print(f"Rank {trainer.global_rank}: Sample {sample_idx}: Using first frame from sequence with shape {img_np.shape}")
-                img_np = img_np[0]  # Take first frame
             if img_np.shape[0] in {1, 3, 6}:  # CHW format
                 img_np = np.transpose(img_np, (1, 2, 0))  # HWC
-            print(f"Rank {trainer.global_rank}: Sample {sample_idx}: Image shape after processing: {img_np.shape}")
-
-            # Validate image size
-            expected_image_size = 512  # Based on config
-            if img_np.shape[0] != expected_image_size or img_np.shape[1] != expected_image_size:
-                raise ValueError(f"Image size {img_np.shape[0]}x{img_np.shape[1]} does not match expected {expected_image_size}x{expected_image_size}")
 
             # Create RGB composite
             rgb_img = np.zeros((img_np.shape[0], img_np.shape[1], 3))
@@ -121,30 +181,16 @@ class AttentionMapCallback(Callback):
                     channel = img_np[..., ch]
                     rgb_img[..., i] = (channel - channel.min()) / (channel.max() - channel.min() + 1e-8)
 
-            # Get attention from last layer and average heads
-            last_layer_attn = attn_weights[-1].mean(0) if attn_weights.dim() == 4 else attn_weights[-1]  # [num_heads, seq_len, seq_len] -> [seq_len, seq_len]
-            cls_attn = last_layer_attn[0, 1:] if last_layer_attn.shape[0] > 1 else last_layer_attn[1:]  # CLS token attention to patches
-            print(f"Rank {trainer.global_rank}: Sample {sample_idx}: CLS attention shape: {cls_attn.shape}")
-
-            # Calculate grid size
-            seq_len = cls_attn.shape[0]
-            grid_size = int(np.sqrt(seq_len))
-            if grid_size * grid_size != seq_len:
-                raise ValueError(f"Attention length {seq_len} isn't square (grid_size={grid_size})")
-
-            # Validate patch size
-            expected_grid_size = 512 // patch_size
-            if grid_size != expected_grid_size:
-                raise ValueError(f"Grid size {grid_size} does not match expected {expected_grid_size} for patch_size={patch_size}")
+            # Process attention weights
+            last_layer_attn = attn_weights[-1].mean(0) if attn_weights.dim() == 4 else attn_weights[-1]
+            cls_attn = last_layer_attn[0, 1:] if last_layer_attn.shape[0] > 1 else last_layer_attn[1:]
 
             # Reshape and resize attention
+            grid_size = int(np.sqrt(cls_attn.shape[0]))
             attn_map = cls_attn.reshape(grid_size, grid_size).cpu().numpy()
             zoom_factor = img_np.shape[0] / grid_size
             attn_resized = zoom(attn_map, (zoom_factor, zoom_factor), order=1)
-
-            # Normalize attention map
             attn_resized = (attn_resized - attn_resized.min()) / (attn_resized.max() - attn_resized.min() + 1e-8)
-            print(f"Rank {trainer.global_rank}: Sample {sample_idx}: Attention map shape after resize: {attn_resized.shape}")
 
             # Create figure
             fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -167,11 +213,10 @@ class AttentionMapCallback(Callback):
             axes[2].axis('off')
 
             plt.tight_layout()
-            print(f"Rank {trainer.global_rank}: Sample {sample_idx}: Attention figure created successfully")
             return fig
 
         except Exception as e:
-            print(f"Rank {trainer.global_rank}: ⚠️ Error in _create_attention_figure for sample {sample_idx}: {str(e)}")
+            print(f"⚠️ Error in _create_attention_figure: {str(e)}")
             return self._create_error_figure()
 
     def _create_error_figure(self):
@@ -181,63 +226,89 @@ class AttentionMapCallback(Callback):
                 ha='center', va='center', fontsize=12)
         ax.axis('off')
         plt.tight_layout()
-        print(f"Rank {trainer.global_rank}: Created error figure due to visualization failure")
         return fig
 
 class ImagePredictionLogger_SXR(Callback):
-    """Enhanced SXR logger with debug features"""
+    """Modified to handle both single predictions and sequences"""
+
     def __init__(self, data_samples, sxr_norm, log_every_n_epochs=1):
         super().__init__()
-        self.data_samples = data_samples[:4]  # Limit samples
+        self.data_samples = data_samples
         self.sxr_norm = sxr_norm
-        self.log_every_n_epochs = max(1, log_every_n_epochs)
-        self._debug_data = []
+        self.log_every_n_epochs = log_every_n_epochs
+        self.epoch_counter = 0
+
+    def denormalize_sxr(self, normalized):
+        """Convert normalized SXR back to original scale"""
+        return 10 ** (normalized * self.sxr_norm[1] + self.sxr_norm[0])
+
+    def _create_rgb_composite(self, img_np):
+        """Convert 6-channel AIA image to 3-channel RGB composite"""
+        # Select channels for RGB (adjust these indices based on your channel order)
+        r_channel = img_np[..., 0]  # 94Å
+        g_channel = img_np[..., 2]  # 193Å
+        b_channel = img_np[..., 4]  # 335Å
+
+        # Normalize each channel
+        r_norm = (r_channel - r_channel.min()) / (r_channel.max() - r_channel.min() + 1e-8)
+        g_norm = (g_channel - g_channel.min()) / (g_channel.max() - g_channel.min() + 1e-8)
+        b_norm = (b_channel - b_channel.min()) / (b_channel.max() - b_channel.min() + 1e-8)
+
+        # Stack into RGB image
+        rgb_img = np.stack([r_norm, g_norm, b_norm], axis=-1)
+        return rgb_img
 
     def on_validation_epoch_end(self, trainer, pl_module):
-        if trainer.current_epoch % self.log_every_n_epochs != 0:
+        self.epoch_counter += 1
+        if self.epoch_counter % self.log_every_n_epochs != 0:
             return
 
-        try:
-            pred_sxr, true_sxr = [], []
-            debug_info = {'epoch': trainer.current_epoch}
+        # Get a batch of sample data
+        sample_imgs, sample_targets = zip(*self.data_samples)
+        sample_imgs = torch.stack(sample_imgs).to(pl_module.device)
+        sample_targets = torch.stack(sample_targets).to(pl_module.device)
 
-            for i, (aia, target) in enumerate(self.data_samples):
-                with torch.no_grad():
-                    pred = pl_module(aia.unsqueeze(0).to(pl_module.device))
-                    if isinstance(pred, tuple):
-                        pred = pred[0]
-                    pred_sxr.append(pred.item())
-                    true_sxr.append(target.item())
+        # Get predictions
+        with torch.no_grad():
+            predictions = pl_module(sample_imgs)
+            if isinstance(predictions, tuple):  # Handle attention case
+                predictions = predictions[0]
 
-            # Unnormalize and validate
-            true_unorm = 10**(np.array(true_sxr)*self.sxr_norm[1] + self.sxr_norm[0])
-            pred_unorm = 10**(np.array(pred_sxr)*self.sxr_norm[1] + self.sxr_norm[0])
+        # Handle sequence vs single prediction
+        if sample_imgs.ndim == 5:  # Sequence input [B, T, H, W, C]
+            # For sequences, we'll log the first and last frames
+            sample_imgs = sample_imgs[:, 0]  # First frame
+            if sample_targets.ndim == 2:  # Sequence target
+                sample_targets = sample_targets[:, -1]  # Last target
+                predictions = predictions[:, -1]  # Last prediction
 
-            debug_info.update({
-                'true_values': true_unorm.tolist(),
-                'pred_values': pred_unorm.tolist()
-            })
+        # Denormalize values
+        denorm_targets = self.denormalize_sxr(sample_targets.cpu().numpy())
+        denorm_preds = self.denormalize_sxr(predictions.cpu().numpy())
 
-            # Create and log plots
-            fig1 = self._create_comparison_plot(true_unorm, pred_unorm)
-            fig2 = self._create_error_plot(true_unorm, pred_unorm)
+        # Log to wandb
+        logged_images = []
+        for img, tgt, pred in zip(sample_imgs, denorm_targets, denorm_preds):
+            # Convert to numpy and handle different formats
+            img_np = img.cpu().numpy()
+            if img_np.shape[0] in {1, 3, 6}:  # CHW format
+                img_np = np.transpose(img_np, (1, 2, 0))  # HWC
 
-            trainer.logger.experiment.log({
-                "SXR_Predictions": wandb.Image(fig1),
-                "SXR_Errors": wandb.Image(fig2),
-                "sxr_debug": wandb.Table(
-                    columns=list(debug_info.keys()),
-                    data=[list(debug_info.values())]
-                )
-            })
+            # Create RGB composite
+            rgb_img = self._create_rgb_composite(img_np)
 
-            plt.close(fig1)
-            plt.close(fig2)
-            self._debug_data.append(debug_info)
+            # Create matplotlib figure
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.imshow(rgb_img)
+            ax.set_title(f"Target: {tgt:.2f}, Pred: {pred:.2f}")
+            ax.axis('off')
+            plt.tight_layout()
 
-        except Exception as e:
-            print(f"⚠️ SXR Logger error: {str(e)}")
+            # Log the figure
+            logged_images.append(wandb.Image(fig, caption=f"Target: {tgt:.2f}, Pred: {pred:.2f}"))
+            plt.close(fig)
 
+        trainer.logger.experiment.log({"val/examples": logged_images})
     def _create_comparison_plot(self, true, pred):
         """Enhanced comparison plot with error bars"""
         fig, ax = plt.subplots(figsize=(12, 6))

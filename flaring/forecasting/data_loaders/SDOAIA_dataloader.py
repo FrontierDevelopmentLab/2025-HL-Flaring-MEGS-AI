@@ -74,7 +74,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         return self._load_sample(timestamp)
 
 class AIA_GOESSequenceDataset(AIA_GOESDataset):
-    """Dataset for time-series regression with sequence of AIA images."""
+    """Dataset for sequence-to-sequence regression with sequence of AIA images."""
 
     def __init__(self, aia_dir: str, sxr_dir: str, sequence_length: int = 12, stride: int = 1,
                  transform=None, sxr_transform=None, target_size: Tuple[int, int] = (512, 512)):
@@ -95,10 +95,10 @@ class AIA_GOESSequenceDataset(AIA_GOESDataset):
         return len(self.sequences)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Returns a sequence of AIA images and the corresponding SXR value (for the last frame)."""
+        """Returns a sequence of AIA images and the corresponding sequence of SXR values."""
         sequence_timestamps = self.sequences[idx]
 
-        # Load all images in the sequence
+        # Load all images and SXR values in the sequence
         aia_sequence = []
         sxr_values = []
 
@@ -109,10 +109,10 @@ class AIA_GOESSequenceDataset(AIA_GOESDataset):
 
         # Stack images along new dimension (T, H, W, C)
         aia_sequence = torch.stack(aia_sequence)
+        # Stack SXR values into a tensor (T,)
+        sxr_values = torch.stack(sxr_values)
 
-        # For sequence-to-one prediction, we use the last SXR value
-        # For sequence-to-sequence, we would return all sxr_values
-        return aia_sequence, sxr_values[-1]
+        return aia_sequence, sxr_values
 
 class AIA_GOESDataModule(LightningDataModule):
     """DataModule for one-to-one regression."""
@@ -171,7 +171,7 @@ class AIA_GOESDataModule(LightningDataModule):
                           shuffle=False, num_workers=self.num_workers)
 
 class AIA_GOESSequenceDataModule(LightningDataModule):
-    """DataModule for time-series regression."""
+    """DataModule for sequence-to-sequence regression."""
 
     def __init__(self, aia_train_dir: str, aia_val_dir: str, aia_test_dir: str,
                  sxr_train_dir: str, sxr_val_dir: str, sxr_test_dir: str,

@@ -5,9 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import torch
 import re
-from sklearn.metrics import mean_squared_error, mean_absolute_error, confusion_matrix
-
-
+from sklearn.metrics import mean_squared_error, mean_absolute_error, confusion_matrix,r2_score,accuracy_score
 
 def convert_tensor_strings(value):
     """Convert string representations of tensors to floats"""
@@ -49,6 +47,8 @@ def calculate_metrics(csv_file_path,output_dir):
 
     rmse = np.sqrt(mean_squared_error(y_true,y_pred))
     mae = mean_absolute_error(y_true , y_pred)
+    r_squared = r2_score(y_true, y_pred)
+   # acc_score = accuracy_score(y_true,y_pred)
     #TSS = calculate_tss()
 
     plot_regression(y_true , y_pred ,output_dir )
@@ -56,6 +56,8 @@ def calculate_metrics(csv_file_path,output_dir):
 
     print("RMSE :", rmse)
     print("MAE :", mae)
+    print("R2 Score :",r_squared )
+   # print("Accuracy :", acc_score )
 
 def plot_regression(y_true, y_pred, output_dir):
     """Create regression visualization plots"""
@@ -81,7 +83,7 @@ def plot_regression(y_true, y_pred, output_dir):
     plt.title('Residual Plot')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'regression_plots.png'))
+    plt.savefig(os.path.join(output_dir, 'regression_plots3.png'))
     plt.close()
 
 """
