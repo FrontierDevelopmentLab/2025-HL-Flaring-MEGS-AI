@@ -1,3 +1,5 @@
+from collections import deque
+
 import math
 import numpy as np
 import torch
@@ -24,6 +26,7 @@ class ViT(pl.LightningModule):
         filtered_kwargs = dict(model_kwargs)
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
+        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=100)
 
     def forward(self, x, return_attention=True):
         return self.model(x, return_attention=return_attention)
@@ -33,38 +36,12 @@ class ViT(pl.LightningModule):
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.lr,
-            weight_decay=0.01,  # Add weight decay
-            betas=(0.9, 0.95)  # Better betas for ViT
+            weight_decay=0.01,
         )
-
-        # Option 1: ReduceLROnPlateau (your current approach, fixed)
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        #     optimizer,
-        #     mode='min',
-        #     factor=0.5,
-        #     patience=5,  # Increased patience
-        #     min_lr=1e-7,  # Set minimum LR
-        # )
-
-        # return {
-        #     'optimizer': optimizer,
-        #     'lr_scheduler': {
-        #         'scheduler': scheduler,
-        #         'monitor': 'val_loss',
-        #         'interval': 'epoch',
-        #         'frequency': 1,
-        #         'strict': True,
-        #         'name': 'learning_rate'  # This helps with logging
-        #     }
-        # }
-
-        # Option 2: Cosine Annealing with Warmup (recommended)
-        # Uncomment this section and comment out the above return statement to use
-
 
         scheduler = CosineAnnealingWarmRestarts(
             optimizer,
-            T_0=10,  # Restart every 10 epochs
+            T_0=20,  # Restart every 20 epochs
             T_mult=2,  # Double the cycle length after each restart
             eta_min=1e-7  # Minimum learning rate
         )
@@ -82,113 +59,34 @@ class ViT(pl.LightningModule):
     # M/X Class Flare Detection Optimized Weights
 
     def _calculate_loss(self, batch, mode="train"):
-        imgs, sxr = batch  # sxr is normalized
-        preds = self.model(imgs)  # preds are also normalized (model trained on normalized data)
+        imgs, sxr = batch
+        preds = self.model(imgs)
         preds_squeezed = torch.squeeze(preds)
 
-        # Calculate base loss (on normalized values)
-        base_loss = F.huber_loss(preds_squeezed, sxr, delta=1.0, reduction='none')
+        # Unnormalize
+        sxr_un = unnormalize_sxr(sxr, norm)
+        preds_squeezed_un = unnormalize_sxr(preds_squeezed, norm)
 
-        # ===== UNNORMALIZE FOR THRESHOLD COMPARISONS =====
-        sxr_un = unnormalize_sxr(sxr,norm)  # Convert to actual flux values
+        # Use adaptive rare event loss
+        loss, weights = self.adaptive_loss.calculate_loss(
+            preds_squeezed, sxr, sxr_un, preds_squeezed_un
+        )
 
-        preds_squeezed_un = unnormalize_sxr(preds_squeezed,norm)  # Convert predictions too
+        # Log adaptation info
+        if mode == "train" and self.global_step % 200 == 0:
+            multipliers = self.adaptive_loss.get_current_multipliers()
+            for key, value in multipliers.items():
+                self.log(f"adaptive/{key}", value)
 
-        # ===== M/X CLASS FLARE SPECIFIC THRESHOLDS =====
-        # GOES SXR flux thresholds for flare classes (in original units):
-        c_class_threshold = 1e-6  # C-class flares
-        m_class_threshold = 1e-5  # M-class flares
-        x_class_threshold = 1e-4  # X-class flares
-
-        # ===== STRATIFIED FLUX WEIGHTING =====
-        # Much more aggressive weighting for M/X class events
-        flux_weights = torch.ones_like(sxr_un)
-        flux_weights = torch.where(sxr_un >= c_class_threshold, 2.0, flux_weights)  # C-class: 2x
-        flux_weights = torch.where(sxr_un >= m_class_threshold, 10.0, flux_weights)  # M-class: 10x
-        flux_weights = torch.where(sxr_un >= x_class_threshold, 10.0, flux_weights)  # X-class: 25x
-
-        # ===== PREDICTION-BASED WEIGHTING FOR M/X =====
-        # Heavy penalty when model fails to predict M/X class flares
-        pred_weights = torch.ones_like(preds_squeezed_un)
-
-        # If actual is M/X but prediction is too low → massive penalty
-        missed_m_flares = (sxr_un >= m_class_threshold) & (preds_squeezed_un < m_class_threshold * 0.5)
-        missed_x_flares = (sxr_un >= x_class_threshold) & (preds_squeezed_un < x_class_threshold * 0.5)
-
-        pred_weights = torch.where(missed_m_flares, 10.0, pred_weights)  # 15x penalty for missed M
-        pred_weights = torch.where(missed_x_flares, 10.0, pred_weights)  # 50x penalty for missed X
-
-        # If prediction is M/X class → moderate penalty to reduce false positives
-        pred_weights = torch.where(preds_squeezed_un >= m_class_threshold, 3.0, pred_weights)
-
-        # ===== FALSE ALARM REDUCTION =====
-        # Penalize false alarms (predicting M/X when actual is lower)
-        false_m_alarms = (preds_squeezed_un >= m_class_threshold) & (sxr_un < c_class_threshold)
-        false_x_alarms = (preds_squeezed_un >= x_class_threshold) & (sxr_un < m_class_threshold)
-
-        false_alarm_weights = torch.ones_like(sxr_un)
-        false_alarm_weights = torch.where(false_m_alarms, 5.0, false_alarm_weights)  # 5x penalty for false M
-        false_alarm_weights = torch.where(false_x_alarms, 5.0, false_alarm_weights)  # 8x penalty for false X
-
-
-        # ===== COMBINE ALL WEIGHTS =====
-        total_weights = flux_weights * pred_weights * false_alarm_weights
-
-        # Cap maximum weight to prevent training instability
-        total_weights = torch.clamp(total_weights, min=1.0, max=100.0)
-
-        # Apply weights to loss
-        weighted_loss = base_loss * total_weights
-        loss = weighted_loss.mean()
-
-        # ===== M/X CLASS SPECIFIC METRICS =====
-        # Track performance specifically on M/X class events (using unnormalized values)
-        m_class_mask = sxr_un >= m_class_threshold
-        x_class_mask = sxr_un >= x_class_threshold
-
-        if m_class_mask.any():
-            m_class_mae = F.l1_loss(preds_squeezed[m_class_mask], sxr[m_class_mask])
-            self.log(f"{mode}_m_class_mae", m_class_mae, sync_dist=True)
-
-            # M-class detection rate (did we predict >= M when actual >= M?)
-            # FIXED: Use unnormalized predictions for threshold comparison
-            m_detection_rate = (preds_squeezed_un[m_class_mask] >= m_class_threshold).float().mean()
-            self.log(f"{mode}_m_detection_rate", m_detection_rate, sync_dist=True)
-
-        if x_class_mask.any():
-            x_class_mae = F.l1_loss(preds_squeezed[x_class_mask], sxr[x_class_mask])
-            self.log(f"{mode}_x_class_mae", x_class_mae, sync_dist=True)
-
-            # X-class detection rate
-            # FIXED: Use unnormalized predictions for threshold comparison
-            x_detection_rate = (preds_squeezed_un[x_class_mask] >= x_class_threshold).float().mean()
-            self.log(f"{mode}_x_detection_rate", x_detection_rate, sync_dist=True)
-
-        # False alarm rates
-        # FIXED: Use unnormalized values for threshold comparisons
-        quiet_mask = sxr_un < c_class_threshold
-        if quiet_mask.any():
-            false_m_rate = (preds_squeezed_un[quiet_mask] >= m_class_threshold).float().mean()
-            false_x_rate = (preds_squeezed_un[quiet_mask] >= x_class_threshold).float().mean()
-            self.log(f"{mode}_false_m_rate", false_m_rate, sync_dist=True)
-            self.log(f"{mode}_false_x_rate", false_x_rate, sync_dist=True)
-
-        # Calculate standard metrics (on normalized values)
-        mae = F.l1_loss(preds_squeezed, sxr)
-        mse = F.mse_loss(preds_squeezed, sxr)
-
-        # Log all metrics
-        self.log(f"{mode}_loss", loss, prog_bar=True, sync_dist=True)
-        self.log(f"{mode}_mae", mae, sync_dist=True)
-        self.log(f"{mode}_mse", mse, sync_dist=True)
-        self.log(f"{mode}_avg_weight", total_weights.mean(), sync_dist=True)
-        self.log(f"{mode}_max_weight", total_weights.max(), sync_dist=True)
-        self.log(f"{mode}_mx_flare_ratio", (sxr_un >= m_class_threshold).float().mean(), sync_dist=True)  # FIXED: Use unnormalized
-
+            self.log("adaptive/avg_weight", weights.mean())
+            self.log("adaptive/max_weight", weights.max())
         # FIXED: Log current learning rate from optimizer
         if mode == "train":
             current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
             self.log('learning_rate', current_lr, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+
+        if mode == "val":
+            self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         return loss
 
@@ -202,13 +100,6 @@ class ViT(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         self._calculate_loss(batch, mode="test")
 
-    # Optional: Add learning rate warmup
-    def on_train_epoch_start(self):
-        # Warmup for first 5 epochs
-        if self.current_epoch < 5:
-            warmup_lr = self.lr * (self.current_epoch + 1) / 5
-            for param_group in self.trainer.optimizers[0].param_groups:
-                param_group['lr'] = warmup_lr
 
 
 
@@ -349,3 +240,136 @@ def img_to_patch(x, patch_size, flatten_channels=True):
     if flatten_channels:
         x = x.flatten(2, 4)  # [B, H'*W', C*p_H*p_W]
     return x
+
+
+class SXRRegressionDynamicLoss:
+    def __init__(self, window_size=100):
+        self.c_threshold = 1e-6
+        self.m_threshold = 1e-5
+        self.x_threshold = 1e-4
+
+        self.window_size = window_size
+        self.quiet_errors = deque(maxlen=window_size)
+        self.c_errors = deque(maxlen=window_size)
+        self.m_errors = deque(maxlen=window_size)
+        self.x_errors = deque(maxlen=window_size)
+
+        self.base_weights = {
+            'quiet': 1.0,
+            'c_class': 2.0,
+            'm_class': 5.0,
+            'x_class': 10.0
+        }
+
+    def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
+        base_loss = F.huber_loss(preds_squeezed, sxr, delta=1.0, reduction='none')
+        weights = self._get_adaptive_weights(sxr_un, preds_squeezed_un, base_loss)
+        self._update_tracking(sxr_un, preds_squeezed_un, base_loss)
+        weighted_loss = base_loss * weights
+        loss = weighted_loss.mean()
+        return loss, weights
+
+    def _get_adaptive_weights(self, sxr_un, preds_squeezed_un, base_loss):
+        device = sxr_un.device
+
+        # Get continuous multipliers per class with custom params
+        quiet_mult = self._get_performance_multiplier(
+            self.quiet_errors, max_multiplier=1.5, min_multiplier=0.5, sensitivity=2.0
+        )
+        c_mult = self._get_performance_multiplier(
+            self.c_errors, max_multiplier=3.0, min_multiplier=0.7, sensitivity=2.5
+        )
+        m_mult = self._get_performance_multiplier(
+            self.m_errors, max_multiplier=7.0, min_multiplier=0.8, sensitivity=3.0
+        )
+        x_mult = self._get_performance_multiplier(
+            self.x_errors, max_multiplier=15.0, min_multiplier=0.9, sensitivity=4.0
+        )
+
+        quiet_weight = self.base_weights['quiet'] * quiet_mult
+        c_weight = self.base_weights['c_class'] * c_mult
+        m_weight = self.base_weights['m_class'] * m_mult
+        x_weight = self.base_weights['x_class'] * x_mult
+
+        weights = torch.ones_like(sxr_un, device=device)
+        weights = torch.where(sxr_un < self.c_threshold, quiet_weight, weights)
+        weights = torch.where((sxr_un >= self.c_threshold) & (sxr_un < self.m_threshold), c_weight, weights)
+        weights = torch.where((sxr_un >= self.m_threshold) & (sxr_un < self.x_threshold), m_weight, weights)
+        weights = torch.where(sxr_un >= self.x_threshold, x_weight, weights)
+
+        # Normalize so mean weight ~1.0 (optional, helps stability)
+        mean_weight = torch.mean(weights)
+        weights = weights / (mean_weight + 1e-8)
+
+        # Clamp extreme weights
+        weights = torch.clamp(weights, min=0.3, max=20.0)
+
+        # Save for logging
+        self.current_multipliers = {
+            'quiet_mult': quiet_mult,
+            'c_mult': c_mult,
+            'm_mult': m_mult,
+            'x_mult': x_mult,
+            'quiet_weight': quiet_weight,
+            'c_weight': c_weight,
+            'm_weight': m_weight,
+            'x_weight': x_weight
+        }
+
+        return weights
+
+    def _get_performance_multiplier(self, error_history, max_multiplier=10.0, min_multiplier=0.5, sensitivity=3.0):
+        if len(error_history) < 10:
+            return 1.0
+        recent = np.mean(list(error_history)[-20:])
+        overall = np.mean(list(error_history)) + 1e-8
+        ratio = recent / overall
+        multiplier = np.exp(sensitivity * (ratio - 1))
+        multiplier = np.clip(multiplier, min_multiplier, max_multiplier)
+        return multiplier
+
+    def _update_tracking(self, sxr_un, preds_squeezed_un, base_loss):
+        try:
+            sxr_np = sxr_un.detach().cpu().numpy()
+            preds_np = preds_squeezed_un.detach().cpu().numpy()
+            log_error = np.abs(np.log10(np.maximum(sxr_np, 1e-12)) - np.log10(np.maximum(preds_np, 1e-12)))
+
+            quiet_mask = sxr_np < self.c_threshold
+            if quiet_mask.sum() > 0:
+                self.quiet_errors.append(float(np.mean(log_error[quiet_mask])))
+
+            c_mask = (sxr_np >= self.c_threshold) & (sxr_np < self.m_threshold)
+            if c_mask.sum() > 0:
+                self.c_errors.append(float(np.mean(log_error[c_mask])))
+
+            m_mask = (sxr_np >= self.m_threshold) & (sxr_np < self.x_threshold)
+            if m_mask.sum() > 0:
+                self.m_errors.append(float(np.mean(log_error[m_mask])))
+
+            x_mask = sxr_np >= self.x_threshold
+            if x_mask.sum() > 0:
+                self.x_errors.append(float(np.mean(log_error[x_mask])))
+
+        except Exception:
+            pass
+
+    def get_current_multipliers(self):
+        """Get current performance multipliers for logging"""
+        return {
+            'quiet_mult': self._get_performance_multiplier(self.quiet_errors),
+            'c_mult': self._get_performance_multiplier(self.c_errors),
+            'm_mult': self._get_performance_multiplier(self.m_errors),
+            'x_mult': self._get_performance_multiplier(self.x_errors),
+            'quiet_count': len(self.quiet_errors),
+            'c_count': len(self.c_errors),
+            'm_count': len(self.m_errors),
+            'x_count': len(self.x_errors),
+            'quiet_error': np.mean(self.quiet_errors) if self.quiet_errors else 0.0,
+            'c_error': np.mean(self.c_errors) if self.c_errors else 0.0,
+            'm_error': np.mean(self.m_errors) if self.m_errors else 0.0,
+            'x_error': np.mean(self.x_errors) if self.x_errors else 0.0,
+            'quiet_weight': self.current_multipliers['quiet_weight'],
+            'c_weight': self.current_multipliers['c_weight'],
+            'm_weight': self.current_multipliers['m_weight'],
+            'x_weight': self.current_multipliers['x_weight']
+        }

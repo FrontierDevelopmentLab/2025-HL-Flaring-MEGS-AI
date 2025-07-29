@@ -3,21 +3,19 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import AsinhNorm
-from sunpy.visualization.colormaps import color_tables as ct
 from datetime import datetime, timedelta
 import imageio.v2 as imageio
 import pandas as pd
 from scipy.ndimage import zoom
 from multiprocessing import Pool, cpu_count
-from functools import partial
 import time
 
 # Config
 aia_dir = "/mnt/data/ML-Ready/mixed_data/AIA/test/"
-weight_path = "/mnt/data/ML-Ready/mixed_data/weights/"
-sxr_data_path = "/mnt/data/ML-Ready/mixed_data/outputs/deep-vit-weighted.csv"
+weight_path = "/mnt/data/ML-Ready/mixed_data/weights2/"
+sxr_data_path = "/mnt/data/ML-Ready/mixed_data/outputs/deep-vit-weighted-clean.csv"
 output_dir = "/mnt/data/ML-Ready/mixed_data/movie/"
-output_video = "aia_attention_sxr_movie2.mp4"
+output_video = "aia_attention_sxr_movie4.mp4"
 os.makedirs(output_dir, exist_ok=True)
 
 # Global variables for worker processes
@@ -104,8 +102,8 @@ def generate_frame_worker(timestamp):
         gs = fig.add_gridspec(2, 4, width_ratios=[1, 1, 1, 2.5], hspace=0.2, wspace=0.2)
 
         wavs = ['94', '131', '171', '193', '211', '304']
-        att_max = np.percentile(attention_data, 99)
-        att_min = np.percentile(attention_data, 1)
+        att_max = np.percentile(attention_data, 100)
+        att_min = np.percentile(attention_data, 0)
         att_norm = AsinhNorm(vmin=att_min, vmax=att_max, clip=False)
 
         # Plot AIA images with attention maps
@@ -181,7 +179,7 @@ def main():
     # Generate timestamps
     start_time = datetime(2023, 8, 1)
     end_time = datetime(2023, 8, 14)
-    interval = timedelta(minutes=60)
+    interval = timedelta(minutes=15)
     timestamps = []
     while start_time <= end_time:
         timestamps.append(start_time.strftime("%Y-%m-%dT%H:%M:%S"))

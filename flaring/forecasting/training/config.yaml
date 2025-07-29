@@ -5,8 +5,8 @@ base_checkpoint_dir: "/mnt/data/ML-Ready/mixed_data"    # Change this line for d
 
 # Model configuration
 selected_model: "ViT Custom"  # Options: "cnn", "vit",
-batch_size:    32
-epochs:        100
+batch_size:    64
+epochs:        250
 megsai:
   architecture:
     "cnn"
@@ -67,5 +67,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: mixed-vit-weighted-loss
+  wb_name: mixed-vit-diff-weighted-loss-new
   notes: Regression from AIA images (6 channels) to GOES SXR flux
