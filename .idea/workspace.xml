@@ -6,8 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="add visualization notebook and refactor model configuration; update batch size, patch size, and dropout rate; implement dynamic loss for SXR regression">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/data_loaders/sxr_normalization.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/data_loaders/sxr_normalization.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/base_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/base_model.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/train.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

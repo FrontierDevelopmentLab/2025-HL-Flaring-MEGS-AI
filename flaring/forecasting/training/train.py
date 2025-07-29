@@ -183,10 +183,10 @@ elif config_data['selected_model'] == 'hybrid':
     model = HybridIrradianceModel(
         d_input=6,
         d_output=1,
-        cnn_model=config_data['model']['cnn_model'],
+        cnn_model=config_data['megsai']['cnn_model'],
         ln_model=True,
-        cnn_dp=config_data['model']['cnn_dp'],
-        lr=config_data['model']['lr'],
+        cnn_dp=config_data['megsai']['cnn_dp'],
+        lr=config_data['megsai']['lr'],
     )
 elif config_data['selected_model'] == 'ViT Custom':
     model = ViT(model_kwargs=config_data['vit_custom'])
@@ -198,16 +198,26 @@ else:
     raise NotImplementedError(f"Architecture {config_data['selected_model']} not supported.")
 
 # Trainer
-trainer = Trainer(
-    default_root_dir=config_data['data']['checkpoints_dir'],
-    accelerator="gpu" if torch.cuda.is_available() else "cpu",
-    devices=1,
-    max_epochs=config_data['epochs'],
-    callbacks=[attention, checkpoint_callback],
-    logger=wandb_logger,
-    log_every_n_steps=10,
-)
-
+if config_data['selected_model'] == 'ViT':
+    trainer = Trainer(
+        default_root_dir=config_data['data']['checkpoints_dir'],
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        devices=1,
+        max_epochs=config_data['epochs'],
+        callbacks=[attention, checkpoint_callback],
+        logger=wandb_logger,
+        log_every_n_steps=10,
+    )
+else:
+    trainer = Trainer(
+        default_root_dir=config_data['data']['checkpoints_dir'],
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        devices=1,
+        max_epochs=config_data['epochs'],
+        callbacks=[checkpoint_callback],
+        logger=wandb_logger,
+        log_every_n_steps=10,
+    )
 # Save checkpoint
 trainer.fit(model, data_loader)
 

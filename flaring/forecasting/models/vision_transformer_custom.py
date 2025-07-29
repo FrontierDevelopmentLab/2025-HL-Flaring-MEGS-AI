@@ -13,7 +13,7 @@ from torchvision import transforms
 import pytorch_lightning as pl
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
-norm = np.load("/mnt/data/ML-Ready/mixed_data/SXR/normalized_sxr.npy")
+norm = np.load("/mnt/data/ML-Ready_clean/mixed_data/SXR/normalized_sxr.npy")
 
 def unnormalize_sxr(normalized_values, sxr_norm):
     return 10 ** (normalized_values * float(sxr_norm[1].item()) + float(sxr_norm[0].item())) - 1e-8

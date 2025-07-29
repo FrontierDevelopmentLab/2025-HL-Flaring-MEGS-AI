@@ -5,7 +5,7 @@ from flaring.forecasting.models.base_model import BaseModel
 from torchvision.models import resnet18
 
 class LinearIrradianceModel(BaseModel):
-    def __init__(self, d_input, d_output, loss_func=HuberLoss(), lr=1e-2):
+    def __init__(self, d_input, d_output, loss_func=HuberLoss(), lr=1e-4):
         self.n_channels = d_input
         self.outSize = d_output
         model = nn.Linear(2 * self.n_channels, self.outSize)

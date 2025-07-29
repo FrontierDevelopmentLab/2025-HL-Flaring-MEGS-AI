@@ -26,6 +26,8 @@ class BaseModel(LightningModule):
         pred = self(x)
         loss = self.loss_func(torch.squeeze(pred), target)
         self.log('train_loss', loss)
+        current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        self.log('learning_rate', current_lr, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
