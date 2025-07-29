@@ -110,4 +110,3 @@ if __name__ == '__main__':
         processor.process_download()
 
         current_start = current_end
-
