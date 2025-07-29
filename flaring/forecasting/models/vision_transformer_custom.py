@@ -26,7 +26,7 @@ class ViT(pl.LightningModule):
         filtered_kwargs = dict(model_kwargs)
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
-        self.dynamic_loss = SXRRegressionDynamicLoss(window_size=50)
+        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=100)
 
     def forward(self, x, return_attention=True):
         return self.model(x, return_attention=return_attention)
@@ -36,38 +36,12 @@ class ViT(pl.LightningModule):
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.lr,
-            weight_decay=0.01,  # Add weight decay
-            betas=(0.9, 0.95)  # Better betas for ViT
+            weight_decay=0.01,
         )
-
-        # Option 1: ReduceLROnPlateau (your current approach, fixed)
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        #     optimizer,
-        #     mode='min',
-        #     factor=0.5,
-        #     patience=5,  # Increased patience
-        #     min_lr=1e-7,  # Set minimum LR
-        # )
-
-        # return {
-        #     'optimizer': optimizer,
-        #     'lr_scheduler': {
-        #         'scheduler': scheduler,
-        #         'monitor': 'val_loss',
-        #         'interval': 'epoch',
-        #         'frequency': 1,
-        #         'strict': True,
-        #         'name': 'learning_rate'  # This helps with logging
-        #     }
-        # }
-
-        # Option 2: Cosine Annealing with Warmup (recommended)
-        # Uncomment this section and comment out the above return statement to use
-
 
         scheduler = CosineAnnealingWarmRestarts(
             optimizer,
-            T_0=10,  # Restart every 10 epochs
+            T_0=20,  # Restart every 20 epochs
             T_mult=2,  # Double the cycle length after each restart
             eta_min=1e-7  # Minimum learning rate
         )
@@ -93,37 +67,26 @@ class ViT(pl.LightningModule):
         sxr_un = unnormalize_sxr(sxr, norm)
         preds_squeezed_un = unnormalize_sxr(preds_squeezed, norm)
 
-        # Use regression-focused dynamic loss
-        loss, weights = self.dynamic_loss.calculate_loss(
-            preds_squeezed, sxr, sxr_un, preds_squeezed_un,
-            epoch=self.current_epoch
+        # Use adaptive rare event loss
+        loss, weights = self.adaptive_loss.calculate_loss(
+            preds_squeezed, sxr, sxr_un, preds_squeezed_un
         )
 
-        # Log performance info
+        # Log adaptation info
         if mode == "train" and self.global_step % 200 == 0:
-            perf_info = self.dynamic_loss.get_performance_info()
-            for key, value in perf_info['range_multipliers'].items():
-                self.log(f"regression/{key}", value)
-            if 'recent_relative_error' in perf_info:
-                self.log("regression/relative_error", perf_info['recent_relative_error'])
-            if 'recent_bias' in perf_info:
-                self.log("regression/bias", perf_info['recent_bias'])
-        # Calculate standard metrics (on normalized values)
-        mae = F.l1_loss(preds_squeezed, sxr)
-        mse = F.mse_loss(preds_squeezed, sxr)
+            multipliers = self.adaptive_loss.get_current_multipliers()
+            for key, value in multipliers.items():
+                self.log(f"adaptive/{key}", value)
 
-        # Log all metrics
-        self.log(f"{mode}_loss", loss, prog_bar=True, sync_dist=True)
-        self.log(f"{mode}_mae", mae, sync_dist=True)
-        self.log(f"{mode}_mse", mse, sync_dist=True)
-        #self.log(f"{mode}_avg_weight", total_weights.mean(), sync_dist=True)
-        #self.log(f"{mode}_max_weight", total_weights.max(), sync_dist=True)
-        #self.log(f"{mode}_mx_flare_ratio", (sxr_un >= m_class_threshold).float().mean(), sync_dist=True)  # FIXED: Use unnormalized
-
+            self.log("adaptive/avg_weight", weights.mean())
+            self.log("adaptive/max_weight", weights.max())
         # FIXED: Log current learning rate from optimizer
         if mode == "train":
             current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
             self.log('learning_rate', current_lr, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+
+        if mode == "val":
+            self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         return loss
 
@@ -137,13 +100,6 @@ class ViT(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         self._calculate_loss(batch, mode="test")
 
-    # Optional: Add learning rate warmup
-    def on_train_epoch_start(self):
-        # Warmup for first 5 epochs
-        if self.current_epoch < 5:
-            warmup_lr = self.lr * (self.current_epoch + 1) / 5
-            for param_group in self.trainer.optimizers[0].param_groups:
-                param_group['lr'] = warmup_lr
 
 
 
@@ -287,247 +243,133 @@ def img_to_patch(x, patch_size, flatten_channels=True):
 
 
 class SXRRegressionDynamicLoss:
-    """
-    Dynamic weighted loss for SXR flux regression from EUV images
-    Focuses on prediction accuracy across the full flux range with adaptive emphasis
-    """
+    def __init__(self, window_size=100):
+        self.c_threshold = 1e-6
+        self.m_threshold = 1e-5
+        self.x_threshold = 1e-4
 
-    def __init__(self, window_size=50):
-        # SXR flux ranges for context (but we're predicting continuous values)
-        self.quiet_level = 1e-9  # Typical background
-        self.c_threshold = 1e-6  # C-class reference
-        self.m_threshold = 1e-5  # M-class reference
-        self.x_threshold = 1e-4  # X-class reference
-
-        # Performance tracking for different flux ranges
         self.window_size = window_size
-        self.quiet_errors = deque(maxlen=window_size)  # < 1e-6
-        self.moderate_errors = deque(maxlen=window_size)  # 1e-6 to 1e-5
-        self.high_errors = deque(maxlen=window_size)  # 1e-5 to 1e-4
-        self.extreme_errors = deque(maxlen=window_size)  # > 1e-4
+        self.quiet_errors = deque(maxlen=window_size)
+        self.c_errors = deque(maxlen=window_size)
+        self.m_errors = deque(maxlen=window_size)
+        self.x_errors = deque(maxlen=window_size)
 
-        # Relative error tracking (more important for regression)
-        self.relative_errors = deque(maxlen=window_size)
-
-        # Trend tracking (are we consistently under/over predicting?)
-        self.bias_tracking = deque(maxlen=window_size)
-
-        self.epoch = 0
-
-    def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un, epoch=None):
-        """
-        Calculate adaptive regression loss for SXR prediction
-
-        Args:
-            preds_squeezed: Normalized predictions
-            sxr: Normalized targets
-            sxr_un: Unnormalized targets (actual SXR flux)
-            preds_squeezed_un: Unnormalized predictions (actual SXR flux)
-            epoch: Current epoch
-        """
-        if epoch is not None:
-            self.epoch = epoch
-
-        # Base regression loss
-        base_loss = F.huber_loss(preds_squeezed, sxr, delta=1.0, reduction='none')
-
-        # Calculate adaptive weights based on flux ranges and recent performance
-        adaptive_weights = self._calculate_regression_weights(
-            sxr_un, preds_squeezed_un, base_loss
-        )
-
-        # Update performance tracking
-        self._update_regression_tracking(sxr_un, preds_squeezed_un, base_loss)
-
-        # Apply weights
-        weighted_loss = base_loss * adaptive_weights
-        loss = weighted_loss.mean()
-
-        return loss, adaptive_weights
-
-    def _calculate_regression_weights(self, sxr_un, preds_squeezed_un, base_loss):
-        """Calculate weights for regression focusing on flux magnitude and recent performance"""
-
-        # 1. Flux-magnitude based weighting (logarithmic importance)
-        flux_weights = self._get_flux_magnitude_weights(sxr_un)
-
-        # 2. Error-magnitude based weighting (focus on large errors)
-        error_weights = self._get_error_magnitude_weights(sxr_un, preds_squeezed_un)
-
-        # 3. Adaptive range-based weighting (based on recent performance per flux range)
-        range_weights = self._get_adaptive_range_weights(sxr_un)
-
-        # 4. Bias correction weights (fix systematic under/over prediction)
-        bias_weights = self._get_bias_correction_weights(sxr_un, preds_squeezed_un)
-
-        # 5. Curriculum weighting (gradually focus on harder examples)
-        curriculum_weights = self._get_curriculum_weights(base_loss)
-
-        # Combine all weights
-        total_weights = (flux_weights *
-                         error_weights *
-                         range_weights *
-                         bias_weights *
-                         curriculum_weights)
-
-        # Clamp to reasonable range
-        total_weights = torch.clamp(total_weights, min=0.5, max=20.0)
-
-        return total_weights
-
-    def _get_flux_magnitude_weights(self, sxr_un):
-        """Weight based on flux magnitude - higher flux = higher importance"""
-
-        # Logarithmic weighting: higher flux values get more attention
-        # But not too extreme to avoid ignoring quiet periods
-        log_flux = torch.log10(sxr_un + 1e-10)  # Add small constant to avoid log(0)
-
-        # Normalize to reasonable range
-        # quiet (~1e-9) → log ≈ -9 → weight ≈ 1.0
-        # C-class (1e-6) → log ≈ -6 → weight ≈ 1.3
-        # M-class (1e-5) → log ≈ -5 → weight ≈ 1.4
-        # X-class (1e-4) → log ≈ -4 → weight ≈ 1.5
-        normalized_log = (log_flux + 9) / 5  # Shift and scale
-        flux_weights = 1.0 + 0.5 * torch.clamp(normalized_log, 0, 1)
-
-        return flux_weights
-
-    def _get_error_magnitude_weights(self, sxr_un, preds_squeezed_un):
-        """Weight based on prediction error magnitude - larger errors get more attention"""
-
-        # Relative error is more meaningful for flux prediction
-        relative_error = torch.abs(sxr_un - preds_squeezed_un) / (sxr_un + 1e-10)
-
-        # Focus more on samples with large relative errors
-        error_percentile_75 = torch.quantile(relative_error, 0.75)
-        error_percentile_90 = torch.quantile(relative_error, 0.90)
-
-        error_weights = torch.ones_like(relative_error)
-        error_weights = torch.where(relative_error > error_percentile_75, 1.5, error_weights)
-        error_weights = torch.where(relative_error > error_percentile_90, 2.0, error_weights)
-
-        return error_weights
-
-    def _get_adaptive_range_weights(self, sxr_un):
-        """Adaptive weights based on recent performance in different flux ranges"""
-
-        range_weights = torch.ones_like(sxr_un)
-
-        # Get performance multipliers for different ranges
-        quiet_mult = self._get_range_performance_multiplier(self.quiet_errors)
-        moderate_mult = self._get_range_performance_multiplier(self.moderate_errors)
-        high_mult = self._get_range_performance_multiplier(self.high_errors)
-        extreme_mult = self._get_range_performance_multiplier(self.extreme_errors)
-
-        # Apply multipliers based on flux range
-        range_weights = torch.where(sxr_un < self.c_threshold, quiet_mult, range_weights)
-        range_weights = torch.where((sxr_un >= self.c_threshold) & (sxr_un < self.m_threshold),
-                                    moderate_mult, range_weights)
-        range_weights = torch.where((sxr_un >= self.m_threshold) & (sxr_un < self.x_threshold),
-                                    high_mult, range_weights)
-        range_weights = torch.where(sxr_un >= self.x_threshold, extreme_mult, range_weights)
-
-        return range_weights
-
-    def _get_range_performance_multiplier(self, error_history):
-        """Get multiplier based on recent performance in a flux range"""
-        if len(error_history) < 5:
-            return 1.0
-
-        recent_avg_error = np.mean(list(error_history))
-
-        # If recent errors are high, increase weight for this range
-        if recent_avg_error > 2.0:  # High error
-            return 2.0
-        elif recent_avg_error > 1.0:  # Moderate error
-            return 1.5
-        else:
-            return 1.0  # Good performance
-
-    def _get_bias_correction_weights(self, sxr_un, preds_squeezed_un):
-        """Correct for systematic bias (consistent under/over prediction)"""
-
-        bias_weights = torch.ones_like(sxr_un)
-
-        if len(self.bias_tracking) < 10:
-            return bias_weights
-
-        recent_bias = np.mean(list(self.bias_tracking))
-
-        # If we're systematically under-predicting, boost weight when actual > pred
-        if recent_bias < -0.2:  # Consistent under-prediction
-            under_pred_mask = preds_squeezed_un < sxr_un
-            bias_weights = torch.where(under_pred_mask, 1.5, bias_weights)
-
-        # If we're systematically over-predicting, boost weight when actual < pred
-        elif recent_bias > 0.2:  # Consistent over-prediction
-            over_pred_mask = preds_squeezed_un > sxr_un
-            bias_weights = torch.where(over_pred_mask, 1.5, bias_weights)
-
-        return bias_weights
-
-    def _get_curriculum_weights(self, base_loss):
-        """Curriculum learning for regression - gradually focus on harder examples"""
-
-        if self.epoch < 10:
-            # Early training: focus on easier examples (smaller losses)
-            curriculum_factor = 0.5
-        elif self.epoch < 30:
-            # Mid training: gradual transition
-            curriculum_factor = 0.5 + 0.5 * (self.epoch - 10) / 20
-        else:
-            # Late training: focus on all examples equally
-            curriculum_factor = 1.0
-
-        # Harder examples = higher loss values
-        loss_difficulty = (base_loss - base_loss.min()) / (base_loss.max() - base_loss.min() + 1e-8)
-        curriculum_weights = 1.0 + curriculum_factor * loss_difficulty
-
-        return curriculum_weights
-
-    def _update_regression_tracking(self, sxr_un, preds_squeezed_un, base_loss):
-        """Update performance tracking for different flux ranges"""
-
-        # Track errors by flux range
-        quiet_mask = sxr_un < self.c_threshold
-        moderate_mask = (sxr_un >= self.c_threshold) & (sxr_un < self.m_threshold)
-        high_mask = (sxr_un >= self.m_threshold) & (sxr_un < self.x_threshold)
-        extreme_mask = sxr_un >= self.x_threshold
-
-        # Calculate relative errors for each range
-        relative_errors = torch.abs(sxr_un - preds_squeezed_un) / (sxr_un + 1e-10)
-
-        if quiet_mask.any():
-            self.quiet_errors.append(relative_errors[quiet_mask].mean().item())
-        if moderate_mask.any():
-            self.moderate_errors.append(relative_errors[moderate_mask].mean().item())
-        if high_mask.any():
-            self.high_errors.append(relative_errors[high_mask].mean().item())
-        if extreme_mask.any():
-            self.extreme_errors.append(relative_errors[extreme_mask].mean().item())
-
-        # Track overall relative error
-        self.relative_errors.append(relative_errors.mean().item())
-
-        # Track prediction bias (positive = over-prediction, negative = under-prediction)
-        bias = torch.log10(preds_squeezed_un + 1e-10) - torch.log10(sxr_un + 1e-10)
-        self.bias_tracking.append(bias.mean().item())
-
-    def get_performance_info(self):
-        """Get current performance info for logging"""
-        info = {
-            'epoch': self.epoch,
-            'range_multipliers': {
-                'quiet_mult': self._get_range_performance_multiplier(self.quiet_errors),
-                'moderate_mult': self._get_range_performance_multiplier(self.moderate_errors),
-                'high_mult': self._get_range_performance_multiplier(self.high_errors),
-                'extreme_mult': self._get_range_performance_multiplier(self.extreme_errors)
-            }
+        self.base_weights = {
+            'quiet': 1.0,
+            'c_class': 2.0,
+            'm_class': 5.0,
+            'x_class': 10.0
         }
 
-        if len(self.relative_errors) > 0:
-            info['recent_relative_error'] = np.mean(list(self.relative_errors))
-        if len(self.bias_tracking) > 0:
-            info['recent_bias'] = np.mean(list(self.bias_tracking))
+    def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
+        base_loss = F.huber_loss(preds_squeezed, sxr, delta=1.0, reduction='none')
+        weights = self._get_adaptive_weights(sxr_un, preds_squeezed_un, base_loss)
+        self._update_tracking(sxr_un, preds_squeezed_un, base_loss)
+        weighted_loss = base_loss * weights
+        loss = weighted_loss.mean()
+        return loss, weights
 
-        return info
+    def _get_adaptive_weights(self, sxr_un, preds_squeezed_un, base_loss):
+        device = sxr_un.device
+
+        # Get continuous multipliers per class with custom params
+        quiet_mult = self._get_performance_multiplier(
+            self.quiet_errors, max_multiplier=1.5, min_multiplier=0.5, sensitivity=2.0
+        )
+        c_mult = self._get_performance_multiplier(
+            self.c_errors, max_multiplier=3.0, min_multiplier=0.7, sensitivity=2.5
+        )
+        m_mult = self._get_performance_multiplier(
+            self.m_errors, max_multiplier=7.0, min_multiplier=0.8, sensitivity=3.0
+        )
+        x_mult = self._get_performance_multiplier(
+            self.x_errors, max_multiplier=15.0, min_multiplier=0.9, sensitivity=4.0
+        )
+
+        quiet_weight = self.base_weights['quiet'] * quiet_mult
+        c_weight = self.base_weights['c_class'] * c_mult
+        m_weight = self.base_weights['m_class'] * m_mult
+        x_weight = self.base_weights['x_class'] * x_mult
+
+        weights = torch.ones_like(sxr_un, device=device)
+        weights = torch.where(sxr_un < self.c_threshold, quiet_weight, weights)
+        weights = torch.where((sxr_un >= self.c_threshold) & (sxr_un < self.m_threshold), c_weight, weights)
+        weights = torch.where((sxr_un >= self.m_threshold) & (sxr_un < self.x_threshold), m_weight, weights)
+        weights = torch.where(sxr_un >= self.x_threshold, x_weight, weights)
+
+        # Normalize so mean weight ~1.0 (optional, helps stability)
+        mean_weight = torch.mean(weights)
+        weights = weights / (mean_weight + 1e-8)
+
+        # Clamp extreme weights
+        weights = torch.clamp(weights, min=0.3, max=20.0)
+
+        # Save for logging
+        self.current_multipliers = {
+            'quiet_mult': quiet_mult,
+            'c_mult': c_mult,
+            'm_mult': m_mult,
+            'x_mult': x_mult,
+            'quiet_weight': quiet_weight,
+            'c_weight': c_weight,
+            'm_weight': m_weight,
+            'x_weight': x_weight
+        }
+
+        return weights
+
+    def _get_performance_multiplier(self, error_history, max_multiplier=10.0, min_multiplier=0.5, sensitivity=3.0):
+        if len(error_history) < 10:
+            return 1.0
+        recent = np.mean(list(error_history)[-20:])
+        overall = np.mean(list(error_history)) + 1e-8
+        ratio = recent / overall
+        multiplier = np.exp(sensitivity * (ratio - 1))
+        multiplier = np.clip(multiplier, min_multiplier, max_multiplier)
+        return multiplier
+
+    def _update_tracking(self, sxr_un, preds_squeezed_un, base_loss):
+        try:
+            sxr_np = sxr_un.detach().cpu().numpy()
+            preds_np = preds_squeezed_un.detach().cpu().numpy()
+            log_error = np.abs(np.log10(np.maximum(sxr_np, 1e-12)) - np.log10(np.maximum(preds_np, 1e-12)))
+
+            quiet_mask = sxr_np < self.c_threshold
+            if quiet_mask.sum() > 0:
+                self.quiet_errors.append(float(np.mean(log_error[quiet_mask])))
+
+            c_mask = (sxr_np >= self.c_threshold) & (sxr_np < self.m_threshold)
+            if c_mask.sum() > 0:
+                self.c_errors.append(float(np.mean(log_error[c_mask])))
+
+            m_mask = (sxr_np >= self.m_threshold) & (sxr_np < self.x_threshold)
+            if m_mask.sum() > 0:
+                self.m_errors.append(float(np.mean(log_error[m_mask])))
+
+            x_mask = sxr_np >= self.x_threshold
+            if x_mask.sum() > 0:
+                self.x_errors.append(float(np.mean(log_error[x_mask])))
+
+        except Exception:
+            pass
+
+    def get_current_multipliers(self):
+        """Get current performance multipliers for logging"""
+        return {
+            'quiet_mult': self._get_performance_multiplier(self.quiet_errors),
+            'c_mult': self._get_performance_multiplier(self.c_errors),
+            'm_mult': self._get_performance_multiplier(self.m_errors),
+            'x_mult': self._get_performance_multiplier(self.x_errors),
+            'quiet_count': len(self.quiet_errors),
+            'c_count': len(self.c_errors),
+            'm_count': len(self.m_errors),
+            'x_count': len(self.x_errors),
+            'quiet_error': np.mean(self.quiet_errors) if self.quiet_errors else 0.0,
+            'c_error': np.mean(self.c_errors) if self.c_errors else 0.0,
+            'm_error': np.mean(self.m_errors) if self.m_errors else 0.0,
+            'x_error': np.mean(self.x_errors) if self.x_errors else 0.0,
+            'quiet_weight': self.current_multipliers['quiet_weight'],
+            'c_weight': self.current_multipliers['c_weight'],
+            'm_weight': self.current_multipliers['m_weight'],
+            'x_weight': self.current_multipliers['x_weight']
+        }
