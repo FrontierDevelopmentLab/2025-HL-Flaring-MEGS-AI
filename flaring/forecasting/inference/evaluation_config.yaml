@@ -1,0 +1,78 @@
+# eval_config.yaml
+
+# Base directory configuration
+base_data_dir: "/mnt/data2/non_flares_event_dir"  # Root directory for all datasets
+
+# Model configuration
+model:
+  checkpoint: "ViT-final-20250726_000801.pt"  # Model checkpoint filename
+  checkpoint_path: "${base_data_dir}/checkpoints/${model.checkpoint}"  # Full path to checkpoint
+
+# Prediction data configuration
+prediction_csv:
+  full_csv_path: "${base_data_dir}/outputs/deep-vit-weighted-clean.csv"  # Main model predictions
+  baseline_csv_path: "${base_data_dir}/outputs/baseline_model_predictions.csv"  # Baseline model predictions
+
+# Time range configuration
+timestamp:
+  start_time: "2023-08-01T00:00:00"  # Start time in YYYY-MM-DDTHH:MM:SS format
+  end_time: "2023-08-14T23:59:59"    # End time in YYYY-MM-DDTHH:MM:SS format
+  cadence: 15                         # Time interval in minutes
+
+# Input data directories
+data:
+  aia:
+    base_dir: "${base_data_dir}/AIA"
+    test_dir: "${data.aia.base_dir}/test"  # AIA test data location
+    image_shape: [512, 512]                # Expected image dimensions
+
+  sxr:
+    base_dir: "${base_data_dir}/SXR"
+    test_dir: "${data.sxr.base_dir}/test"  # SXR test data location
+    normalized_data: "${data.sxr.base_dir}/normalized_sxr.npy"  # Normalized data file
+
+  # Attention weights configuration
+  weights:
+    dir: "${base_data_dir}/attention_weights"
+    target_shape: [512, 512]  # Target shape for attention maps
+
+# Baseline model configuration (optional)
+baseline:
+  name: "Previous Model v1.2"
+  description: "The previous version of our flare prediction model"
+  csv_path: "${base_data_dir}/baseline_results/predictions.csv"  # Baseline results
+
+# Output configuration
+output:
+  evaluation_results: "${base_data_dir}/evaluation_results"  # Where to save evaluation outputs
+  movies:
+    dir: "${output.evaluation_results}/movies"  # Movie output directory
+    fps: 30                                    # Frames per second
+    dpi: 150                                   # Image quality
+    cleanup_frames: true                      # Whether to delete frames after movie creation
+
+# Visualization settings
+visualization:
+  colors:
+    ground_truth: "green"
+    main_model: "red"
+    baseline_model: "blue"
+    current_time: "white"
+  styles:
+    line_width: 2
+    marker_size: 6
+    alpha: 0.8
+  plot_settings:
+    figure_size: [22, 8]
+    face_color: "#1a1a2e"
+    grid_alpha: 0.3
+    font_sizes:
+      title: 14
+      axis: 10
+      legend: 8
+      tick: 8
+
+# Performance metrics thresholds
+metrics:
+  tss_threshold: 1e-5  # Threshold for True Skill Statistic calculation
+  flare_threshold: 1e-6  # Threshold for flare/non-flare classification
