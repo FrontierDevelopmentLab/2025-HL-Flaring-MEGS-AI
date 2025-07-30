@@ -1,9 +1,10 @@
 # Base directories - change these to switch datasets
-base_data_dir: "/mnt/data/ML-Ready/mixed_data"  # Change this line for different datasets
-output_path: "${base_data_dir}/outputs/deep-vit-weighted-clean.csv"
-#checkpoint: "mixed-vit-deep-model-epoch=19-val_loss=0.1484.pth"
-weight_path: "${base_data_dir}/weights2/"
+base_data_dir: "/mnt/data/ML-Ready_clean/mixed_data"  # Change this line for different datasets
+output_path: "${base_data_dir}/output/final-model-results.csv"
+checkpoint: "${base_data_dir}/checkpoints/"
+weight_path: "${base_data_dir}/weights-84epoch/"
 # Data paths (automatically constructed from base directories)
+model: "hybrid"  # Options: "cnn", "vit", "ViT Custom"
 data:
   aia_dir:
     "${base_data_dir}/AIA"
@@ -12,6 +13,5 @@ data:
   sxr_norm_path:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoint_path:
-    #"${base_data_dir}/checkpoints/${checkpoint}"
-    "/mnt/data/ML-Ready/mixed_data/checkpoints/mixed-vit-weighted-loss-cleanish-data-epoch=83-valid_loss=0.0000.pth.ckpt"
+    "/mnt/data/ML-Ready_clean/mixed_data/checkpoints/baseline-test-final-20250730_091211.pth"
 

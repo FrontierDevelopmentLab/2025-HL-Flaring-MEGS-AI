@@ -4,9 +4,9 @@ base_data_dir: "/mnt/data/ML-Ready_clean/mixed_data"  # Change this line for dif
 base_checkpoint_dir: "/mnt/data/ML-Ready_clean/mixed_data"    # Change this line for different datasets
 
 # Model configuration
-selected_model: "hybrid"  # Options: "cnn", "vit",
+selected_model: "ViT Custom"  # Options: "cnn", "vit",
 batch_size:    64
-epochs:        150
+epochs:        250
 megsai:
   architecture: "cnn"
   seed: 42
@@ -56,11 +56,11 @@ data:
 
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-  project: MEGS-AI Baseline
+  project: MEGS-AI ViT Custom
   job_type: training
   tags:
     - aia
     - sxr
     - regression
-  wb_name: baseline-test
+  wb_name: custom-vit-weighted
   notes: Regression from AIA images (6 channels) to GOES SXR flux
