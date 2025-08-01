@@ -52,7 +52,7 @@ data:
   sxr_norm_path:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoints_dir:
-    "${base_checkpoint_dir}/checkpoints"
+    "${base_checkpoint_dir}/checkpoints-higher-x-m-weight/"
 
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
@@ -62,5 +62,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: custom-vit-weighted
+  wb_name: custom-vit-weighted-higher-x-m-weight-unrestricted
   notes: Regression from AIA images (6 channels) to GOES SXR flux

@@ -4,12 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="add visualization notebook and refactor model configuration; update batch size, patch size, and dropout rate; implement dynamic loss for SXR regression">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="added evaluation script">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/data_loaders/sxr_normalization.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/data_loaders/sxr_normalization.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/base_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/base_model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/train.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -19,8 +20,8 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="Python Script" />
         <option value="Jupyter Notebook" />
+        <option value="Python Script" />
       </list>
     </option>
   </component>
@@ -52,25 +53,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowPanel.toolwindow.highlight.mappings&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowPanel.toolwindow.highlight.symlinks&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowPanel.toolwindow.show.date&quot;: &quot;false&quot;,
-    &quot;WebServerToolWindowPanel.toolwindow.show.permissions&quot;: &quot;false&quot;,
-    &quot;WebServerToolWindowPanel.toolwindow.show.size&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;flaring&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;terminal&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "WebServerToolWindowPanel.toolwindow.highlight.mappings": "true",
+    "WebServerToolWindowPanel.toolwindow.highlight.symlinks": "true",
+    "WebServerToolWindowPanel.toolwindow.show.date": "false",
+    "WebServerToolWindowPanel.toolwindow.show.permissions": "false",
+    "WebServerToolWindowPanel.toolwindow.show.size": "false",
+    "database.data.extractors.current.export.id": "Comma-separated (CSV)_id",
+    "git-widget-placeholder": "flaring",
+    "junie.onboarding.icon.badge.shown": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "terminal",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/flaring/forecasting/training" />
@@ -125,6 +127,8 @@
       <workItem from="1753374480667" duration="45913000" />
       <workItem from="1753545524483" duration="2816000" />
       <workItem from="1753630961668" duration="9897000" />
+      <workItem from="1753929248247" duration="23397000" />
+      <workItem from="1754000190506" duration="8887000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -270,7 +274,31 @@
       <option name="project" value="LOCAL" />
       <updated>1753730360460</updated>
     </task>
-    <option name="localTasksCounter" value="22" />
+    <task id="LOCAL-00022" summary="update model configuration and training scripts; adjust learning rate, epochs, and data paths; refactor trainer initialization and logging">
+      <option name="closed" value="true" />
+      <created>1753821485670</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1753821485670</updated>
+    </task>
+    <task id="LOCAL-00023" summary="update model configuration and training scripts; change selected model to 'ViT Custom', increase epochs to 250, and adjust output paths; refactor model loading in inference to support hybrid models and attention weight saving">
+      <option name="closed" value="true" />
+      <created>1753883159604</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1753883159604</updated>
+    </task>
+    <task id="LOCAL-00024" summary="added evaluation script">
+      <option name="closed" value="true" />
+      <created>1753901835422</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1753901835422</updated>
+    </task>
+    <option name="localTasksCounter" value="25" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -325,17 +353,9 @@
     <MESSAGE value="update plotting script to change output video name and adjust timestamp generation interval;" />
     <MESSAGE value="remove unused resizing and normalization code from SDOAIA_dataloader" />
     <MESSAGE value="add visualization notebook and refactor model configuration; update batch size, patch size, and dropout rate; implement dynamic loss for SXR regression" />
-    <option name="LAST_COMMIT_MESSAGE" value="add visualization notebook and refactor model configuration; update batch size, patch size, and dropout rate; implement dynamic loss for SXR regression" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
-          <url>file://$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb</url>
-          <line>607</line>
-          <option name="timeStamp" value="4" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
+    <MESSAGE value="update model configuration and training scripts; adjust learning rate, epochs, and data paths; refactor trainer initialization and logging" />
+    <MESSAGE value="update model configuration and training scripts; change selected model to 'ViT Custom', increase epochs to 250, and adjust output paths; refactor model loading in inference to support hybrid models and attention weight saving" />
+    <MESSAGE value="added evaluation script" />
+    <option name="LAST_COMMIT_MESSAGE" value="added evaluation script" />
   </component>
 </project>

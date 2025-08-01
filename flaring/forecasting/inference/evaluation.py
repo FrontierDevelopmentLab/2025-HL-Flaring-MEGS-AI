@@ -9,7 +9,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, confusion_matrix
 from scipy.ndimage import zoom
-from matplotlib.colors import AsinhNorm
+from matplotlib.colors import AsinhNorm, LogNorm
+import seaborn as sns
 
 
 class SolarFlareEvaluator:
@@ -93,36 +94,102 @@ class SolarFlareEvaluator:
 
         # Calculate metrics for main model
         main_metrics = {
-            'Model': 'Main',
-            'MSE': mean_squared_error(self.y_true, self.y_pred),
-            'RMSE': np.sqrt(mean_squared_error(self.y_true, self.y_pred)),
-            'MAE': mean_absolute_error(self.y_true, self.y_pred),
-            'R2': r2_score(self.y_true, self.y_pred),
-            'TSS': self._calculate_tss(self.y_true, self.y_pred, threshold=1e-5)
+            'Model': 'ViT',
+            'MSE': mean_squared_error(np.log10(self.y_true), np.log10(self.y_pred)),
+            'RMSE': np.sqrt(mean_squared_error(np.log10(self.y_true), np.log10(self.y_pred))),
+            'MAE': mean_absolute_error(np.log10(self.y_true), np.log10(self.y_pred)),
+            'R2': r2_score(np.log10(self.y_true), np.log10(self.y_pred))
         }
 
-        metrics_list = [main_metrics]
+        # Calculate metrics for each flare class
+        flare_classes = {
+            'Quiet': (0, 1e-6),  # Below 1e-6
+            'C': (1e-6, 1e-5),  # 1e-6 to 1e-5
+            'M': (1e-5, 1e-4),  # 1e-5 to 1e-4
+            'X': (1e-4, np.inf)  # Above 1e-4
+        }
+
+        flare_class_metrics = []
+
+        for class_name, (lower_bound, upper_bound) in flare_classes.items():
+            # Create mask for current flare class
+            if upper_bound == np.inf:
+                mask = self.y_true >= lower_bound
+            else:
+                mask = (self.y_true >= lower_bound) & (self.y_true < upper_bound)
+
+            # Skip if no samples in this class
+            if not np.any(mask):
+                print(f"Warning: No samples found for flare class {class_name}")
+                continue
+
+            # Get true and predicted values for this class
+            y_true_class = self.y_true[mask]
+            y_pred_class = self.y_pred[mask]
+
+            # Calculate metrics for this flare class
+            class_metrics = {
+                'Model': f'ViT_{class_name}',
+                'MSE': mean_squared_error(np.log10(y_true_class), np.log10(y_pred_class)),
+                'RMSE': np.sqrt(mean_squared_error(np.log10(y_true_class), np.log10(y_pred_class))),
+                'MAE': mean_absolute_error(np.log10(y_true_class), np.log10(y_pred_class)),
+                'R2': r2_score(np.log10(y_true_class), np.log10(y_pred_class)),
+                'Sample_Count': len(y_true_class)
+            }
+
+            flare_class_metrics.append(class_metrics)
+
+            # If baseline exists, calculate baseline metrics for this class too
+            if self.y_baseline is not None:
+                y_baseline_class = self.y_baseline[mask]
+
+                baseline_class_metrics = {
+                    'Model': f'Baseline_{class_name}',
+                    'MSE': mean_squared_error(np.log10(y_true_class), np.log10(y_baseline_class)),
+                    'RMSE': np.sqrt(mean_squared_error(np.log10(y_true_class), np.log10(y_baseline_class))),
+                    'MAE': mean_absolute_error(np.log10(y_true_class), np.log10(y_baseline_class)),
+                    'R2': r2_score(np.log10(y_true_class), np.log10(y_baseline_class)),
+                    'Sample_Count': len(y_true_class)
+                }
+
+                flare_class_metrics.append(baseline_class_metrics)
+
+                # Calculate improvement for this class
+                improvement_class_metrics = {
+                    'Model': f'Improvement_{class_name} (%)',
+                    'MSE': ((baseline_class_metrics['MSE'] - class_metrics['MSE']) / baseline_class_metrics[
+                        'MSE']) * 100,
+                    'RMSE': ((baseline_class_metrics['RMSE'] - class_metrics['RMSE']) / baseline_class_metrics[
+                        'RMSE']) * 100,
+                    'MAE': ((baseline_class_metrics['MAE'] - class_metrics['MAE']) / baseline_class_metrics[
+                        'MAE']) * 100,
+                    'R2': ((class_metrics['R2'] - baseline_class_metrics['R2']) / abs(
+                        baseline_class_metrics['R2'])) * 100,
+                    'Sample_Count': len(y_true_class)
+                }
+
+                flare_class_metrics.append(improvement_class_metrics)
+
+        metrics_list = [main_metrics] + flare_class_metrics
 
         # Calculate metrics for baseline model if available
         if self.y_baseline is not None:
             baseline_metrics = {
                 'Model': 'Baseline',
-                'MSE': mean_squared_error(self.y_true, self.y_baseline),  # Fixed: was using y_pred
-                'RMSE': np.sqrt(mean_squared_error(self.y_true, self.y_baseline)),
-                'MAE': mean_absolute_error(self.y_true, self.y_baseline),
-                'R2': r2_score(self.y_true, self.y_baseline),
-                'TSS': self._calculate_tss(self.y_true, self.y_baseline, threshold=1e-5)
+                'MSE': mean_squared_error(np.log10(self.y_true), np.log10(self.y_baseline)),
+                'RMSE': np.sqrt(mean_squared_error(np.log10(self.y_true), np.log10(self.y_baseline))),
+                'MAE': mean_absolute_error(np.log10(self.y_true), np.log10(self.y_baseline)),
+                'R2': r2_score(np.log10(self.y_true), np.log10(self.y_baseline))
             }
             metrics_list.append(baseline_metrics)
 
             # Calculate improvement metrics
             improvement_metrics = {
-                'Model': 'Improvement (%)',
+                'Model': 'Improvement_Overall (%)',
                 'MSE': ((baseline_metrics['MSE'] - main_metrics['MSE']) / baseline_metrics['MSE']) * 100,
                 'RMSE': ((baseline_metrics['RMSE'] - main_metrics['RMSE']) / baseline_metrics['RMSE']) * 100,
                 'MAE': ((baseline_metrics['MAE'] - main_metrics['MAE']) / baseline_metrics['MAE']) * 100,
-                'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100,
-                'TSS': ((main_metrics['TSS'] - baseline_metrics['TSS']) / abs(baseline_metrics['TSS'])) * 100
+                'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100
             }
             metrics_list.append(improvement_metrics)
 
@@ -154,54 +221,71 @@ class SolarFlareEvaluator:
 
     def _plot_regression_comparison(self):
         """Generate regression comparison plot"""
+
+        log_bins = np.logspace(np.log10(min(self.y_true)),
+                               np.log10(max(self.y_true)), 100)
+        shared_norm = LogNorm(vmin=1, vmax=None)  # Or specify vmax explicitly
+
         if self.y_baseline is not None:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
         else:
             fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
             ax2 = None
 
+        fig.patch.set_facecolor('#1a1a2e')
+        sns.set_palette("husl")
+        ax1.set_facecolor('#2d2d44')
+        if ax2 is not None:
+            ax2.set_facecolor('#2d2d44')
+
         # Main model plot
-        ax1.scatter(self.y_true, self.y_pred, alpha=0.5, label='Main Model', color='blue')
-        ax1.plot([min(self.y_true), max(self.y_true)],
-                 [min(self.y_true), max(self.y_true)],
-                 '--k', label='Perfect Prediction', alpha=0.7)
+        min_val = min(min(self.y_true), min(self.y_pred))
+        max_val = max(max(self.y_true), max(self.y_pred))
+        ax1.plot([min_val, max_val], [min_val, max_val],
+                 label='Perfect Prediction', color='red', linestyle='--', linewidth=2)
 
-        # Add regression line for main model
-        coeffs = np.polyfit(self.y_true, self.y_pred, 1)
-        regression_line = np.poly1d(coeffs)
-        ax1.plot(self.y_true, regression_line(self.y_true),
-                 'b-', label='Regression Line', alpha=0.8)
+        h1 = ax1.hist2d(self.y_true, self.y_pred, bins=[log_bins, log_bins],
+                        cmap='summer', norm=shared_norm)
 
-        ax1.set_xlabel('Ground Truth Flux')
-        ax1.set_ylabel('Predicted Flux')
-        ax1.set_title('Main Model Performance')
+        ax1.set_xlabel('Ground Truth Flux', color='white')
+        ax1.set_ylabel('Predicted Flux', color='white')
+        ax1.set_title('ViT Model Performance', color='white')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
+        ax1.tick_params(colors='white')
         ax1.set_xscale('log')
         ax1.set_yscale('log')
+        for spine in ax1.spines.values():
+            spine.set_color('white')
 
         # Baseline model plot if available
         if self.y_baseline is not None and ax2 is not None:
-            ax2.scatter(self.y_true, self.y_baseline, alpha=0.5, label='Baseline Model', color='red')
-            ax2.plot([min(self.y_true), max(self.y_true)],
-                     [min(self.y_true), max(self.y_true)],
-                     '--k', label='Perfect Prediction', alpha=0.7)
+            h2 = ax2.hist2d(self.y_true, self.y_baseline, bins=[log_bins, log_bins],
+                            cmap='summer', norm=shared_norm)
 
-            # Add regression line for baseline model
-            coeffs_baseline = np.polyfit(self.y_true, self.y_baseline, 1)
-            regression_line_baseline = np.poly1d(coeffs_baseline)
-            ax2.plot(self.y_true, regression_line_baseline(self.y_true),
-                     'r-', label='Regression Line', alpha=0.8)
+            min_val = min(min(self.y_true), min(self.y_baseline))
+            max_val = max(max(self.y_true), max(self.y_baseline))
+            ax2.plot([min_val, max_val], [min_val, max_val],
+                     label='Perfect Prediction', color='red', linestyle='--', linewidth=2)
 
-            ax2.set_xlabel('Ground Truth Flux')
-            ax2.set_ylabel('Predicted Flux')
-            ax2.set_title('Baseline Model Performance')
+            ax2.set_xlabel('Ground Truth Flux', color='white')
+            ax2.set_ylabel('Predicted Flux', color='white')
+            ax2.set_title('Baseline Model Performance', color='white')
             ax2.legend()
+            ax2.grid(True, alpha=0.3)
+            ax2.tick_params(colors='white')
             ax2.set_xscale('log')
             ax2.set_yscale('log')
-            ax2.grid(True, alpha=0.3)
+            for spine in ax2.spines.values():
+                spine.set_color('white')
 
-        plt.tight_layout()
+        # Colorbar (use h1[3] or h2[3], they’re identical)
+        cbar = fig.colorbar(h1[3], ax=[ax1, ax2] if ax2 else ax1, orientation='vertical', pad=.02)
+        cbar.ax.yaxis.set_tick_params(color='white')
+        plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
+        cbar.set_label("Count (log scale)", color='white')
+
+        #plt.tight_layout()
         plot_path = os.path.join(self.comparison_dir, "regression_comparison.png")
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         plt.close()
@@ -269,7 +353,7 @@ class SolarFlareEvaluator:
         main_metrics = metrics_list[0]
         baseline_metrics = metrics_list[1]
 
-        metrics_names = ['RMSE', 'MSE', 'MAE', 'R2', 'TSS']
+        metrics_names = ['RMSE', 'MSE', 'MAE', 'R2']
         main_values = [main_metrics[m] for m in metrics_names]
         baseline_values = [baseline_metrics[m] for m in metrics_names]
 
@@ -460,17 +544,14 @@ class SolarFlareEvaluator:
 
             if sxr_window is not None and not sxr_window.empty:
                 # Plot ground truth
-                sxr_ax.plot(sxr_window['timestamp'], sxr_window['groundtruth'],
-                            'go-', label='Ground Truth', linewidth=2, alpha=0.8, markersize=6)
+                sxr_ax.plot(sxr_window['timestamp'], sxr_window['groundtruth'], label='Ground Truth', linewidth=3, alpha=1, markersize=5, color = "#F78E69")
 
                 # Plot new model predictions
-                sxr_ax.plot(sxr_window['timestamp'], sxr_window['predictions'],
-                            'ro-', label='New Model', linewidth=2, alpha=0.8, markersize=6)
+                sxr_ax.plot(sxr_window['timestamp'], sxr_window['predictions'], label='ViT Model', linewidth=3, alpha=1, markersize=5, color = "#C0B9DD")
 
                 # Plot baseline predictions if available
                 if 'baseline_predictions' in sxr_window.columns and sxr_window['baseline_predictions'].notna().any():
-                    sxr_ax.plot(sxr_window['timestamp'], sxr_window['baseline_predictions'],
-                                'bo-', label='Baseline Model', linewidth=2, alpha=0.8, markersize=6)
+                    sxr_ax.plot(sxr_window['timestamp'], sxr_window['baseline_predictions'], label='Baseline Model', linewidth=3, alpha=1, markersize=5, color = "#94ECBE")
 
                 # Mark current time
                 if sxr_current is not None:
@@ -481,7 +562,7 @@ class SolarFlareEvaluator:
                     info_lines = [
                         "Current Values:",
                         f"GT: {sxr_current['groundtruth']:.2e}",
-                        f"New: {sxr_current['predictions']:.2e}"
+                        f"ViT: {sxr_current['predictions']:.2e}"
                     ]
                     if sxr_current['baseline_predictions'] is not None:
                         info_lines.append(f"Base: {sxr_current['baseline_predictions']:.2e}")
@@ -495,9 +576,16 @@ class SolarFlareEvaluator:
                 sxr_ax.set_xlabel('Time', fontsize=10, color='white')
                 sxr_ax.set_title('SXR Data Comparison', fontsize=12, color='white')
                 sxr_ax.legend(fontsize=8, loc='upper right')
+                legend1 = sxr_ax.legend()
+                legend1.get_frame().set_facecolor('black')
+                legend1.get_frame().set_edgecolor('white')
+                for text in legend1.get_texts():
+                    text.set_color('white')
                 sxr_ax.grid(True, alpha=0.3)
                 sxr_ax.tick_params(axis='x', rotation=45, labelsize=8, colors='white')
                 sxr_ax.tick_params(axis='y', labelsize=8, colors='white')
+                for spine in sxr_ax.spines.values():
+                    spine.set_color('white')
                 try:
                     sxr_ax.set_yscale('log')
                 except:
@@ -615,15 +703,15 @@ class SolarFlareEvaluator:
 # Example Usage
 if __name__ == "__main__":
     # Example paths - replace with your actual paths
-    example_csv = "/mnt/data/ML-Ready_clean/mixed_data/output/154-results.csv"
+    example_csv = "/mnt/data/ML-Ready_clean/mixed_data/output/final-vit-results.csv"
     example_baseline_csv = "/home/griffingoodwin/2025-HL-Flaring-MEGS-AI/final-model-results.csv"
     example_aia = "/mnt/data/ML-Ready_clean/mixed_data/AIA/test/"
-    example_weights = "/mnt/data/ML-Ready_clean/mixed_data/weights-154epoch/"
+    example_weights = "/mnt/data/ML-Ready_clean/mixed_data/weights-finalepoch/"
 
     # Sample timestamps - Fixed the datetime generation
-    start_time = datetime(2023, 8, 1)
-    end_time = datetime(2023, 8, 14)
-    interval = timedelta(minutes=15)  # Changed from minutes=60 to hours=1 for clarity
+    start_time = datetime(2023, 8, 5)
+    end_time = datetime(2023, 8, 10)
+    interval = timedelta(minutes=1)  # Changed from minutes=60 to hours=1 for clarity
     timestamps = []
     current_time = start_time
     while current_time <= end_time:

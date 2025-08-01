@@ -257,8 +257,8 @@ class SXRRegressionDynamicLoss:
         self.base_weights = {
             'quiet': 1.0,
             'c_class': 2.0,
-            'm_class': 5.0,
-            'x_class': 10.0
+            'm_class': 10.0,
+            'x_class': 20.0
         }
 
     def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
@@ -302,7 +302,7 @@ class SXRRegressionDynamicLoss:
         weights = weights / (mean_weight + 1e-8)
 
         # Clamp extreme weights
-        weights = torch.clamp(weights, min=0.3, max=20.0)
+        weights = torch.clamp(weights, min=0.1, max=40.0)
 
         # Save for logging
         self.current_multipliers = {
