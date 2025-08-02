@@ -4,7 +4,7 @@ base_data_dir: "/mnt/data/ML-Ready_clean/mixed_data"  # Change this line for dif
 base_checkpoint_dir: "/mnt/data/ML-Ready_clean/mixed_data"    # Change this line for different datasets
 wavelengths: [171, 304]  # AIA wavelengths in Angstroms
 # Model configuration
-selected_model: "ViT Custom"  # Options: "cnn", "vit",
+selected_model: "ViT"  # Options: "cnn", "vit",
 batch_size:    64
 epochs:        250
 megsai:
@@ -13,19 +13,6 @@ megsai:
   lr: 0.0001
   cnn_model: "resnet"
   cnn_dp: 0.2
-
-#vit:
-#    embed_dim: 256
-#    num_channels: 6  # AIA has 6 channels
-#    num_classes: 1  # Regression task, predicting SXR flux
-#    patch_size: 32
-#    num_patches: 256
-#    hidden_dim: 256
-#    num_heads: 1
-#    num_layers: 1
-#    dropout: 0.25
-#    lr: .0001
-
 
 vit_custom:
     embed_dim: 512
@@ -38,10 +25,6 @@ vit_custom:
     num_layers: 6
     dropout: 0.2
     lr: 0.0001
-
-
-
-
 
 # Data paths (automatically constructed from base directories)
 data:
@@ -56,11 +39,11 @@ data:
 
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-  project: MEGS-AI ViT Custom
+  project: MEGS-AI Baseline
   job_type: training
   tags:
     - aia
     - sxr
     - regression
-  wb_name: 171-304-ViT
+  wb_name: 171-304-baseline
   notes: Regression from AIA images (2 channels) to GOES SXR flux

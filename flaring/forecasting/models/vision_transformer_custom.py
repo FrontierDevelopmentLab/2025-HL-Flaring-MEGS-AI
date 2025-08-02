@@ -13,13 +13,13 @@ from torchvision import transforms
 import pytorch_lightning as pl
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
-norm = np.load("/mnt/data/ML-Ready_clean/mixed_data/SXR/normalized_sxr.npy")
+#norm = np.load("/mnt/data/ML-Ready_clean/mixed_data/SXR/normalized_sxr.npy")
 
 def unnormalize_sxr(normalized_values, sxr_norm):
     return 10 ** (normalized_values * float(sxr_norm[1].item()) + float(sxr_norm[0].item())) - 1e-8
 
 class ViT(pl.LightningModule):
-    def __init__(self, model_kwargs):
+    def __init__(self, model_kwargs, sxr_norm):
         super().__init__()
         self.lr = model_kwargs['lr']
         self.save_hyperparameters()
@@ -27,6 +27,7 @@ class ViT(pl.LightningModule):
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
         self.adaptive_loss = SXRRegressionDynamicLoss(window_size=100)
+        self.sxr_norm = sxr_norm
 
     def forward(self, x, return_attention=True):
         return self.model(x, return_attention=return_attention)
@@ -64,8 +65,8 @@ class ViT(pl.LightningModule):
         preds_squeezed = torch.squeeze(preds)
 
         # Unnormalize
-        sxr_un = unnormalize_sxr(sxr, norm)
-        preds_squeezed_un = unnormalize_sxr(preds_squeezed, norm)
+        sxr_un = unnormalize_sxr(sxr, self.sxr_norm)
+        preds_squeezed_un = unnormalize_sxr(preds_squeezed, self.sxr_norm)
 
         # Use adaptive rare event loss
         loss, weights = self.adaptive_loss.calculate_loss(

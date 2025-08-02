@@ -13,5 +13,5 @@ data:
   sxr_norm_path:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoint_path:
-    "/mnt/data/ML-Ready_clean/mixed_data/checkpoints/custom-vit-weighted-final-20250731_072155.pth"
+    "/mnt/data/ML-Ready_clean/mixed_data/checkpoints-higher-x-m-weight/custom-vit-weighted-higher-x-m-weight-epoch=43-val_loss=0.0664.ckpt"
 

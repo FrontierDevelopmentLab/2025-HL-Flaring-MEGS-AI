@@ -4,13 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="update model configuration and evaluation scripts; adjust checkpoint paths, output file names, and weight paths; enhance evaluation metrics for flare classes and improve visualization aesthetics">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="updated model and data loaders to take in different wavelengths!">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/data_loaders/SDOAIA_dataloader.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/data_loaders/SDOAIA_dataloader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/callback.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/callback.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/train.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -129,7 +127,7 @@
       <workItem from="1753630961668" duration="9897000" />
       <workItem from="1753929248247" duration="23397000" />
       <workItem from="1754000190506" duration="10165000" />
-      <workItem from="1754146439867" duration="3226000" />
+      <workItem from="1754146439867" duration="7262000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -307,7 +305,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754083359321</updated>
     </task>
-    <option name="localTasksCounter" value="26" />
+    <task id="LOCAL-00026" summary="updated model and data loaders to take in different wavelengths!">
+      <option name="closed" value="true" />
+      <created>1754149724483</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1754149724484</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -341,7 +347,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="right split_data.py" />
     <MESSAGE value="fixed split data so that we include AIA and SXR data... we also fixed the config file and bug fixes for data loaders" />
     <MESSAGE value="fixed wandb name scheme" />
     <MESSAGE value="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints" />
@@ -366,6 +371,7 @@
     <MESSAGE value="update model configuration and training scripts; change selected model to 'ViT Custom', increase epochs to 250, and adjust output paths; refactor model loading in inference to support hybrid models and attention weight saving" />
     <MESSAGE value="added evaluation script" />
     <MESSAGE value="update model configuration and evaluation scripts; adjust checkpoint paths, output file names, and weight paths; enhance evaluation metrics for flare classes and improve visualization aesthetics" />
-    <option name="LAST_COMMIT_MESSAGE" value="update model configuration and evaluation scripts; adjust checkpoint paths, output file names, and weight paths; enhance evaluation metrics for flare classes and improve visualization aesthetics" />
+    <MESSAGE value="updated model and data loaders to take in different wavelengths!" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated model and data loaders to take in different wavelengths!" />
   </component>
 </project>

@@ -150,7 +150,6 @@ class AttentionMapCallback(Callback):
             epoch: Current epoch number
             patch_size: Size of patches
         """
-        # Convert image to numpy for plotting
         # Convert image to numpy and transpose
         img_np = image.cpu().numpy()
         if len(img_np.shape) == 3 and img_np.shape[0] in [1, 3]:  # Check if channels first
