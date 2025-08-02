@@ -227,7 +227,7 @@ class AttentionBlock(nn.Module):
 def img_to_patch(x, patch_size, flatten_channels=True):
     """
     Args:
-        x: Tensor representing the image of shape [B, C, H, W]
+        x: Tensor representing the image of shape [B, H, W, C]
         patch_size: Number of pixels per dimension of the patches (integer)
         flatten_channels: If True, the patches will be returned in a flattened format
                            as a feature vector instead of a image grid.
@@ -258,7 +258,7 @@ class SXRRegressionDynamicLoss:
             'quiet': 1.0,
             'c_class': 2.0,
             'm_class': 10.0,
-            'x_class': 20.0
+            'x_class': 15.0
         }
 
     def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):

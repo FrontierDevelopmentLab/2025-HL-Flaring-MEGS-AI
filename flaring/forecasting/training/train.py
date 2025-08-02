@@ -84,6 +84,9 @@ n = 0
 torch.manual_seed(config_data['megsai']['seed'])
 np.random.seed(config_data['megsai']['seed'])
 
+training_wavelengths = config_data['wavelengths']
+
+
 # DataModule
 data_loader = AIA_GOESDataModule(
     aia_train_dir= config_data['data']['aia_dir']+"/train",
@@ -95,6 +98,7 @@ data_loader = AIA_GOESDataModule(
     batch_size=config_data['batch_size'],
     num_workers=os.cpu_count(),
     sxr_norm=sxr_norm,
+    wavelengths=training_wavelengths,
 )
 data_loader.setup()
 
@@ -174,14 +178,14 @@ pth_callback = PTHCheckpointCallback(
 # Model
 if config_data['selected_model'] == 'linear':
     model = LinearIrradianceModel(
-        d_input=6,
+        d_input= len(config_data['wavelengths']),
         d_output=1,
         lr= config_data['model']['lr'],
         loss_func=MSELoss()
     )
 elif config_data['selected_model'] == 'hybrid':
     model = HybridIrradianceModel(
-        d_input=6,
+        d_input= len(config_data['wavelengths']),
         d_output=1,
         cnn_model=config_data['megsai']['cnn_model'],
         ln_model=True,

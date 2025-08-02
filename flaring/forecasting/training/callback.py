@@ -194,9 +194,14 @@ class AttentionMapCallback(Callback):
         #     axes[0].imshow(img_display, cmap='gray')
 
             # Option 2: Create RGB composite from 3 channels (uncomment if preferred)
-        rgb_channels = [0, 2, 4]  # Select which channels to use for R, G, B
-        img_display = np.stack([(img_np[:, :, i] + 1) / 2 for i in rgb_channels], axis=2)
-        img_display = np.clip(img_display, 0, 1)
+        if len(img_np[0,0,:]) >= 6:  # Ensure we have enough channels
+            rgb_channels = [0, 2, 4]  # Select which channels to use for R, G, B
+            img_display = np.stack([(img_np[:, :, i] + 1) / 2 for i in rgb_channels], axis=2)
+            img_display = np.clip(img_display, 0, 1)
+        else:
+            # If not enough channels, use grayscale
+            img_display = (img_np[:, :, 0] + 1) / 2
+            img_display = np.stack([img_display] * 3, axis=2)
         axes[0].imshow(img_display)
         axes[0].set_title(f'Original Image (Epoch {epoch})')
         axes[0].axis('off')
