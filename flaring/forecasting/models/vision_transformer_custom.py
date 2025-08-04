@@ -10,7 +10,6 @@ from torchvision import transforms
 import pytorch_lightning as pl
 from typing import Tuple, Dict, Any, Optional
 
-
 class ViT(pl.LightningModule):
     def __init__(self, model_kwargs: Dict[str, Any]):
         super().__init__()
@@ -86,7 +85,6 @@ class ViT(pl.LightningModule):
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         self._calculate_loss(batch, mode="test")
 
-
 class VisionTransformer(nn.Module):
     def __init__(
             self,
@@ -120,6 +118,10 @@ class VisionTransformer(nn.Module):
         self.pos_embedding = nn.Parameter(torch.randn(1, 1 + num_patches, embed_dim))
 
     def forward(self, x: torch.Tensor, return_attention: bool = False) -> torch.Tensor:
+
+       #print(f"ViT forward: Input shape={x.shape}, return_attention={return_attention}")
+        if x.dim() != 4 or x.shape[2:4] != (512, 512):
+            raise ValueError(f"Expected input shape [B, C, 512, 512], got {x.shape}")
         x = img_to_patch(x, self.patch_size)
         B, T, _ = x.shape
         x = self.input_layer(x)
@@ -150,7 +152,6 @@ class VisionTransformer(nn.Module):
             return self.mlp_head(cls), attention_weights
 
         return self.mlp_head(cls)
-
 
 class AttentionBlock(nn.Module):
     def __init__(
@@ -189,17 +190,30 @@ class AttentionBlock(nn.Module):
             x = x + self.linear(self.layer_norm_2(x))
             return x
 
-
 def img_to_patch(
         x: torch.Tensor,
         patch_size: int,
         flatten_channels: bool = True
 ) -> torch.Tensor:
-    x = x.permute(0, 3, 1, 2)
+    """
+    Convert image to patches for Vision Transformer.
+    Args:
+        x: Tensor of shape [B, C, H, W]
+        patch_size: Size of each patch (int)
+        flatten_channels: Whether to flatten channel dimension
+    Returns:
+        Patches of shape [B, H'*W', C*p_H*p_W] if flatten_channels=True
+    """
     B, C, H, W = x.shape
+    #print(f"img_to_patch: Input shape=[B={B}, C={C}, H={H}, W={W}], patch_size={patch_size}")
+    if H % patch_size != 0 or W % patch_size != 0:
+        raise ValueError(f"Height ({H}) and Width ({W}) must be divisible by patch_size ({patch_size})")
+    if H // patch_size == 0 or W // patch_size == 0:
+        raise ValueError(f"Height ({H}) or Width ({W}) too small for patch_size ({patch_size})")
     x = x.reshape(B, C, H // patch_size, patch_size, W // patch_size, patch_size)
-    x = x.permute(0, 2, 4, 1, 3, 5)  # [B, H', W', C, p_H, p_W]
+    x = x.permute(0, 2, 4, 1, 3, 5)  # [B, H//p, W//p, C, p_H, p_W]
     x = x.flatten(1, 2)  # [B, H'*W', C, p_H, p_W]
     if flatten_channels:
         x = x.flatten(2, 4)  # [B, H'*W', C*p_H*p_W]
+    #print(f"img_to_patch: Output shape={x.shape}")
     return x

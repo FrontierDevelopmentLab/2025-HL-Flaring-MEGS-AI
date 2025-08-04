@@ -1,101 +1,33 @@
-import argparse
-import re
-import sys
-import pandas as pd
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
-from torch.utils.data import DataLoader, Subset
 import yaml
-import os
-import glob
+import argparse
 from datetime import datetime
-import torchvision.transforms as T
+import pandas as pd
+import os
+import sys
+import re
+from typing import Optional, Tuple, List, Dict, Any
 
 # Get the absolute path to the forecasting directory
 current_dir = Path(__file__).parent  # inference/
 forecasting_dir = current_dir.parent  # forecasting/
 sys.path.insert(0, str(forecasting_dir))
 
+# Import models
+from models.vision_transformer_custom import ViT
+from models.FastSpectralNet import FastViTFlaringModel
+from training.train import Seq2SeqViTWrapper
+
+# Import data modules
 from data_loaders.SDOAIA_dataloader import AIA_GOESSequenceDataset
-from training.train import SequenceViTWrapper, SequenceFastViTWrapper
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def resolve_config_variables(config_dict, base_vars=None):
+    """Resolve ${variable} references within the config"""
+    variables = base_vars.copy() if base_vars else {}
 
-def unnormalize_sxr(normalized_data, norm_params):
-    """Reverse log10 and z-score normalization for SXR values."""
-    if isinstance(normalized_data, torch.Tensor):
-        normalized_data = normalized_data.cpu().numpy()
-    mean, std = norm_params  # Assume norm_params is [mean, std]
-    if std == 0:
-        raise ValueError("Standard deviation in norm_params is zero")
-    log_sxr = normalized_data * std + mean
-    sxr = 10 ** log_sxr - 1e-8
-    return sxr
-
-def predict_sequence(model, dataset, batch_size=1, visualize_attention=False, output_dir=None):
-    """Generator yielding predictions for time series data with optional attention visualization."""
-    model.eval()
-    loader = DataLoader(dataset, batch_size=batch_size)
-
-    if visualize_attention and output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-
-    with torch.no_grad():
-        for batch_idx, batch in enumerate(loader):
-            aia_sequences = batch[0].to(device)
-            sxr_targets = batch[1].to(device)
-
-            if visualize_attention:
-                preds, attn_weights = model(aia_sequences, return_attention=True)
-                if batch_idx == 0:
-                    visualize_attention_maps(
-                        aia_sequences[0].cpu().numpy(),
-                        attn_weights[:, 0].cpu().numpy(),
-                        output_dir=output_dir,
-                        timestamp=str(datetime.now()))
-            else:
-                preds = model(aia_sequences)
-
-            # Debug: Print raw predictions and targets
-            print(f"Batch {batch_idx}: Raw preds = {preds.cpu().numpy()}, Raw targets = {sxr_targets.cpu().numpy()}")
-
-            yield {
-                'predictions': preds.cpu().numpy(),
-                'targets': sxr_targets.cpu().numpy(),
-                'timestamps': dataset.dataset.sequences[batch_idx*batch_size : (batch_idx+1)*batch_size] if isinstance(dataset, Subset) else dataset.sequences[batch_idx*batch_size : (batch_idx+1)*batch_size]
-            }
-
-def visualize_attention_maps(sequence, attn_weights, output_dir, timestamp):
-    """Save attention visualization for a sequence."""
-    last_layer_attn = attn_weights[-1].mean(0)
-
-    plt.figure(figsize=(15, 5))
-    for i in range(min(3, sequence.shape[0])):
-        plt.subplot(1, 3, i+1)
-        # Normalize AIA image to [0, 1] for visualization (assuming channels 0:3 are RGB-like)
-        img = sequence[i][..., :3]
-        img = (img - img.min()) / (img.max() - img.min() + 1e-8)  # Normalize to [0, 1]
-        plt.imshow(img)
-        plt.title(f"Frame {i}")
-        plt.axis('off')
-
-    seq_path = os.path.join(output_dir, f"sequence_{timestamp.replace(':', '-')}.png")
-    plt.savefig(seq_path)
-    plt.close()
-
-    plt.figure(figsize=(10, 10))
-    plt.imshow(last_layer_attn, cmap='hot')
-    plt.title("Attention Weights (Last Layer)")
-    plt.colorbar()
-    attn_path = os.path.join(output_dir, f"attention_{timestamp.replace(':', '-')}.png")
-    plt.savefig(attn_path)
-    plt.close()
-
-def resolve_config_variables(config_dict):
-    """Recursively resolve ${variable} references within the config."""
-    variables = {}
+    # First pass - collect non-referencing variables
     for key, value in config_dict.items():
         if isinstance(value, str) and not value.startswith('${'):
             variables[key] = value
@@ -119,178 +51,219 @@ def resolve_config_variables(config_dict):
 
     return recursive_substitute(config_dict, variables)
 
-def load_model(train_config, checkpoint_path):
-    """Load model using parameters from training config."""
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint file not found at: {checkpoint_path}")
+def load_configs(model_config_path: str, inference_config_path: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Load both model and inference configs with proper variable resolution"""
+    # Load model config first
+    with open(model_config_path, 'r') as f:
+        model_config = yaml.safe_load(f)
 
-    state = torch.load(checkpoint_path, map_location=device)
+    # Resolve model config variables
+    model_config = resolve_config_variables(model_config)
 
-    # Get model parameters from training config
-    model_type = train_config['model']['type']
-    sequence_length = train_config['training']['sequence']['length']
+    # Load inference config
+    with open(inference_config_path, 'r') as f:
+        inference_config = yaml.safe_load(f)
 
-    if model_type == 'ViT':
+    # Resolve inference config variables using model config as base
+    inference_config = resolve_config_variables(inference_config, model_config)
+
+    return model_config, inference_config
+
+def load_model(model_config: Dict[str, Any], model_path: str, device: torch.device):
+    """Load trained model based on config"""
+    input_seq_length = model_config['training']['sequence']['input_length']
+    output_seq_length = model_config['training']['sequence']['output_length']
+    sxr_norm_path = model_config['data']['paths']['sxr_norm']
+    sxr_norm = np.load(sxr_norm_path, allow_pickle=True)
+    print(f"Loaded sxr_norm from {sxr_norm_path}: type={type(sxr_norm)}, content={sxr_norm}")
+    if isinstance(sxr_norm, (np.ndarray, list)) and len(sxr_norm) == 2:
+        sxr_norm = tuple(float(x) for x in sxr_norm)
+        print(f"Converted sxr_norm to tuple: {sxr_norm}")
+    if not isinstance(sxr_norm, tuple) or len(sxr_norm) != 2:
+        raise ValueError(f"sxr_norm must be a tuple of (mean, std), got type={type(sxr_norm)}, content={sxr_norm}")
+    if not all(np.isfinite(sxr_norm)):
+        raise ValueError(f"sxr_norm contains non-finite values: {sxr_norm}")
+
+    # Initialize model based on config
+    if model_config['model']['type'] == 'ViT':
         vit_kwargs = {
-            'patch_size': train_config['ViT']['architecture']['patch_size'],
-            'num_channels': train_config['ViT']['architecture']['num_channels'],
-            'embed_dim': train_config['ViT']['architecture']['embed_dim'],
-            'num_heads': train_config['ViT']['architecture']['num_heads'],
-            'num_classes': train_config['ViT']['architecture']['num_classes'],
-            'num_patches': train_config['ViT']['architecture']['num_patches'],
-            'num_layers': train_config['ViT']['architecture']['num_layers'],
-            'hidden_dim': train_config['ViT']['architecture']['hidden_dim']
+            **model_config['ViT']['architecture'],
+            **model_config['ViT']['training'],
+            'eve_norm': sxr_norm
         }
-
-        model = SequenceViTWrapper(
+        model = Seq2SeqViTWrapper(
             model_kwargs=vit_kwargs,
-            sequence_length=sequence_length
+            input_sequence_length=input_seq_length,
+            output_sequence_length=output_seq_length
         )
-    elif model_type == 'FastViT':
+    elif model_config['model']['type'] == 'FastViT':
         fastvit_kwargs = {
-            'd_input': train_config['ViT']['architecture']['num_channels'],
-            'd_output': train_config['ViT']['architecture']['num_classes'],
-            'embed_dim': train_config['FastViT']['architecture']['embed_dim'],
-            'num_heads': train_config['FastViT']['architecture']['num_heads'],
-            'depth': train_config['FastViT']['architecture']['depth'],
-            'mlp_ratio': train_config['FastViT']['architecture']['mlp_ratio'],
-            'qkv_bias': train_config['FastViT']['architecture']['qkv_bias'],
-            'drop_rate': train_config['FastViT']['architecture']['drop_rate'],
-            'attn_drop_rate': train_config['FastViT']['architecture']['attn_drop_rate'],
-            'image_size': 512,
-            'patch_size': 32
+            **model_config['FastViT']['architecture'],
+            **model_config['FastViT']['training'],
+            'eve_norm': sxr_norm
         }
-
-        model = SequenceFastViTWrapper(
-            sequence_length=sequence_length,
+        model = Seq2SeqFastViTWrapper(
+            d_input=6,
+            d_output=output_seq_length,
+            eve_norm=sxr_norm,
+            image_size=512,
+            patch_size=32,
+            input_sequence_length=input_seq_length,
+            output_sequence_length=output_seq_length,
             **fastvit_kwargs
         )
     else:
-        raise ValueError(f"Unknown model type: {model_type}")
+        raise ValueError(f"Unknown model type: {model_config['model']['type']}")
 
-    # Load model weights
-    if isinstance(state, dict):
-        if 'model' in state:
-            model.load_state_dict(state['model'].state_dict())
-        elif 'state_dict' in state:
-            model.load_state_dict(state['state_dict'])
-        else:
-            model.load_state_dict(state)
+    # Load weights if available
+    if model_path and os.path.exists(model_path):
+        try:
+            state_dict = torch.load(model_path, map_location=device)
+            model.load_state_dict(state_dict)
+            print(f"Successfully loaded weights from {model_path}")
+        except Exception as e:
+            print(f"Warning: Could not load weights from {model_path}. Using initialized model. Error: {str(e)}")
     else:
-        model.load_state_dict(state)
+        print(f"No model weights found at {model_path}. Using initialized model with config parameters.")
 
-    return model.to(device)
+    model = model.to(device)
+    model.eval()
+    print(f"Model moved to device: {device}")
+    return model
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--train-config', type=str, required=True,
-                        help='Path to training config YAML')
-    parser.add_argument('--inference-config', type=str, required=True,
-                        help='Path to inference config YAML')
-    parser.add_argument('--visualize-attention', action='store_true',
-                        help='Generate attention visualizations')
-    args = parser.parse_args()
+def denormalize_sxr(sxr_values: np.ndarray, sxr_norm: Tuple[float, float]) -> np.ndarray:
+    """Convert normalized SXR values back to original scale"""
+    return np.power(10, sxr_values * sxr_norm[1] + sxr_norm[0]) - 1e-8
 
-    # Load and resolve both configs
-    with open(args.train_config, 'r') as stream:
-        train_config = yaml.safe_load(stream)
-    train_config = resolve_config_variables(train_config)
+def predict_sequence(
+        model: torch.nn.Module,
+        dataset: AIA_GOESSequenceDataset,
+        sample_idx: int,
+        device: torch.device,
+        sxr_norm: Tuple[float, float]
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Make predictions for a single sequence sample"""
+    input_sequence, true_values = dataset[sample_idx]
+    print(f"Dataset sample {sample_idx}: input shape={input_sequence.shape}, true_values shape={true_values.shape}")
+    input_tensor = input_sequence.unsqueeze(0).to(device)
+    print(f"Input tensor shape: {input_tensor.shape}, device: {input_tensor.device}")
 
-    with open(args.inference_config, 'r') as stream:
-        inference_config = yaml.safe_load(stream)
-    inference_config = resolve_config_variables(inference_config)
+    with torch.no_grad():
+        pred_values = model(input_tensor).cpu().numpy().squeeze()
+    print(f"Predicted values shape: {pred_values.shape}")
 
-    # Get paths from inference config
-    checkpoint_path = inference_config['data']['checkpoint_path']
-    aia_test_dir = os.path.join(inference_config['data']['aia_dir'], 'test')
-    sxr_test_dir = os.path.join(inference_config['data']['sxr_dir'], 'test')
+    input_sequence = input_sequence.cpu().numpy()
+    true_values = true_values.cpu().numpy()
+
+    true_values = denormalize_sxr(true_values, sxr_norm)
+    pred_values = denormalize_sxr(pred_values, sxr_norm)
+
+    return input_sequence, true_values, pred_values
+
+def collect_sequence_results(
+        true_values: np.ndarray,
+        pred_values: np.ndarray,
+        sample_idx: int,
+        output_seq_length: int,
+        timestamp: str
+) -> pd.DataFrame:
+    """Collect true and predicted SXR values for a single sample"""
+    time_steps = np.arange(output_seq_length)
+    data = {
+        'Sample_Index': [sample_idx] * output_seq_length,
+        'Time_Step': time_steps,
+        'True_SXR': true_values,
+        'Predicted_SXR': pred_values,
+        'Timestamp': [timestamp] * output_seq_length
+    }
+    return pd.DataFrame(data)
+
+def run_inference(
+        model_config_path: str,
+        inference_config_path: str,
+        output_dir: str,
+        num_samples: int = 5,
+        device: str = 'cuda'
+):
+    """Main inference function"""
+    # Load configurations
+    model_config, inference_config = load_configs(model_config_path, inference_config_path)
+    device = torch.device(device if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Load model
+    model_path = inference_config.get('model_path')
+    model = load_model(model_config, model_path, device)
+
+    # Load sxr_norm
     sxr_norm_path = inference_config['data']['sxr_norm_path']
-    output_path = inference_config['output_path']
+    sxr_norm = np.load(sxr_norm_path, allow_pickle=True)
+    print(f"Loaded sxr_norm from {sxr_norm_path}: type={type(sxr_norm)}, content={sxr_norm}")
+    if isinstance(sxr_norm, (np.ndarray, list)) and len(sxr_norm) == 2:
+        sxr_norm = tuple(float(x) for x in sxr_norm)
+        print(f"Converted sxr_norm to tuple: {sxr_norm}")
+    if not isinstance(sxr_norm, tuple) or len(sxr_norm) != 2:
+        raise ValueError(f"sxr_norm must be a tuple of (mean, std), got type={type(sxr_norm)}, content={sxr_norm}")
 
-    # Debug: Inspect normalization parameters
-    norm_params = np.load(sxr_norm_path)
-    try:
-        mean, std = norm_params['mean'], norm_params['std']
-    except (IndexError, TypeError):
-        mean, std = norm_params  # Assume [mean, std]
-    print(f"Normalization params: mean={mean}, std={std}")
-    norm_params = (mean, std)
-
-    # Debug: Inspect SXR data files
-    sxr_files = sorted(glob.glob(os.path.join(sxr_test_dir, "*.npy")))
-    print(f"Found {len(sxr_files)} SXR files in {sxr_test_dir}")
-    for f in sxr_files[:5]:
-        sxr_val = np.load(f)
-        print(f"SXR file {os.path.basename(f)}: {sxr_val}")
-
-    # Load model using training config
-    model = load_model(train_config, checkpoint_path)
-
-    # Define sxr_transform to match training
-    sxr_transform = T.Lambda(lambda x: (np.log10(x + 1e-8) - mean) / std)
-
-    # Initialize sequence dataset with sxr_transform
-    full_dataset = AIA_GOESSequenceDataset(
-        aia_dir=aia_test_dir,
-        sxr_dir=sxr_test_dir,
-        sequence_length=train_config['training']['sequence']['length'],
-        stride=train_config['training']['sequence']['stride'],
-        sxr_transform=sxr_transform
+    # Setup dataset
+    dataset = AIA_GOESSequenceDataset(
+        aia_dir=inference_config['data']['aia_dir'],
+        sxr_dir=inference_config['data']['sxr_dir'],
+        sequence_length=model_config['training']['sequence']['input_length'],
+        stride=1,
+        sxr_transform=lambda x: (np.log10(x + 1e-8) - sxr_norm[0]) / sxr_norm[1],
+        target_size=(512, 512)
     )
+    print(f"Dataset size: {len(dataset)} samples")
 
-    # Limit to first 100 sequences
-    num_sequences = min(8000, len(full_dataset))
-    dataset = Subset(full_dataset, range(num_sequences))
-
-    # Debug: Inspect dataset samples
-    print(f"Dataset size: {len(dataset)} sequences")
-    for i in range(min(5, len(dataset))):
-        aia_seq, sxr_target = dataset[i]
-        timestamp = full_dataset.sequences[i][-1]
-        # Unnormalize sxr_target for debugging
-        unnorm_target = unnormalize_sxr(sxr_target, norm_params)
-        print(f"Sample {i}: timestamp={timestamp}, sxr_target={sxr_target}, unnorm_target={unnorm_target}, aia_seq_shape={aia_seq.shape}")
-
-    # Prepare output
-    results = []
-    output_dir = os.path.dirname(output_path)
-    attention_dir = os.path.join(output_dir, 'attention_plots') if args.visualize_attention else None
+    # Collect all results
+    results_dfs = []
+    num_samples = min(num_samples, len(dataset))
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Run inference
-    for batch in predict_sequence(
-            model,
-            dataset,
-            batch_size=train_config['training']['batch_size'],
-            visualize_attention=args.visualize_attention,
-            output_dir=attention_dir
-    ):
-        for i, (pred, target, timestamp) in enumerate(zip(
-                batch['predictions'],
-                batch['targets'],
-                batch['timestamps']
-        )):
-            # Use the last timestamp in the sequence
-            timestamp = timestamp[-1]
-            # Debug: Print raw and unnormalized values
-            print(f"Timestamp: {timestamp}, Raw pred: {pred}, Raw target: {target}")
-            unnorm_pred = unnormalize_sxr(pred, norm_params).item()
-            unnorm_target = unnormalize_sxr(target, norm_params).item()
-            print(f"Unnormalized pred: {unnorm_pred}, Unnormalized target: {unnorm_target}")
+    for sample_idx in range(num_samples):
+        input_seq, true_sxr, pred_sxr = predict_sequence(
+            model, dataset, sample_idx, device, sxr_norm)
 
-            results.append({
-                'Timestamp': timestamp,
-                'Prediction': unnorm_pred,
-                'Ground_Truth': unnorm_target
-            })
+        # Collect results for this sample
+        sample_df = collect_sequence_results(
+            true_sxr, pred_sxr,
+            sample_idx,
+            model_config['training']['sequence']['output_length'],
+            timestamp)
 
-    # Save results
-    df = pd.DataFrame(results)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    print(f"Predictions saved to {output_path}")
+        results_dfs.append(sample_df)
 
-    if args.visualize_attention and attention_dir:
-        print(f"Attention visualizations saved to {attention_dir}")
+        #print(f"\nSample {sample_idx} Results:")
+        #print(f"Input Sequence Length: {model_config['training']['sequence']['input_length']}")
+       # print(f"Prediction Horizon: {model_config['training']['sequence']['output_length']} steps")
+        print("True SXR Values:", true_sxr)
+        print("Predicted SXR Values:", pred_sxr)
 
-if __name__ == '__main__':
-    main()
+    # Combine all results and save to a single CSV
+    output_path = os.path.join(output_dir, f"predictions_{timestamp}.csv")
+    combined_df = pd.concat(results_dfs, ignore_index=True)
+    combined_df.to_csv(output_path, index=False)
+    print(f"All results saved to: {output_path}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Run sequence-to-sequence solar flare prediction')
+    parser.add_argument('--model_config', type=str, required=True, help='Path to model config YAML')
+    parser.add_argument('--inference_config', type=str, required=True, help='Path to inference config YAML')
+    parser.add_argument('--output', type=str, default='inference_results', help='Output directory')
+    parser.add_argument('--num_samples', type=int, default=5, help='Number of samples to process')
+    parser.add_argument('--device', type=str, default='cuda', choices=['cuda', 'cpu'], help='Device to use')
+
+    args = parser.parse_args()
+
+    run_inference(
+        model_config_path=args.model_config,
+        inference_config_path=args.inference_config,
+        output_dir=args.output,
+        num_samples=args.num_samples,
+        device=args.device
+    )

@@ -5,7 +5,7 @@ base_checkpoint_dir: "/mnt/data3/ML-Ready_clean/non_flares_event_dir/c"
 # Training configuration
 training:
   batch_size: 2
-  epochs: 100
+  epochs: 50
   seed: 42
   sequence:
     enabled: true
