@@ -24,6 +24,61 @@ def has_attention_weights(model):
     """Check if model supports attention weights"""
     return hasattr(model, 'attention') or isinstance(model, ViT)
 
+#Does not return SXR data or use Dataloader for solo dataset
+def evaluate_solo_dataset(model, dataset, batch_size=16, times=None, config_data=None, save_weights=True, input_size = 512, patch_size = 16):
+    """Optimized generator for SolO dataset without Dataloader"""
+    model.eval()
+    supports_attention = has_attention_weights(model) and save_weights
+
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(dataset):
+            # Correct unpacking based on your data structure
+            aia_imgs = batch[0]  # Get aia_img from inputs
+            # Move to device (it's already a tensor)
+            aia_imgs = aia_imgs.to(device, non_blocking=True)
+
+            # Get model predictions for entire batch
+            pred = model(aia_imgs)
+
+            # Handle different model output formats
+            if isinstance(pred, tuple) and len(pred) > 1:
+                predictions = pred[0]  # Shape: [batch_size, ...]
+                weights = pred[1] if supports_attention else None  # Shape: [batch_size, heads, L, S ...]
+            else:
+                predictions = pred
+                weights = None
+
+            # Process entire batch at once for weights if needed
+            batch_weights = []
+            if supports_attention and weights is not None:
+                current_batch_size = predictions.shape[0]
+                for i in range(current_batch_size):
+                    last_layer_attention = weights[-1][i]  # Get i-th item from batch [num_heads, seq_len, seq_len]
+                    avg_attention = last_layer_attention.mean(dim=0)  # [seq_len, seq_len]
+
+                    cls_attention = avg_attention[0, 1:].cpu()  # [num_patches] - 1D array
+
+                    grid_h, grid_w = input_size // patch_size, input_size // patch_size  # Should be 64, 64
+
+                    attention_map = cls_attention.reshape(grid_h, grid_w)  # [64, 64]
+
+                    batch_weights.append(attention_map.numpy())
+
+                if config_data and 'weight_path' in config_data:
+                    save_batch_weights(batch_weights, batch_idx, batch_size, times, config_data['weight_path'])
+
+            current_batch_size = predictions.shape[0]
+            for i in range(current_batch_size):
+                global_idx = batch_idx * batch_size + i
+                weight_data = batch_weights[i] if (supports_attention and batch_weights) else None
+                yield (predictions[i].cpu().numpy(),
+                       weight_data, global_idx)
+
+
+
+
+
+
 
 def evaluate_model_on_dataset(model, dataset, batch_size=16, times=None, config_data=None, save_weights=True, input_size = 512, patch_size = 16):
     """Optimized generator with batch processing and weight saving"""
@@ -211,10 +266,18 @@ def main():
 
     # Dataset
     print("Loading dataset...")
-    dataset = AIA_GOESDataset(
-        aia_dir=config_data['data']['aia_dir'] + '/test',
-        sxr_dir=config_data['data']['sxr_dir'] + '/test',
-    )
+    if config_data['SolO'] == "true":
+        print("Using SolO dataset configuration")
+        dataset = AIA_GOESDataset(
+            aia_dir=config_data['SolO_data']['solo_img_dir'] + '/test',
+            sxr_dir=config_data['SolO_data']['sxr_dir'] + '/test', wavelengths=[94,131], only_prediction=True
+        )
+        print(dataset)
+    else:
+        dataset = AIA_GOESDataset(
+            aia_dir=config_data['data']['aia_dir'] + '/test',
+            sxr_dir=config_data['data']['sxr_dir'] + '/test', wavelengths= config_data['wavelengths']
+        )
 
     times = dataset.samples
     sxr_norm = np.load(config_data['data']['sxr_norm_path'])

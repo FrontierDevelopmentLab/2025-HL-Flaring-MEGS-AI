@@ -1,10 +1,15 @@
 # Base directories - change these to switch datasets
 base_data_dir: "/mnt/data/ML-Ready_clean/mixed_data"  # Change this line for different datasets
-output_path: "${base_data_dir}/output/final-vit-results.csv"
-checkpoint: "${base_data_dir}/checkpoints/"
-weight_path: "${base_data_dir}/weights-finalepoch/"
+output_path: "${base_data_dir}/output/SolO-171-304-MEGS-results.csv"
+weight_path: "${base_data_dir}/SolO-weights-171-304-finalepoch/"
 # Data paths (automatically constructed from base directories)
+SolO: "true"
+SolO_data:
+    solo_img_dir: "/mnt/data/ML-Ready_clean/SolO/SolO/ML-Ready-SolO"
+    sxr_dir: "${base_data_dir}/SXR"
+    sxr_norm_path: "${base_data_dir}/SolO/SXR/normalized_sxr.npy"
 model: "vit"  # Options: "cnn", "vit", "ViT Custom"
+wavelengths: [171, 304]  # AIA wavelengths in Angstroms
 data:
   aia_dir:
     "${base_data_dir}/AIA"
@@ -13,5 +18,5 @@ data:
   sxr_norm_path:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoint_path:
-    "/mnt/data/ML-Ready_clean/mixed_data/checkpoints-higher-x-m-weight/custom-vit-weighted-higher-x-m-weight-epoch=43-val_loss=0.0664.ckpt"
+    "/mnt/data/ML-Ready_clean/mixed_data/checkpoints-higher-x-m-weight/171-304-ViT-final-20250803_210021.pth"
 

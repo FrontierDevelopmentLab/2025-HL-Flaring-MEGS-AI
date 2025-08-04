@@ -12,13 +12,14 @@ import os
 class AIA_GOESDataset(torch.utils.data.Dataset):
     """Dataset for loading AIA images and SXR values for regression."""
 
-    def __init__(self, aia_dir, sxr_dir, wavelengths = [94,131,171,211,293,304], sxr_transform=None, target_size=(512, 512)):
+    def __init__(self, aia_dir, sxr_dir, wavelengths = [94,131,171,211,293,304], sxr_transform=None, target_size=(512, 512), only_prediction=False):
         self.aia_dir = Path(aia_dir).resolve()
         self.sxr_dir = Path(sxr_dir).resolve()
         self.wavelengths = wavelengths
         self.sxr_transform = sxr_transform
         self.target_size = target_size
         self.samples = []
+        self.only_prediction = only_prediction
 
         # Check directories
         if not self.aia_dir.is_dir():
@@ -33,10 +34,13 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         for f in aia_files:
             timestamp = f.stem
             sxr_path = self.sxr_dir / f"{timestamp}.npy"
-            if sxr_path.exists():
+            if sxr_path.exists() and not self.only_prediction:
+                self.samples.append(timestamp)
+            elif self.only_prediction:
                 self.samples.append(timestamp)
 
-        if len(self.samples) == 0:
+
+        if len(self.samples) == 0 and not self.only_prediction:
             raise ValueError("No valid sample pairs found")
 
     def __len__(self):
@@ -64,7 +68,10 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         aia_img = aia_img.permute(1,2,0) # (H, W, 6)
 
         # Load SXR value
-        sxr_val = np.load(sxr_path)
+        if not self.only_prediction:
+            sxr_val = np.load(sxr_path)
+        else:
+            sxr_val = np.array([0])
         if sxr_val.size != 1:
             raise ValueError(f"SXR value has size {sxr_val.size}, expected scalar")
         sxr_val = float(np.atleast_1d(sxr_val).flatten()[0])
