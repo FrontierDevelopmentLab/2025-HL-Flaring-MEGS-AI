@@ -19,7 +19,7 @@ class FlareDownloadProcessor:
         self.SXRDownloader = SXRDownloader
         self.flaring_data = flaring_data
 
-    def process_download(self, time_before_start=timedelta(minutes=15), time_after_end=timedelta(minutes=0)):
+    def process_download(self, time_before_start=timedelta(minutes=5), time_after_end=timedelta(minutes=0)):
 
         fl_events = self.FlareEventDownloader.download_events()
         print(fl_events)
@@ -94,16 +94,16 @@ if __name__ == '__main__':
         current_end = min(current_start + timedelta(days=chunk_size), end)
         print(f"Processing chunk: {current_start.strftime('%Y-%m-%d')} to {current_end.strftime('%Y-%m-%d')}")
 
-        sxr_downloader = sxr.SXRDownloader(f"{download_dir}/GOES-non-flaring",
-                                           f"{download_dir}/GOES-non-flaring/combined")
+        sxr_downloader = sxr.SXRDownloader(f"{download_dir}/GOES-flaring",
+                                           f"{download_dir}/GOES-flaring/combined")
         flare_event = fed.FlareEventDownloader(
             current_start.strftime("%Y-%m-%d"),
             current_end.strftime("%Y-%m-%d"),
             event_type="FL",
             GOESCls="M1.0",
-            directory=f"{download_dir}/SDO-AIA-non-flaring/FlareEvents"
+            directory=f"{download_dir}/SDO-AIA-flaring/FlareEvents"
         )
-        sdo_downloader = sdo.SDODownloader(f"{download_dir}/SDO-AIA-non-flaring", "ggoodwin5@gsu.edu")
+        sdo_downloader = sdo.SDODownloader(f"{download_dir}/SDO-AIA-flaring", "ggoodwin5@gsu.edu")
 
         processor = FlareDownloadProcessor(flare_event, sdo_downloader, sxr_downloader,
                                            flaring_data=flaring_data)
