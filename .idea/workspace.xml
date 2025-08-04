@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="Changed weights for ViT">
+      <change afterPath="$PROJECT_DIR$/flaring/notebook_tests/model_params.ipynb" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -13,8 +15,8 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="Jupyter Notebook" />
         <option value="Python Script" />
+        <option value="Jupyter Notebook" />
       </list>
     </option>
   </component>
@@ -123,6 +125,7 @@
       <workItem from="1753929248247" duration="23397000" />
       <workItem from="1754000190506" duration="10165000" />
       <workItem from="1754146439867" duration="7692000" />
+      <workItem from="1754282226274" duration="5949000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -316,7 +319,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754154137848</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="Changed weights for ViT">
+      <option name="closed" value="true" />
+      <created>1754319038616</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1754319038616</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -350,7 +361,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="fixed wandb name scheme" />
     <MESSAGE value="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints" />
     <MESSAGE value="added requirements.txt" />
     <MESSAGE value="added some nice animations and plots for analysis to plotting_test_results.ipynb" />
@@ -375,6 +385,7 @@
     <MESSAGE value="update model configuration and evaluation scripts; adjust checkpoint paths, output file names, and weight paths; enhance evaluation metrics for flare classes and improve visualization aesthetics" />
     <MESSAGE value="updated model and data loaders to take in different wavelengths!" />
     <MESSAGE value="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
-    <option name="LAST_COMMIT_MESSAGE" value="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
+    <MESSAGE value="Changed weights for ViT" />
+    <option name="LAST_COMMIT_MESSAGE" value="Changed weights for ViT" />
   </component>
 </project>

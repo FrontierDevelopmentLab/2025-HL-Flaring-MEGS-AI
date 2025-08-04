@@ -56,18 +56,7 @@ class HybridIrradianceModel(BaseModel):
             self.ln_model.model.bias = nn.Parameter(self.ln_params['bias'])
         self.cnn_model = None
         self.cnn_lambda = 1.
-        if cnn_model == 'resnet':
-            # self.cnn_model = nn.Sequential(
-            #     nn.Conv2d(d_input, 64, kernel_size=7, stride=2, padding=3),
-            #     nn.ReLU(),
-            #     nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-            #     nn.ReLU(),
-            #     nn.AdaptiveAvgPool2d((1, 1)),
-            #     nn.Flatten(),
-            #     nn.Linear(64, d_output),
-            #     nn.Dropout(cnn_dp)
-            # )
+        if cnn_model == 'original':
             self.cnn_model = nn.Sequential(
                 nn.Conv2d(d_input, 64, kernel_size=7, stride=2, padding=3),
                 nn.BatchNorm2d(64),  # Add batch normalization
@@ -92,10 +81,66 @@ class HybridIrradianceModel(BaseModel):
 
                 nn.AdaptiveAvgPool2d((1, 1)),
                 nn.Flatten(),
-                nn.Linear(256, 128),  # Add intermediate layer
+                nn.Linear(256, 128),
                 nn.ReLU(),
                 nn.Dropout(cnn_dp),
                 nn.Linear(128, d_output)
+            )
+
+        if cnn_model == 'updated':
+            # deeper model
+            self.cnn_model = nn.Sequential(
+
+                nn.Conv2d(d_input, 64, kernel_size=7, stride=1, padding=1),
+                nn.BatchNorm2d(64),  # Add batch normalization
+                nn.ReLU(),
+                nn.Conv2d(64, 64, kernel_size=7, stride=1, padding=1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+
+                nn.Conv2d(64, 128, kernel_size=5, stride=1, padding=1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128, 128, kernel_size=5, stride=1, padding=1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+
+                nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+                nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+
+                nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(512),
+                nn.ReLU(),
+                nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(512),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+
+                nn.AdaptiveAvgPool2d((2, 2)),
+                nn.Flatten(),
+                nn.Linear(2048, 2048),
+                nn.ReLU(),
+                nn.Dropout(cnn_dp),
+                nn.Linear(2048, 1024),
+                nn.ReLU(),
+                nn.Dropout(cnn_dp),
+                nn.Linear(1024, 512),
+                nn.ReLU(),
+                nn.Dropout(cnn_dp),
+                nn.Linear(512, 256),
+                nn.ReLU(),
+                nn.Dropout(cnn_dp),
+                nn.Linear(256, 128),
+                nn.ReLU(),
+                nn.Dropout(cnn_dp),
+                nn.Linear(128, d_output),
             )
 
         elif cnn_model.startswith('efficientnet'):
