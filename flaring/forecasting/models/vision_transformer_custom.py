@@ -244,7 +244,7 @@ def img_to_patch(x, patch_size, flatten_channels=True):
 
 
 class SXRRegressionDynamicLoss:
-    def __init__(self, window_size=100):
+    def __init__(self, window_size=1000):
         self.c_threshold = 1e-6
         self.m_threshold = 1e-5
         self.x_threshold = 1e-4
@@ -257,9 +257,9 @@ class SXRRegressionDynamicLoss:
 
         self.base_weights = {
             'quiet': 1.0,
-            'c_class': 2.0,
-            'm_class': 10.0,
-            'x_class': 15.0
+            'c_class': 1.0,
+            'm_class': 20.0,
+            'x_class': 30.0
         }
 
     def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
@@ -275,16 +275,16 @@ class SXRRegressionDynamicLoss:
 
         # Get continuous multipliers per class with custom params
         quiet_mult = self._get_performance_multiplier(
-            self.quiet_errors, max_multiplier=1.5, min_multiplier=0.5, sensitivity=2.0
+            self.quiet_errors, max_multiplier=1.5, min_multiplier=0.5, sensitivity=2.0, sxrclass = 'quiet'
         )
         c_mult = self._get_performance_multiplier(
-            self.c_errors, max_multiplier=3.0, min_multiplier=0.7, sensitivity=2.5
+            self.c_errors, max_multiplier=3.0, min_multiplier=0.7, sensitivity=2.5, sxrclass = 'c_class'
         )
         m_mult = self._get_performance_multiplier(
-            self.m_errors, max_multiplier=7.0, min_multiplier=0.8, sensitivity=3.0
+            self.m_errors, max_multiplier=7.0, min_multiplier=0.8, sensitivity=3.0, sxrclass = 'm_class'
         )
         x_mult = self._get_performance_multiplier(
-            self.x_errors, max_multiplier=15.0, min_multiplier=0.9, sensitivity=4.0
+            self.x_errors, max_multiplier=15.0, min_multiplier=0.9, sensitivity=4.0, sxrclass = 'x_class'
         )
 
         quiet_weight = self.base_weights['quiet'] * quiet_mult
@@ -319,15 +319,29 @@ class SXRRegressionDynamicLoss:
 
         return weights
 
-    def _get_performance_multiplier(self, error_history, max_multiplier=10.0, min_multiplier=0.5, sensitivity=3.0):
-        if len(error_history) < 10:
+    def _get_performance_multiplier(self, error_history, max_multiplier=10.0, min_multiplier=0.5, sensitivity=3.0, sxrclass='quiet'):
+        """Class-dependent performance multiplier"""
+
+        class_params = {
+            'quiet': {'min_samples': 200, 'recent_window': 100},
+            'c_class': {'min_samples': 200, 'recent_window': 100},
+            'm_class': {'min_samples': 20, 'recent_window': 10},
+            'x_class': {'min_samples': 10, 'recent_window': 5}
+        }
+
+        if len(error_history) < class_params[sxrclass]['min_samples']:
             return 1.0
-        recent = np.mean(list(error_history)[-20:])
-        overall = np.mean(list(error_history)) + 1e-8
+
+        recent_window = class_params[sxrclass]['recent_window']
+        recent = np.mean(list(error_history)[-recent_window:])
+        overall = np.mean(list(error_history))
+
+        # if overall < 1e-10:
+        #     return 1.0
+
         ratio = recent / overall
         multiplier = np.exp(sensitivity * (ratio - 1))
-        multiplier = np.clip(multiplier, min_multiplier, max_multiplier)
-        return multiplier
+        return np.clip(multiplier, min_multiplier, max_multiplier)
 
     def _update_tracking(self, sxr_un, preds_squeezed_un, base_loss):
         try:

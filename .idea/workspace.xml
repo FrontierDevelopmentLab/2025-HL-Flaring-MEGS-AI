@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="updated model and data loaders to take in different wavelengths!">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
-    </list>
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -127,7 +122,7 @@
       <workItem from="1753630961668" duration="9897000" />
       <workItem from="1753929248247" duration="23397000" />
       <workItem from="1754000190506" duration="10165000" />
-      <workItem from="1754146439867" duration="7262000" />
+      <workItem from="1754146439867" duration="7692000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -313,7 +308,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754149724484</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT',">
+      <option name="closed" value="true" />
+      <created>1754154137848</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1754154137848</updated>
+    </task>
+    <option name="localTasksCounter" value="28" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -347,7 +350,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="fixed split data so that we include AIA and SXR data... we also fixed the config file and bug fixes for data loaders" />
     <MESSAGE value="fixed wandb name scheme" />
     <MESSAGE value="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints" />
     <MESSAGE value="added requirements.txt" />
@@ -372,6 +374,7 @@
     <MESSAGE value="added evaluation script" />
     <MESSAGE value="update model configuration and evaluation scripts; adjust checkpoint paths, output file names, and weight paths; enhance evaluation metrics for flare classes and improve visualization aesthetics" />
     <MESSAGE value="updated model and data loaders to take in different wavelengths!" />
-    <option name="LAST_COMMIT_MESSAGE" value="updated model and data loaders to take in different wavelengths!" />
+    <MESSAGE value="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
   </component>
 </project>
