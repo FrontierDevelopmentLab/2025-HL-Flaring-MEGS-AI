@@ -98,7 +98,8 @@ class SolarFlareEvaluator:
             'MSE': mean_squared_error(np.log10(self.y_true), np.log10(self.y_pred)),
             'RMSE': np.sqrt(mean_squared_error(np.log10(self.y_true), np.log10(self.y_pred))),
             'MAE': mean_absolute_error(np.log10(self.y_true), np.log10(self.y_pred)),
-            'R2': r2_score(np.log10(self.y_true), np.log10(self.y_pred))
+            'R2': r2_score(np.log10(self.y_true), np.log10(self.y_pred)),
+            'Pearson_Corr': np.corrcoef(np.log10(self.y_true), np.log10(self.y_pred))[0, 1],
         }
 
         # Calculate metrics for each flare class
@@ -134,7 +135,8 @@ class SolarFlareEvaluator:
                 'RMSE': np.sqrt(mean_squared_error(np.log10(y_true_class), np.log10(y_pred_class))),
                 'MAE': mean_absolute_error(np.log10(y_true_class), np.log10(y_pred_class)),
                 'R2': r2_score(np.log10(y_true_class), np.log10(y_pred_class)),
-                'Sample_Count': len(y_true_class)
+                'Sample_Count': len(y_true_class),
+                'Pearson_Corr': np.corrcoef(np.log10(y_true_class), np.log10(y_pred_class))[0, 1],
             }
 
             flare_class_metrics.append(class_metrics)
@@ -149,7 +151,8 @@ class SolarFlareEvaluator:
                     'RMSE': np.sqrt(mean_squared_error(np.log10(y_true_class), np.log10(y_baseline_class))),
                     'MAE': mean_absolute_error(np.log10(y_true_class), np.log10(y_baseline_class)),
                     'R2': r2_score(np.log10(y_true_class), np.log10(y_baseline_class)),
-                    'Sample_Count': len(y_true_class)
+                    'Sample_Count': len(y_true_class),
+                    'Pearson_Corr': np.corrcoef(np.log10(y_true_class), np.log10(y_baseline_class))[0, 1],
                 }
 
                 flare_class_metrics.append(baseline_class_metrics)
@@ -165,7 +168,11 @@ class SolarFlareEvaluator:
                         'MAE']) * 100,
                     'R2': ((class_metrics['R2'] - baseline_class_metrics['R2']) / abs(
                         baseline_class_metrics['R2'])) * 100,
-                    'Sample_Count': len(y_true_class)
+                    'Sample_Count': len(y_true_class),
+                    'Pearson_Corr': (
+                        np.corrcoef(np.log10(y_true_class), np.log10(y_baseline_class))[0, 1] -
+                        np.corrcoef(np.log10(y_true_class), np.log10(y_pred_class))[0, 1]
+                    ) * 100
                 }
 
                 flare_class_metrics.append(improvement_class_metrics)
@@ -179,7 +186,8 @@ class SolarFlareEvaluator:
                 'MSE': mean_squared_error(np.log10(self.y_true), np.log10(self.y_baseline)),
                 'RMSE': np.sqrt(mean_squared_error(np.log10(self.y_true), np.log10(self.y_baseline))),
                 'MAE': mean_absolute_error(np.log10(self.y_true), np.log10(self.y_baseline)),
-                'R2': r2_score(np.log10(self.y_true), np.log10(self.y_baseline))
+                'R2': r2_score(np.log10(self.y_true), np.log10(self.y_baseline)),
+                'Pearson_Corr': np.corrcoef(np.log10(self.y_true), np.log10(self.y_baseline))[0, 1]
             }
             metrics_list.append(baseline_metrics)
 
@@ -189,7 +197,8 @@ class SolarFlareEvaluator:
                 'MSE': ((baseline_metrics['MSE'] - main_metrics['MSE']) / baseline_metrics['MSE']) * 100,
                 'RMSE': ((baseline_metrics['RMSE'] - main_metrics['RMSE']) / baseline_metrics['RMSE']) * 100,
                 'MAE': ((baseline_metrics['MAE'] - main_metrics['MAE']) / baseline_metrics['MAE']) * 100,
-                'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100
+                'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100,
+                'Pearson_Corr': ((baseline_metrics['Pearson_Corr'] - main_metrics['Pearson_Corr']) / abs(baseline_metrics['Pearson_Corr'])) * 100
             }
             metrics_list.append(improvement_metrics)
 
