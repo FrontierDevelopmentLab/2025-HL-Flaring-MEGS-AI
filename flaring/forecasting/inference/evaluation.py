@@ -170,9 +170,8 @@ class SolarFlareEvaluator:
                         baseline_class_metrics['R2'])) * 100,
                     'Sample_Count': len(y_true_class),
                     'Pearson_Corr': (
-                        np.corrcoef(np.log10(y_true_class), np.log10(y_baseline_class))[0, 1] -
-                        np.corrcoef(np.log10(y_true_class), np.log10(y_pred_class))[0, 1]
-                    ) * 100
+                        np.corrcoef(np.log10(y_true_class), np.log10(y_pred_class))[0, 1] - np.corrcoef(np.log10(y_true_class), np.log10(y_baseline_class))[0, 1]
+                    )/abs(baseline_class_metrics['Pearson_Corr']) * 100
                 }
 
                 flare_class_metrics.append(improvement_class_metrics)
@@ -198,7 +197,7 @@ class SolarFlareEvaluator:
                 'RMSE': ((baseline_metrics['RMSE'] - main_metrics['RMSE']) / baseline_metrics['RMSE']) * 100,
                 'MAE': ((baseline_metrics['MAE'] - main_metrics['MAE']) / baseline_metrics['MAE']) * 100,
                 'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100,
-                'Pearson_Corr': ((baseline_metrics['Pearson_Corr'] - main_metrics['Pearson_Corr']) / abs(baseline_metrics['Pearson_Corr'])) * 100
+                'Pearson_Corr': ((main_metrics['Pearson_Corr'] - baseline_metrics['Pearson_Corr']) / abs(baseline_metrics['Pearson_Corr'])) * 100
             }
             metrics_list.append(improvement_metrics)
 
