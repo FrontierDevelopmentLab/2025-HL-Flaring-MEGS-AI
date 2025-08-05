@@ -1,7 +1,4 @@
 import collections.abc
-import shutil
-
-import pandas as pd
 
 collections.Iterable = collections.abc.Iterable
 collections.Mapping = collections.abc.Mapping
@@ -11,7 +8,7 @@ collections.MutableMapping = collections.abc.MutableMapping
 import numpy as np
 from astropy.visualization import ImageNormalize, AsinhStretch
 from itipy.data.dataset import StackDataset, get_intersecting_files, AIADataset
-from itipy.data.editor import LoadMapEditor, NormalizeRadiusEditor, MapToDataEditor, BrightestPixelPatchEditor
+from itipy.data.editor import BrightestPixelPatchEditor, sdo_norms
 import os
 from multiprocessing import Pool
 from tqdm import tqdm
@@ -62,6 +59,7 @@ class SDODataset_flaring(StackDataset):
 
 aia_dataset = SDODataset_flaring(data=base_input_folder, wavelengths=wavelengths, resolution=512)
 
+
 def save_sample(i):
     data = aia_dataset[i]
     file_path = os.path.join(output_folder, aia_dataset.getId(i)) + '.npy'
@@ -69,5 +67,7 @@ def save_sample(i):
         return  # Skip if file already exists
     np.save(file_path, data)
 
+
 with Pool(processes=90) as pool:
     list(tqdm(pool.imap(save_sample, range(len(aia_dataset))), total=len(aia_dataset)))
+    print("AIA data processing completed.")
