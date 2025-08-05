@@ -193,7 +193,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 
         # Load AIA image as (6, H, W)
         try:
-            all_wavelengths = [94, 131, 171, 211, 293, 304]
+            all_wavelengths = [94, 131, 171, 193, 211, 304]
             aia_img = np.load(aia_path)
             # Extract dimensions from aia data according to selected wavelengths
             indices = [all_wavelengths.index(wav) for wav in self.wavelengths if wav in all_wavelengths]
@@ -252,7 +252,7 @@ class AIA_GOESDataModule(LightningDataModule):
             cadence = 1,
             reference_time = None,
             only_prediction = False,
-            oversample = True,
+            oversample = False,
             flare_threshold = 1e-5,
             balance_strategy = 'upsample_minority'
         )
