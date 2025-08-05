@@ -200,7 +200,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
             aia_img = aia_img[indices]
         except:
             print(f"Error loading AIA image from {aia_path}. Skipping sample.")
-            return None
+            return self.__getitem__((idx + 1) % len(self))
 
         # Convert to torch for transforms
         aia_img = torch.tensor(aia_img, dtype=torch.float32)  # (6, H, W)

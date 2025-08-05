@@ -1,7 +1,7 @@
 
 #Base directories - change these to switch datasets
-base_data_dir: "/mnt/data/ML-Ready_clean/mixed_data"  # Change this line for different datasets
-base_checkpoint_dir: "/mnt/data/ML-Ready_clean/mixed_data"    # Change this line for different datasets
+base_data_dir: "/mnt/data/Additional-Clean-Data/merged_events"  # Change this line for different datasets
+base_checkpoint_dir: "/mnt/data/Additional-Clean-Data/merged_events"    # Change this line for different datasets
 wavelengths: [94, 131, 171, 193, 211, 304]  # AIA wavelengths in Angstroms
 # Model configuration
 selected_model: "ViT"  # Options: "cnn", "vit",
@@ -36,15 +36,15 @@ data:
   sxr_norm_path:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoints_dir:
-    "${base_checkpoint_dir}/baseline/"
+    "${base_checkpoint_dir}/added_data/"
 
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-  project: MEGS-AI Oversample
+  project: ViT Added Flaring Data
   job_type: training
   tags:
     - aia
     - sxr
     - regression
-  wb_name: updated-vit-oversample
+  wb_name: Original ViT Model
   notes: Regression from AIA images (6 channels) to GOES SXR flux
