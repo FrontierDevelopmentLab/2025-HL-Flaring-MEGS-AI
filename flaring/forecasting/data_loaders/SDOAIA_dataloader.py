@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Subset
 import numpy as np
@@ -12,7 +15,7 @@ import os
 class AIA_GOESDataset(torch.utils.data.Dataset):
     """Dataset for loading AIA images and SXR values for regression."""
 
-    def __init__(self, aia_dir, sxr_dir, wavelengths = [94,131,171,211,293,304], sxr_transform=None, target_size=(512, 512), only_prediction=False):
+    def __init__(self, aia_dir, sxr_dir, wavelengths = [94,131,171,211,293,304], sxr_transform=None, target_size=(512, 512), cadence = 1, reference_time = None, only_prediction=False):
         self.aia_dir = Path(aia_dir).resolve()
         self.sxr_dir = Path(sxr_dir).resolve()
         self.wavelengths = wavelengths
@@ -20,6 +23,8 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         self.target_size = target_size
         self.samples = []
         self.only_prediction = only_prediction
+        self.cadence = timedelta(minutes=cadence)
+        self.reference_time = reference_time
 
         # Check directories
         if not self.aia_dir.is_dir():
@@ -31,8 +36,26 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         aia_files = sorted(glob.glob(str(self.aia_dir / "*.npy")))
         aia_files = [Path(f) for f in aia_files]
 
+
         for f in aia_files:
             timestamp = f.stem
+            timestamp_dt = pd.to_datetime(timestamp)
+
+            if self.reference_time is None:
+                # First sample sets the alignment
+                self.reference_time = timestamp_dt
+                aligned = True
+            else:
+                delta = (timestamp_dt - self.reference_time).total_seconds()
+                aligned = (delta % self.cadence.total_seconds()) == 0
+
+            if not aligned:
+                continue
+
+            if self.samples and (
+                    timestamp_dt - pd.to_datetime(self.samples[-1])).total_seconds() < self.cadence.total_seconds():
+                continue
+
             sxr_path = self.sxr_dir / f"{timestamp}.npy"
             if sxr_path.exists() and not self.only_prediction:
                 self.samples.append(timestamp)
