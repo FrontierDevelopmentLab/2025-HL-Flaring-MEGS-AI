@@ -157,25 +157,24 @@ class SolarFlareEvaluator:
 
                 flare_class_metrics.append(baseline_class_metrics)
 
-                # Calculate improvement for this class
-                improvement_class_metrics = {
-                    'Model': f'Improvement_{class_name} (%)',
-                    'MSE': ((baseline_class_metrics['MSE'] - class_metrics['MSE']) / baseline_class_metrics[
-                        'MSE']) * 100,
-                    'RMSE': ((baseline_class_metrics['RMSE'] - class_metrics['RMSE']) / baseline_class_metrics[
-                        'RMSE']) * 100,
-                    'MAE': ((baseline_class_metrics['MAE'] - class_metrics['MAE']) / baseline_class_metrics[
-                        'MAE']) * 100,
-                    'R2': ((class_metrics['R2'] - baseline_class_metrics['R2']) / abs(
-                        baseline_class_metrics['R2'])) * 100,
-                    'Sample_Count': len(y_true_class),
-                    'Pearson_Corr': (
-                        np.corrcoef(np.log10(y_true_class), np.log10(y_baseline_class))[0, 1] -
-                        np.corrcoef(np.log10(y_true_class), np.log10(y_pred_class))[0, 1]
-                    ) * 100
-                }
-
-                flare_class_metrics.append(improvement_class_metrics)
+                # # Calculate improvement for this class
+                # improvement_class_metrics = {
+                #     'Model': f'Improvement_{class_name} (%)',
+                #     'MSE': ((baseline_class_metrics['MSE'] - class_metrics['MSE']) / baseline_class_metrics[
+                #         'MSE']) * 100,
+                #     'RMSE': ((baseline_class_metrics['RMSE'] - class_metrics['RMSE']) / baseline_class_metrics[
+                #         'RMSE']) * 100,
+                #     'MAE': ((baseline_class_metrics['MAE'] - class_metrics['MAE']) / baseline_class_metrics[
+                #         'MAE']) * 100,
+                #     'R2': ((class_metrics['R2'] - baseline_class_metrics['R2']) / abs(
+                #         baseline_class_metrics['R2'])) * 100,
+                #     'Sample_Count': len(y_true_class),
+                #     'Pearson_Corr': (
+                #         np.corrcoef(np.log10(y_true_class), np.log10(y_pred_class))[0, 1] - np.corrcoef(np.log10(y_true_class), np.log10(y_baseline_class))[0, 1]
+                #     )/abs(baseline_class_metrics['Pearson_Corr']) * 100
+                # }
+                #
+                # flare_class_metrics.append(improvement_class_metrics)
 
         metrics_list = [main_metrics] + flare_class_metrics
 
@@ -191,16 +190,16 @@ class SolarFlareEvaluator:
             }
             metrics_list.append(baseline_metrics)
 
-            # Calculate improvement metrics
-            improvement_metrics = {
-                'Model': 'Improvement_Overall (%)',
-                'MSE': ((baseline_metrics['MSE'] - main_metrics['MSE']) / baseline_metrics['MSE']) * 100,
-                'RMSE': ((baseline_metrics['RMSE'] - main_metrics['RMSE']) / baseline_metrics['RMSE']) * 100,
-                'MAE': ((baseline_metrics['MAE'] - main_metrics['MAE']) / baseline_metrics['MAE']) * 100,
-                'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100,
-                'Pearson_Corr': ((baseline_metrics['Pearson_Corr'] - main_metrics['Pearson_Corr']) / abs(baseline_metrics['Pearson_Corr'])) * 100
-            }
-            metrics_list.append(improvement_metrics)
+            # # Calculate improvement metrics
+            # improvement_metrics = {
+            #     'Model': 'Improvement_Overall (%)',
+            #     'MSE': ((baseline_metrics['MSE'] - main_metrics['MSE']) / baseline_metrics['MSE']) * 100,
+            #     'RMSE': ((baseline_metrics['RMSE'] - main_metrics['RMSE']) / baseline_metrics['RMSE']) * 100,
+            #     'MAE': ((baseline_metrics['MAE'] - main_metrics['MAE']) / baseline_metrics['MAE']) * 100,
+            #     'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100,
+            #     'Pearson_Corr': ((main_metrics['Pearson_Corr'] - baseline_metrics['Pearson_Corr']) / abs(baseline_metrics['Pearson_Corr'])) * 100
+            # }
+            # metrics_list.append(improvement_metrics)
 
         # Save metrics to CSV
         metrics_df = pd.DataFrame(metrics_list)
@@ -712,10 +711,10 @@ class SolarFlareEvaluator:
 # Example Usage
 if __name__ == "__main__":
     # Example paths - replace with your actual paths
-    example_csv = "/mnt/data/ML-Ready_clean/mixed_data/output/final-vit-results.csv"
+    example_csv = "/mnt/data/ML-Ready_clean/mixed_data/output/final-171-304-vit-results.csv"
     example_baseline_csv = "/home/griffingoodwin/2025-HL-Flaring-MEGS-AI/final-model-results.csv"
     example_aia = "/mnt/data/ML-Ready_clean/mixed_data/AIA/test/"
-    example_weights = "/mnt/data/ML-Ready_clean/mixed_data/weights-finalepoch/"
+    example_weights = "/mnt/data/ML-Ready_clean/mixed_data/weights-171-304-finalepoch/"
 
     # Sample timestamps - Fixed the datetime generation
     start_time = datetime(2023, 8, 5)
@@ -733,7 +732,7 @@ if __name__ == "__main__":
         baseline_csv_path=example_baseline_csv,
         aia_dir=example_aia,
         weight_path=example_weights,
-        output_dir="./solar_flare_comparison_results"
+        output_dir="./solar_flare_comparison_results/171-304"
     )
 
     # Run complete evaluation with baseline comparison
