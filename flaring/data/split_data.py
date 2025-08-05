@@ -28,11 +28,6 @@ for i, row in flare_event.iterrows():
     end_time = pd.to_datetime(row['event_endtime'])
     flaring_eve_list.append((start_time, end_time))
 
-# Define date ranges for splits
-train_range = (datetime(2023, 7, 1, 0, 0, 0), datetime(2023, 7, 25, 23, 59, 59))
-val_range = (datetime(2023, 7, 27, 0, 0, 0), datetime(2023, 7, 31, 23, 59, 59))
-test_range = (datetime(2023, 8, 1, 0, 0, 0), datetime(2023, 8, 15, 23, 59, 59))
-
 # Get list of files in data_dir
 data_list = os.listdir(aia_data_dir)
 
@@ -47,15 +42,16 @@ for file in data_list:
     is_flaring = any(start <= aia_time <= end for start, end in flaring_eve_list)
     base_dir = flares_event_dir if is_flaring else non_flares_event_dir
 
-    # Determine split based on date
-    if train_range[0] <= aia_time <= train_range[1]:
+    month = aia_time.month
+
+    if month in [1, 2, 3, 4, 5, 6, 9, 10, 11, 12]:
         split_dir = "train"
-    elif val_range[0] <= aia_time <= val_range[1]:
+    elif month == 7:
         split_dir = "val"
-    elif test_range[0] <= aia_time <= test_range[1]:
+    elif month == 8:
         split_dir = "test"
     else:
-        print(f"Skipping file {file}: Outside date range")
+        print(f"Skipping file {file}: Unexpected month {month}")
         continue
 
     # Copy file to appropriate directory
