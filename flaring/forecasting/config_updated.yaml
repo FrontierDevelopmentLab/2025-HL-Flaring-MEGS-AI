@@ -7,10 +7,13 @@ training:
   batch_size: 1
   epochs: 50
   seed: 42
+  early_stopping_patience: 10
+  accumulate_grad_batches: 1
+  use_oversampling: true
   sequence:
     enabled: true
-    input_length: 6    # Changed from in_length to input_length
-    output_length: 6   # Changed from out_lenght to output_length
+    input_length: 6
+    output_length: 6
     stride: 1          # Step between sequence starts
 
 # Model selection
@@ -24,12 +27,12 @@ ViT:
     embed_dim: 512
     num_channels: 6
     num_classes: 1
-    patch_size: 8
-    num_patches: 4096
+    patch_size: 16       # Changed from 8 to 16 for better stability
+    # num_patches: 1024  # Removed - will be calculated automatically (512/16)^2 = 1024
     hidden_dim: 512
-    num_heads: 4
-    num_layers: 4
-    dropout: 0.25
+    num_heads: 8         # Changed from 4 to 8 for better performance
+    num_layers: 6        # Increased from 4 to 6
+    dropout: 0.1         # Reduced from 0.25 to 0.1
 
   # Training parameters
   training:
@@ -58,7 +61,6 @@ FastViT:
     weight_decay: 0.01
     lr_scheduler: "cosine"
     warmup_epochs: 5
-    use_oversampling: true  ## Add in this tag
 
 # Data configuration
 data:
@@ -68,8 +70,14 @@ data:
     sxr_norm: "${base_data_dir}/SXR/normalized_sxr.npy"
     checkpoints: "${base_checkpoint_dir}/checkpoints"
 
+  # Data transforms (optional)
+  transforms:
+    train: []  # Add transforms here if needed
+    val: []    # Add transforms here if needed
+
 # Weights & Biases configuration
 wandb:
+  enabled: true  # Set to false to disable wandb
   entity: "jayantbiradar619-university-of-arizona"
   project: "mixed-ViT-Sequence-modelling"
   job_type: "training"
