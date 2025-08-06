@@ -26,7 +26,7 @@ class ViT(pl.LightningModule):
         filtered_kwargs = dict(model_kwargs)
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
-        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=1000)
+        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=500)
         self.sxr_norm = sxr_norm
 
     def forward(self, x, return_attention=True):
@@ -81,6 +81,13 @@ class ViT(pl.LightningModule):
 
             self.log("adaptive/avg_weight", weights.mean())
             self.log("adaptive/max_weight", weights.max())
+        if mode == "val":
+            multipliers = self.adaptive_loss.get_current_multipliers()
+            for key, value in multipliers.items():
+                self.log(f"val/{key}", value)
+            self.log("val/avg_weight", weights.mean())
+            self.log("val/max_weight", weights.max())
+
         # FIXED: Log current learning rate from optimizer
         if mode == "train":
             current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
@@ -244,7 +251,7 @@ def img_to_patch(x, patch_size, flatten_channels=True):
 
 
 class SXRRegressionDynamicLoss:
-    def __init__(self, window_size=1000):
+    def __init__(self, window_size=500):
         self.c_threshold = 1e-6
         self.m_threshold = 1e-5
         self.x_threshold = 1e-4
@@ -325,8 +332,8 @@ class SXRRegressionDynamicLoss:
         class_params = {
             'quiet': {'min_samples': 200, 'recent_window': 100},
             'c_class': {'min_samples': 200, 'recent_window': 100},
-            'm_class': {'min_samples': 100, 'recent_window': 50},
-            'x_class': {'min_samples': 50, 'recent_window': 25}
+            'm_class': {'min_samples': 200, 'recent_window': 100},
+            'x_class': {'min_samples': 200, 'recent_window': 100}
         }
 
         if len(error_history) < class_params[sxrclass]['min_samples']:
