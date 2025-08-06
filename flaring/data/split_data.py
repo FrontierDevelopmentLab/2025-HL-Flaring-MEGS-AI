@@ -8,7 +8,7 @@ sxr_data_dir = "/mnt/data2/ML-Ready_clean/GOES-18-SXR-B/"
 flares_event_dir = "/mnt/data2/ML-Ready_clean/flares_event_dir/"
 non_flares_event_dir = "/mnt/data2/ML-Ready_clean/non_flares_event_dir/"
 mixed_data_dir = "/mnt/data2/ML-Ready_clean/mixed_data/"
-flare_events_csv = "/mnt/data/flare_list/flare_events_2023-07-01_2023-08-15.csv"
+flare_events_csv = "/mnt/data2/SDO-AIA-flaring/FlareEvents/flare_events_2012-01-01_2015-03-25.csv"
 
 # Create train, val, test subdirectories under flaring and non-flaring
 for base_dir in [flares_event_dir, non_flares_event_dir, mixed_data_dir]:
@@ -44,9 +44,9 @@ for file in data_list:
 
     month = aia_time.month
 
-    if month in [1, 2, 3, 4, 5, 6, 9, 10, 11, 12]:
+    if month in [2, 3, 4, 5, 6, 7, 9, 10, 11, 12]:
         split_dir = "train"
-    elif month == 7:
+    elif month == 1:
         split_dir = "val"
     elif month == 8:
         split_dir = "test"
