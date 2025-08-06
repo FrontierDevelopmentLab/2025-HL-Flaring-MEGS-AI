@@ -4,8 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="Changed weights for ViT">
-      <change afterPath="$PROJECT_DIR$/flaring/notebook_tests/model_params.ipynb" afterDir="false" />
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="updated the weighted loss">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -126,6 +128,10 @@
       <workItem from="1754000190506" duration="10165000" />
       <workItem from="1754146439867" duration="7692000" />
       <workItem from="1754282226274" duration="5949000" />
+      <workItem from="1754443347602" duration="1827000" />
+      <workItem from="1754482805314" duration="230000" />
+      <workItem from="1754483043965" duration="195000" />
+      <workItem from="1754483254382" duration="4374000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -327,31 +333,63 @@
       <option name="project" value="LOCAL" />
       <updated>1754319038616</updated>
     </task>
-    <option name="localTasksCounter" value="29" />
+    <task id="LOCAL-00029" summary="Enhance AIA_GOESDataset to support cadence and reference time">
+      <option name="closed" value="true" />
+      <created>1754412270354</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1754412270354</updated>
+    </task>
+    <task id="LOCAL-00030" summary="Add oversampling functionality to AIA_GOESDataset and update configuration">
+      <option name="closed" value="true" />
+      <created>1754417745022</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1754417745022</updated>
+    </task>
+    <task id="LOCAL-00031" summary="Update AIA wavelengths and model configuration in config.yaml; adjust oversampling setting in dataloader">
+      <option name="closed" value="true" />
+      <created>1754426834672</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1754426834672</updated>
+    </task>
+    <task id="LOCAL-00032" summary="added some checks to make sure model training and validation is successful">
+      <option name="closed" value="true" />
+      <created>1754431311188</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1754431311188</updated>
+    </task>
+    <task id="LOCAL-00033" summary="updated the weighted loss to return proper multiplication values... also reduced weighting slightly">
+      <option name="closed" value="true" />
+      <created>1754482944827</created>
+      <option name="number" value="00033" />
+      <option name="presentableId" value="LOCAL-00033" />
+      <option name="project" value="LOCAL" />
+      <updated>1754482944827</updated>
+    </task>
+    <task id="LOCAL-00034" summary="updated the weighted loss">
+      <option name="closed" value="true" />
+      <created>1754483729804</created>
+      <option name="number" value="00034" />
+      <option name="presentableId" value="LOCAL-00034" />
+      <option name="project" value="LOCAL" />
+      <updated>1754483729804</updated>
+    </task>
+    <option name="localTasksCounter" value="35" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
-    <option name="OPEN_GENERIC_TABS">
-      <map>
-        <entry key="8d08b698-1d8a-4e40-822b-6db0ee3f2391" value="TOOL_WINDOW" />
-        <entry key="2f6052fa-c551-45f4-ab2d-72dec64ae504" value="TOOL_WINDOW" />
-      </map>
-    </option>
     <option name="TAB_STATES">
       <map>
-        <entry key="2f6052fa-c551-45f4-ab2d-72dec64ae504">
-          <value>
-            <State />
-          </value>
-        </entry>
-        <entry key="8d08b698-1d8a-4e40-822b-6db0ee3f2391">
-          <value>
-            <State />
-          </value>
-        </entry>
         <entry key="MAIN">
           <value>
             <State />
@@ -361,12 +399,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints" />
-    <MESSAGE value="added requirements.txt" />
-    <MESSAGE value="added some nice animations and plots for analysis to plotting_test_results.ipynb" />
-    <MESSAGE value="Implement Vision Transformer model (custom) and update configuration for model selection + changed data loader outputs (it was partially redundant)" />
-    <MESSAGE value="Working on attention callbacks" />
-    <MESSAGE value="Refactor attention map callback to log attention plots and add multi-head visualization" />
     <MESSAGE value="refactor model configuration and callbacks; update data paths and loss functions" />
     <MESSAGE value="refactor attention visualization; update callback to log attention maps and adjust model configuration" />
     <MESSAGE value="refactor model configuration; update vit parameters and checkpoint callback monitor" />
@@ -386,6 +418,12 @@
     <MESSAGE value="updated model and data loaders to take in different wavelengths!" />
     <MESSAGE value="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
     <MESSAGE value="Changed weights for ViT" />
-    <option name="LAST_COMMIT_MESSAGE" value="Changed weights for ViT" />
+    <MESSAGE value="Enhance AIA_GOESDataset to support cadence and reference time" />
+    <MESSAGE value="Add oversampling functionality to AIA_GOESDataset and update configuration" />
+    <MESSAGE value="Update AIA wavelengths and model configuration in config.yaml; adjust oversampling setting in dataloader" />
+    <MESSAGE value="added some checks to make sure model training and validation is successful" />
+    <MESSAGE value="updated the weighted loss to return proper multiplication values... also reduced weighting slightly" />
+    <MESSAGE value="updated the weighted loss" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated the weighted loss" />
   </component>
 </project>

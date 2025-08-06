@@ -26,7 +26,7 @@ class ViT(pl.LightningModule):
         filtered_kwargs = dict(model_kwargs)
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
-        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=100)
+        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=500)
         self.sxr_norm = sxr_norm
 
     def forward(self, x, return_attention=True):
@@ -81,6 +81,13 @@ class ViT(pl.LightningModule):
 
             self.log("adaptive/avg_weight", weights.mean())
             self.log("adaptive/max_weight", weights.max())
+        if mode == "val":
+            multipliers = self.adaptive_loss.get_current_multipliers()
+            for key, value in multipliers.items():
+                self.log(f"val/{key}", value)
+            self.log("val/avg_weight", weights.mean())
+            self.log("val/max_weight", weights.max())
+
         # FIXED: Log current learning rate from optimizer
         if mode == "train":
             current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
@@ -244,7 +251,7 @@ def img_to_patch(x, patch_size, flatten_channels=True):
 
 
 class SXRRegressionDynamicLoss:
-    def __init__(self, window_size=1000):
+    def __init__(self, window_size=500):
         self.c_threshold = 1e-6
         self.m_threshold = 1e-5
         self.x_threshold = 1e-4
@@ -257,9 +264,9 @@ class SXRRegressionDynamicLoss:
 
         self.base_weights = {
             'quiet': 1.0,
-            'c_class': 1.0,
-            'm_class': 20.0,
-            'x_class': 30.0
+            'c_class': 2.0,
+            'm_class': 10.0,
+            'x_class': 15.0
         }
 
     def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
@@ -325,8 +332,8 @@ class SXRRegressionDynamicLoss:
         class_params = {
             'quiet': {'min_samples': 200, 'recent_window': 100},
             'c_class': {'min_samples': 200, 'recent_window': 100},
-            'm_class': {'min_samples': 20, 'recent_window': 10},
-            'x_class': {'min_samples': 10, 'recent_window': 5}
+            'm_class': {'min_samples': 200, 'recent_window': 100},
+            'x_class': {'min_samples': 200, 'recent_window': 100}
         }
 
         if len(error_history) < class_params[sxrclass]['min_samples']:
@@ -371,10 +378,10 @@ class SXRRegressionDynamicLoss:
     def get_current_multipliers(self):
         """Get current performance multipliers for logging"""
         return {
-            'quiet_mult': self._get_performance_multiplier(self.quiet_errors),
-            'c_mult': self._get_performance_multiplier(self.c_errors),
-            'm_mult': self._get_performance_multiplier(self.m_errors),
-            'x_mult': self._get_performance_multiplier(self.x_errors),
+            'quiet_mult': self._get_performance_multiplier(self.quiet_errors,sxrclass='quiet'),
+            'c_mult': self._get_performance_multiplier(self.c_errors,sxrclass='c_class'),
+            'm_mult': self._get_performance_multiplier(self.m_errors,sxrclass='m_class'),
+            'x_mult': self._get_performance_multiplier(self.x_errors,sxrclass='x_class'),
             'quiet_count': len(self.quiet_errors),
             'c_count': len(self.c_errors),
             'm_count': len(self.m_errors),

@@ -51,7 +51,7 @@ def compute_sxr_norm(sxr_dir):
 
 if __name__ == "__main__":
     # Update this path to your real data SXR directory
-    sxr_dir = "/mnt/data/ML-Ready_clean/mixed_data/SXR/train"  # Replace with actual path
+    sxr_dir = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/SXR/train"  # Replace with actual path
     sxr_norm = compute_sxr_norm(sxr_dir)
-    np.save("/mnt/data/ML-Ready_clean/mixed_data/SXR/normalized_sxr.npy", sxr_norm)
+    np.save("/mnt/data/ML-Ready-mixed/ML-Ready-mixed/SXR/normalized_sxr.npy", sxr_norm)
     #print(f"Saved SXR normalization to /mnt/data/ML-Ready-Data-No-Intensity-Cut/normalized_sxr")
