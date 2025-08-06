@@ -26,7 +26,7 @@ class ViT(pl.LightningModule):
         filtered_kwargs = dict(model_kwargs)
         filtered_kwargs.pop('lr', None)
         self.model = VisionTransformer(**filtered_kwargs)
-        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=100)
+        self.adaptive_loss = SXRRegressionDynamicLoss(window_size=1000)
         self.sxr_norm = sxr_norm
 
     def forward(self, x, return_attention=True):
@@ -257,9 +257,9 @@ class SXRRegressionDynamicLoss:
 
         self.base_weights = {
             'quiet': 1.0,
-            'c_class': 1.0,
-            'm_class': 20.0,
-            'x_class': 30.0
+            'c_class': 2.0,
+            'm_class': 10.0,
+            'x_class': 15.0
         }
 
     def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
@@ -371,10 +371,10 @@ class SXRRegressionDynamicLoss:
     def get_current_multipliers(self):
         """Get current performance multipliers for logging"""
         return {
-            'quiet_mult': self._get_performance_multiplier(self.quiet_errors),
-            'c_mult': self._get_performance_multiplier(self.c_errors),
-            'm_mult': self._get_performance_multiplier(self.m_errors),
-            'x_mult': self._get_performance_multiplier(self.x_errors),
+            'quiet_mult': self._get_performance_multiplier(self.quiet_errors,sxrclass='quiet'),
+            'c_mult': self._get_performance_multiplier(self.c_errors,sxrclass='c_class'),
+            'm_mult': self._get_performance_multiplier(self.m_errors,sxrclass='m_class'),
+            'x_mult': self._get_performance_multiplier(self.x_errors,sxrclass='x_class'),
             'quiet_count': len(self.quiet_errors),
             'c_count': len(self.c_errors),
             'm_count': len(self.m_errors),

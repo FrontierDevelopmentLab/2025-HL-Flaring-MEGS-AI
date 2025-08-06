@@ -4,8 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="Changed weights for ViT">
-      <change afterPath="$PROJECT_DIR$/flaring/notebook_tests/model_params.ipynb" afterDir="false" />
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="added some checks to make sure model training and validation is successful">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/data_loaders/sxr_normalization.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/data_loaders/sxr_normalization.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -126,6 +128,7 @@
       <workItem from="1754000190506" duration="10165000" />
       <workItem from="1754146439867" duration="7692000" />
       <workItem from="1754282226274" duration="5949000" />
+      <workItem from="1754443347602" duration="1827000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -327,7 +330,39 @@
       <option name="project" value="LOCAL" />
       <updated>1754319038616</updated>
     </task>
-    <option name="localTasksCounter" value="29" />
+    <task id="LOCAL-00029" summary="Enhance AIA_GOESDataset to support cadence and reference time">
+      <option name="closed" value="true" />
+      <created>1754412270354</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1754412270354</updated>
+    </task>
+    <task id="LOCAL-00030" summary="Add oversampling functionality to AIA_GOESDataset and update configuration">
+      <option name="closed" value="true" />
+      <created>1754417745022</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1754417745022</updated>
+    </task>
+    <task id="LOCAL-00031" summary="Update AIA wavelengths and model configuration in config.yaml; adjust oversampling setting in dataloader">
+      <option name="closed" value="true" />
+      <created>1754426834672</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1754426834672</updated>
+    </task>
+    <task id="LOCAL-00032" summary="added some checks to make sure model training and validation is successful">
+      <option name="closed" value="true" />
+      <created>1754431311188</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1754431311188</updated>
+    </task>
+    <option name="localTasksCounter" value="33" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -361,10 +396,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints" />
-    <MESSAGE value="added requirements.txt" />
-    <MESSAGE value="added some nice animations and plots for analysis to plotting_test_results.ipynb" />
-    <MESSAGE value="Implement Vision Transformer model (custom) and update configuration for model selection + changed data loader outputs (it was partially redundant)" />
     <MESSAGE value="Working on attention callbacks" />
     <MESSAGE value="Refactor attention map callback to log attention plots and add multi-head visualization" />
     <MESSAGE value="refactor model configuration and callbacks; update data paths and loss functions" />
@@ -386,6 +417,10 @@
     <MESSAGE value="updated model and data loaders to take in different wavelengths!" />
     <MESSAGE value="refactor model evaluation and configuration to include sxr norm; update model name to 'ViT'," />
     <MESSAGE value="Changed weights for ViT" />
-    <option name="LAST_COMMIT_MESSAGE" value="Changed weights for ViT" />
+    <MESSAGE value="Enhance AIA_GOESDataset to support cadence and reference time" />
+    <MESSAGE value="Add oversampling functionality to AIA_GOESDataset and update configuration" />
+    <MESSAGE value="Update AIA wavelengths and model configuration in config.yaml; adjust oversampling setting in dataloader" />
+    <MESSAGE value="added some checks to make sure model training and validation is successful" />
+    <option name="LAST_COMMIT_MESSAGE" value="added some checks to make sure model training and validation is successful" />
   </component>
 </project>

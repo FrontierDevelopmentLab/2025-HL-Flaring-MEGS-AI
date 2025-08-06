@@ -1,10 +1,10 @@
 
 #Base directories - change these to switch datasets
-base_data_dir: "/mnt/data/Additional-Clean-Data/merged_events"  # Change this line for different datasets
-base_checkpoint_dir: "/mnt/data/Additional-Clean-Data/merged_events"    # Change this line for different datasets
+base_data_dir: "/mnt/data/ML-Ready-mixed/ML-Ready-mixed"  # Change this line for different datasets
+base_checkpoint_dir: "/mnt/data/ML-Ready-mixed/ML-Ready-mixed"    # Change this line for different datasets
 wavelengths: [94, 131, 171, 193, 211, 304]  # AIA wavelengths in Angstroms
 # Model configuration
-selected_model: "ViT"  # Options: "cnn", "vit",
+selected_model: "hybrid"  # Options: "cnn", "vit",
 batch_size:    64
 epochs:        250
 
@@ -12,7 +12,7 @@ megsai:
   architecture: "cnn"
   seed: 42
   lr: 0.0001
-  cnn_model: "updated"
+  cnn_model: "original"
   cnn_dp: 0.2
 
 vit_custom:
@@ -36,15 +36,15 @@ data:
   sxr_norm_path:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoints_dir:
-    "${base_checkpoint_dir}/added_data/"
+    "${base_checkpoint_dir}/new-checkpoint/"
 
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
-  project: ViT Added Flaring Data
+  project: MEGS-AI Added Flaring Data
   job_type: training
   tags:
     - aia
     - sxr
     - regression
-  wb_name: Original ViT Model
+  wb_name: megsai-added-data
   notes: Regression from AIA images (6 channels) to GOES SXR flux
