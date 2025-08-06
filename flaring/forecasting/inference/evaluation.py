@@ -59,33 +59,24 @@ class SolarFlareEvaluator:
         # Load main model prediction data
         if self.csv_path and os.path.exists(self.csv_path):
             self.df = pd.read_csv(self.csv_path)
-            self._clean_prediction_data(self.df)
             self.y_true = self.df['groundtruth'].values
             self.y_pred = self.df['predictions'].values
+            if 'uncertainty' in self.df.columns and self.df['uncertainty'] is not None:
+                self.y_uncertainty = self.df['uncertainty'].values
+            else:
+                self.y_uncertainty = None
             print(f"Loaded main model data with {len(self.df)} records")
 
         # Load baseline model prediction data
         if self.baseline_csv_path and os.path.exists(self.baseline_csv_path):
             self.baseline_df = pd.read_csv(self.baseline_csv_path)
-            self._clean_prediction_data(self.baseline_df)
             self.y_baseline = self.baseline_df['predictions'].values
+            if 'uncertainty' in self.baseline_df.columns and self.baseline_df['uncertainty'] is not None:
+                self.y_baseline_uncertainty = self.baseline_df['uncertainty'].values
+            else:
+                self.y_baseline_uncertainty = None
             print(f"Loaded baseline model data with {len(self.baseline_df)} records")
 
-            # Ensure same length as main model data
-            if len(self.y_baseline) != len(self.y_pred):
-                print("Warning: Baseline and main model have different number of predictions")
-                min_len = min(len(self.y_baseline), len(self.y_pred))
-                self.y_baseline = self.y_baseline[:min_len]
-                self.y_pred = self.y_pred[:min_len]
-                self.y_true = self.y_true[:min_len]
-
-
-    def _clean_prediction_data(self, df):
-        """Clean and prepare prediction data"""
-        for col in ['groundtruth', 'predictions']:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        df.dropna(inplace=True)
 
     def calculate_metrics(self):
         """Calculate and save performance metrics for both models"""
@@ -157,25 +148,6 @@ class SolarFlareEvaluator:
 
                 flare_class_metrics.append(baseline_class_metrics)
 
-                # # Calculate improvement for this class
-                # improvement_class_metrics = {
-                #     'Model': f'Improvement_{class_name} (%)',
-                #     'MSE': ((baseline_class_metrics['MSE'] - class_metrics['MSE']) / baseline_class_metrics[
-                #         'MSE']) * 100,
-                #     'RMSE': ((baseline_class_metrics['RMSE'] - class_metrics['RMSE']) / baseline_class_metrics[
-                #         'RMSE']) * 100,
-                #     'MAE': ((baseline_class_metrics['MAE'] - class_metrics['MAE']) / baseline_class_metrics[
-                #         'MAE']) * 100,
-                #     'R2': ((class_metrics['R2'] - baseline_class_metrics['R2']) / abs(
-                #         baseline_class_metrics['R2'])) * 100,
-                #     'Sample_Count': len(y_true_class),
-                #     'Pearson_Corr': (
-                #         np.corrcoef(np.log10(y_true_class), np.log10(y_pred_class))[0, 1] - np.corrcoef(np.log10(y_true_class), np.log10(y_baseline_class))[0, 1]
-                #     )/abs(baseline_class_metrics['Pearson_Corr']) * 100
-                # }
-                #
-                # flare_class_metrics.append(improvement_class_metrics)
-
         metrics_list = [main_metrics] + flare_class_metrics
 
         # Calculate metrics for baseline model if available
@@ -189,17 +161,6 @@ class SolarFlareEvaluator:
                 'Pearson_Corr': np.corrcoef(np.log10(self.y_true), np.log10(self.y_baseline))[0, 1]
             }
             metrics_list.append(baseline_metrics)
-
-            # # Calculate improvement metrics
-            # improvement_metrics = {
-            #     'Model': 'Improvement_Overall (%)',
-            #     'MSE': ((baseline_metrics['MSE'] - main_metrics['MSE']) / baseline_metrics['MSE']) * 100,
-            #     'RMSE': ((baseline_metrics['RMSE'] - main_metrics['RMSE']) / baseline_metrics['RMSE']) * 100,
-            #     'MAE': ((baseline_metrics['MAE'] - main_metrics['MAE']) / baseline_metrics['MAE']) * 100,
-            #     'R2': ((main_metrics['R2'] - baseline_metrics['R2']) / abs(baseline_metrics['R2'])) * 100,
-            #     'Pearson_Corr': ((main_metrics['Pearson_Corr'] - baseline_metrics['Pearson_Corr']) / abs(baseline_metrics['Pearson_Corr'])) * 100
-            # }
-            # metrics_list.append(improvement_metrics)
 
         # Save metrics to CSV
         metrics_df = pd.DataFrame(metrics_list)
@@ -235,7 +196,7 @@ class SolarFlareEvaluator:
         shared_norm = LogNorm(vmin=1, vmax=None)  # Or specify vmax explicitly
 
         if self.y_baseline is not None:
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            fig, (ax2, ax1) = plt.subplots(1, 2, figsize=(15, 6))
         else:
             fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
             ax2 = None
@@ -252,8 +213,15 @@ class SolarFlareEvaluator:
         ax1.plot([min_val, max_val], [min_val, max_val],
                  label='Perfect Prediction', color='red', linestyle='--', linewidth=2)
 
-        h1 = ax1.hist2d(self.y_true, self.y_pred, bins=[log_bins, log_bins],
-                        cmap='summer', norm=shared_norm)
+        if self.y_uncertainty is not None:
+            sigma_log = self.y_uncertainty / (self.y_pred * np.log(10))
+            weights = 1 / (sigma_log ** 2)
+
+            h1 = ax1.hist2d(self.y_true, self.y_pred, weights=weights, bins=[log_bins, log_bins],
+                            cmap='summer', norm=shared_norm)
+        else:
+            h1 = ax1.hist2d(self.y_true, self.y_pred, bins=[log_bins, log_bins],
+                            cmap='summer', norm=shared_norm)
 
         ax1.set_xlabel('Ground Truth Flux', color='white')
         ax1.set_ylabel('Predicted Flux', color='white')
@@ -415,10 +383,12 @@ class SolarFlareEvaluator:
             csv_data['timestamp'] = pd.to_datetime(csv_data['timestamp'])
 
         # Load baseline CSV
-        baseline_data = pd.read_csv(self.baseline_csv_path)
-        if 'timestamp' in baseline_data.columns:
-            baseline_data['timestamp'] = pd.to_datetime(baseline_data['timestamp'])
-
+        try:
+            baseline_data = pd.read_csv(self.baseline_csv_path)
+            if 'timestamp' in baseline_data.columns:
+                baseline_data['timestamp'] = pd.to_datetime(baseline_data['timestamp'])
+        except:
+            baseline_data = None
         return csv_data, baseline_data
 
 
@@ -711,10 +681,10 @@ class SolarFlareEvaluator:
 # Example Usage
 if __name__ == "__main__":
     # Example paths - replace with your actual paths
-    example_csv = "/mnt/data/ML-Ready_clean/mixed_data/output/final-171-304-vit-results.csv"
-    example_baseline_csv = "/home/griffingoodwin/2025-HL-Flaring-MEGS-AI/final-model-results.csv"
-    example_aia = "/mnt/data/ML-Ready_clean/mixed_data/AIA/test/"
-    example_weights = "/mnt/data/ML-Ready_clean/mixed_data/weights-171-304-finalepoch/"
+    vit_csv = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/output/vit-39-mc-results.csv"
+    baseline_results_csv = ""
+    aia_data = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/AIA/test/"
+    weights_directory = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/vit-39epoch/"
 
     # Sample timestamps - Fixed the datetime generation
     start_time = datetime(2023, 8, 5)
@@ -728,11 +698,11 @@ if __name__ == "__main__":
 
     # Initialize evaluator with baseline comparison
     evaluator = SolarFlareEvaluator(
-        csv_path=example_csv,
-        baseline_csv_path=example_baseline_csv,
-        aia_dir=example_aia,
-        weight_path=example_weights,
-        output_dir="./solar_flare_comparison_results/171-304"
+        csv_path=vit_csv,
+        baseline_csv_path=baseline_results_csv,
+        aia_dir=aia_data,
+        weight_path=weights_directory,
+        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/171-304"
     )
 
     # Run complete evaluation with baseline comparison

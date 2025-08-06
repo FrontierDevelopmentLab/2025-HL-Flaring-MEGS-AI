@@ -76,10 +76,6 @@ def evaluate_solo_dataset(model, dataset, batch_size=16, times=None, config_data
 
 
 
-
-
-
-
 def evaluate_model_on_dataset(model, dataset, batch_size=16, times=None, config_data=None, save_weights=True, input_size = 512, patch_size = 16):
     """Optimized generator with batch processing and weight saving"""
     model.eval()
@@ -141,6 +137,95 @@ def evaluate_model_on_dataset(model, dataset, batch_size=16, times=None, config_
                 yield (predictions[i].cpu().numpy(), sxr[i].cpu().numpy(),
                        weight_data, global_idx)
 
+#Evaluate model with batches using mc dropout
+def evaluate_model_on_dataset_mc_dropout(model, dataset, batch_size=16, times=None, config_data=None, save_weights=True,
+                                         input_size=512, patch_size=16, runs=100, sxr_norm=None):
+    """Streaming MC Dropout - processes each batch with multiple forward passes without loading all data"""
+
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=4, pin_memory=True)
+    supports_attention = has_attention_weights(model) and save_weights
+
+    print(f"Starting streaming MC Dropout with {runs} forward passes per batch...")
+
+    for batch_idx, batch in enumerate(loader):
+        aia_imgs = batch[0]  # Shape: [batch_size, ...]
+        sxr = batch[1]
+        aia_imgs = aia_imgs.to(device, non_blocking=True)
+        current_batch_size = aia_imgs.shape[0]
+
+        if (batch_idx * batch_size) % 100 == 0:
+            print(
+                f"Processing batch {batch_idx + 1}, samples {batch_idx * batch_size + 1}-{batch_idx * batch_size + current_batch_size}")
+
+        # Storage for this batch's MC predictions
+        # Shape: [runs, batch_size, prediction_dims...]
+        batch_predictions = []
+        batch_weights = [] if supports_attention else None
+
+        # Perform MC dropout runs for this batch
+        for run in range(runs):
+            model.train()  # Enable dropout
+
+            with torch.no_grad():
+                pred = model(aia_imgs)
+
+                if isinstance(pred, tuple) and len(pred) > 1:
+                    predictions = pred[0]  # [batch_size, ...]
+                    weights = pred[1] if supports_attention else None
+                else:
+                    predictions = pred
+                    weights = None
+
+                # Store predictions for this run
+                batch_predictions.append(predictions.cpu().numpy())
+
+                # Process attention weights for this run
+                if supports_attention and weights is not None:
+                    run_weights = []
+                    for i in range(current_batch_size):
+                        last_layer_attention = weights[-1][i]  # [num_heads, seq_len, seq_len]
+                        avg_attention = last_layer_attention.mean(dim=0)  # [seq_len, seq_len]
+                        cls_attention = avg_attention[0, 1:].cpu()  # [num_patches]
+
+                        grid_h, grid_w = input_size // patch_size, input_size // patch_size
+                        attention_map = cls_attention.reshape(grid_h, grid_w)
+                        run_weights.append(attention_map.numpy())
+
+                    if batch_weights is None:
+                        batch_weights = []
+                    batch_weights.append(run_weights)  # [runs, batch_size, grid_h, grid_w]
+
+        # Convert to numpy and compute statistics
+        # batch_predictions: [runs, batch_size, prediction_dims...]
+        batch_predictions = np.array(batch_predictions)
+
+        # Compute mean and std across runs (axis=0)
+        # Result shapes: [batch_size, prediction_dims...]
+        mean_predictions = np.mean(unnormalize_sxr(batch_predictions,sxr_norm=sxr_norm), axis=0)
+        uncertainties = np.std(unnormalize_sxr(batch_predictions,sxr_norm=sxr_norm), axis=0)
+
+        # Process attention weights if available
+        mean_weights = None
+        if supports_attention and batch_weights:
+            # batch_weights: [runs, batch_size, grid_h, grid_w]
+            batch_weights = np.array(batch_weights)
+            # mean_weights: [batch_size, grid_h, grid_w]
+            mean_weights = np.mean(batch_weights, axis=0)
+
+            # Save weights if required
+            if config_data and 'weight_path' in config_data:
+                save_batch_weights(list(mean_weights), batch_idx, batch_size, times, config_data['weight_path'])
+
+        # Yield results for each sample in the batch
+        for i in range(current_batch_size):
+            global_idx = batch_idx * batch_size + i
+            weight_data = mean_weights[i] if mean_weights is not None else None
+
+            yield (mean_predictions[i],  # Mean prediction across MC runs
+                   sxr[i].cpu().numpy(),  # Ground truth
+                   uncertainties[i],  # Uncertainty (std) across MC runs
+                   weight_data,  # Mean attention weights
+                   global_idx)  # Sample index
 
 def save_batch_weights(batch_weights, batch_idx, batch_size, times, weight_path):
     """Save all weights in a batch efficiently"""
@@ -161,7 +246,7 @@ def save_batch_weights(batch_weights, batch_idx, batch_size, times, weight_path)
             save_args.append((weight, filepath))
 
     # Save all weights in this batch in parallel
-    with ThreadPoolExecutor(max_workers=min(4, len(save_args))) as executor:
+    with ThreadPoolExecutor(max_workers=min(11, len(save_args))) as executor:
         executor.map(save_single_weight, save_args)
 
 
@@ -172,7 +257,7 @@ def save_weights_async(weight_data_queue, weight_path):
         weight, filepath = args
         np.savetxt(filepath, weight, delimiter=",")
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=11) as executor:
         executor.map(save_single_weight, weight_data_queue)
 
 
@@ -290,41 +375,113 @@ def main():
 
     print(f"Processing {total_samples} samples with batch size {args.batch_size}...")
 
-    # Process in batches
-    for prediction, sxr, weight, idx in evaluate_model_on_dataset(
-            model, dataset, args.batch_size, times, config_data, save_weights, args.input_size, args.patch_size
-    ):
-        # Unnormalize prediction
-        pred = unnormalize_sxr(prediction, sxr_norm)
+    if config_data['mc']['active'] == "false":
+        print("Running inference without MC Dropout")
+        for prediction, sxr, weight, idx in evaluate_model_on_dataset(
+                model, dataset, args.batch_size, times, config_data, save_weights, args.input_size, args.patch_size
+        ):
+            # Unnormalize prediction
+            pred = unnormalize_sxr(prediction, sxr_norm)
 
-        # Store results
-        predictions.append(pred.item() if hasattr(pred, 'item') else float(pred))
-        ground.append(sxr.item() if hasattr(sxr, 'item') else float(sxr))
-        timestamp.append(str(times[idx]))
+            # Store results
+            predictions.append(pred.item() if hasattr(pred, 'item') else float(pred))
+            ground.append(sxr.item() if hasattr(sxr, 'item') else float(sxr))
+            timestamp.append(str(times[idx]))
 
-        # Progress update
-        if (idx + 1) % 50 == 0:
-            print(f"Processed {idx + 1}/{total_samples}")
+            # Progress update
+            if (idx + 1) % 50 == 0:
+                print(f"Processed {idx + 1}/{total_samples}")
 
-    if save_weights:
-        print("All weights saved during batch processing!")
+        if save_weights:
+            print("All weights saved during batch processing!")
+        else:
+            print("Inference completed (no weights saved)!")
+
+        # Create and save results DataFrame
+        print("Creating output DataFrame...")
+        output_df = pd.DataFrame({
+            'timestamp': timestamp,
+            'predictions': predictions,
+            'groundtruth': ground
+        })
+
+        print(output_df.head())
+        #Make output directory if it doesn't exist
+        output_dir = Path(config_data['output_path']).parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_df.to_csv(config_data['output_path'], index=False)
+        print(f"Predictions saved to {config_data['output_path']}")
     else:
-        print("Inference completed (no weights saved)!")
+        print("Running inference with MC Dropout")
+        if config_data['mc']['active'] == "false":
+            print("Running inference without MC Dropout")
+            for prediction, sxr, weight, idx in evaluate_model_on_dataset(
+                    model, dataset, args.batch_size, times, config_data, save_weights, args.input_size, args.patch_size
+            ):
+                # Unnormalize prediction
+                pred = unnormalize_sxr(prediction, sxr_norm)
 
-    # Create and save results DataFrame
-    print("Creating output DataFrame...")
-    output_df = pd.DataFrame({
-        'timestamp': timestamp,
-        'predictions': predictions,
-        'groundtruth': ground
-    })
+                # Store results
+                predictions.append(pred.item() if hasattr(pred, 'item') else float(pred))
+                ground.append(sxr.item() if hasattr(sxr, 'item') else float(sxr))
+                timestamp.append(str(times[idx]))
 
-    print(output_df.head())
-    #Make output directory if it doesn't exist
-    output_dir = Path(config_data['output_path']).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_df.to_csv(config_data['output_path'], index=False)
-    print(f"Predictions saved to {config_data['output_path']}")
+                # Progress update
+                if (idx + 1) % 50 == 0:
+                    print(f"Processed {idx + 1}/{total_samples}")
+
+            # Create and save results DataFrame
+            print("Creating output DataFrame...")
+            output_df = pd.DataFrame({
+                'timestamp': timestamp,
+                'predictions': predictions,
+                'groundtruth': ground
+            })
+
+        else:
+            #print("Running inference with MC Dropout")
+            uncertainties = []  # Add this to store uncertainties
+            mc_runs = config_data['mc']['runs']  # Allow configurable MC runs
+
+            # Choose between batch processing or single-sample processing
+            # Use single-sample for very large datasets or memory constraints
+
+            print(f"Using batch MC Dropout with {mc_runs} runs per batch")
+            mc_generator = evaluate_model_on_dataset_mc_dropout(
+                model, dataset, args.batch_size, times, config_data, save_weights,
+                args.input_size, args.patch_size, runs=mc_runs, sxr_norm=sxr_norm
+            )
+
+            for prediction, sxr, uncertainty, weight, idx in mc_generator:
+                # Unnormalize prediction and uncertainty
+                #pred = unnormalize_sxr(prediction, sxr_norm)
+                #unc = unnormalize_sxr(uncertainty, sxr_norm)
+
+                # Store results
+                predictions.append(prediction.item() if hasattr(prediction, 'item') else float(prediction))
+                ground.append(sxr.item() if hasattr(sxr, 'item') else float(sxr))
+                uncertainties.append(uncertainty.item() if hasattr(uncertainty, 'item') else float(uncertainty))
+                timestamp.append(str(times[idx]))
+
+                # Progress update
+                if (idx + 1) % 50 == 0:
+                    print(f"Processed {idx + 1}/{total_samples}")
+
+            # Create and save results DataFrame with uncertainty
+            print("Creating output DataFrame with uncertainty...")
+            output_df = pd.DataFrame({
+                'timestamp': timestamp,
+                'predictions': predictions,
+                'groundtruth': ground,
+                'uncertainty': uncertainties  # Add uncertainty column
+            })
+
+        print(output_df.head())
+        # Make output directory if it doesn't exist
+        output_dir = Path(config_data['output_path']).parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_df.to_csv(config_data['output_path'], index=False)
+        print(f"Predictions saved to {config_data['output_path']}")
 
 
 if __name__ == '__main__':

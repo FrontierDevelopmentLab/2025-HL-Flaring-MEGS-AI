@@ -4,10 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="updated the weighted loss">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="added some additional metrics to analyze the validation loss per class">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/models/vision_transformer_custom.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -131,7 +132,7 @@
       <workItem from="1754443347602" duration="1827000" />
       <workItem from="1754482805314" duration="230000" />
       <workItem from="1754483043965" duration="195000" />
-      <workItem from="1754483254382" duration="4374000" />
+      <workItem from="1754483254382" duration="14767000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -381,7 +382,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754483729804</updated>
     </task>
-    <option name="localTasksCounter" value="35" />
+    <task id="LOCAL-00035" summary="added some additional metrics to analyze the validation loss per class">
+      <option name="closed" value="true" />
+      <created>1754487789125</created>
+      <option name="number" value="00035" />
+      <option name="presentableId" value="LOCAL-00035" />
+      <option name="project" value="LOCAL" />
+      <updated>1754487789125</updated>
+    </task>
+    <option name="localTasksCounter" value="36" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -399,7 +408,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="refactor model configuration and callbacks; update data paths and loss functions" />
     <MESSAGE value="refactor attention visualization; update callback to log attention maps and adjust model configuration" />
     <MESSAGE value="refactor model configuration; update vit parameters and checkpoint callback monitor" />
     <MESSAGE value="refactor model configuration and loss functions; update batch size, patch size, and logging metrics" />
@@ -424,6 +432,7 @@
     <MESSAGE value="added some checks to make sure model training and validation is successful" />
     <MESSAGE value="updated the weighted loss to return proper multiplication values... also reduced weighting slightly" />
     <MESSAGE value="updated the weighted loss" />
-    <option name="LAST_COMMIT_MESSAGE" value="updated the weighted loss" />
+    <MESSAGE value="added some additional metrics to analyze the validation loss per class" />
+    <option name="LAST_COMMIT_MESSAGE" value="added some additional metrics to analyze the validation loss per class" />
   </component>
 </project>
