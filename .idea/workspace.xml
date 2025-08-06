@@ -4,10 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="added some additional metrics to analyze the validation loss per class">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -132,7 +131,7 @@
       <workItem from="1754443347602" duration="1827000" />
       <workItem from="1754482805314" duration="230000" />
       <workItem from="1754483043965" duration="195000" />
-      <workItem from="1754483254382" duration="14767000" />
+      <workItem from="1754483254382" duration="20486000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -390,7 +389,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754487789125</updated>
     </task>
-    <option name="localTasksCounter" value="36" />
+    <task id="LOCAL-00036" summary="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation">
+      <option name="closed" value="true" />
+      <created>1754500617537</created>
+      <option name="number" value="00036" />
+      <option name="presentableId" value="LOCAL-00036" />
+      <option name="project" value="LOCAL" />
+      <updated>1754500617537</updated>
+    </task>
+    <option name="localTasksCounter" value="37" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -408,7 +415,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="refactor attention visualization; update callback to log attention maps and adjust model configuration" />
     <MESSAGE value="refactor model configuration; update vit parameters and checkpoint callback monitor" />
     <MESSAGE value="refactor model configuration and loss functions; update batch size, patch size, and logging metrics" />
     <MESSAGE value="refactor file structure; rename and reorganize model, callback, and configuration files; added configuration file for inference" />
@@ -433,6 +439,7 @@
     <MESSAGE value="updated the weighted loss to return proper multiplication values... also reduced weighting slightly" />
     <MESSAGE value="updated the weighted loss" />
     <MESSAGE value="added some additional metrics to analyze the validation loss per class" />
-    <option name="LAST_COMMIT_MESSAGE" value="added some additional metrics to analyze the validation loss per class" />
+    <MESSAGE value="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation" />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation" />
   </component>
 </project>

@@ -11,6 +11,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, c
 from scipy.ndimage import zoom
 from matplotlib.colors import AsinhNorm, LogNorm
 import seaborn as sns
+import matplotlib.ticker as mticker
 
 
 class SolarFlareEvaluator:
@@ -191,9 +192,71 @@ class SolarFlareEvaluator:
     def _plot_regression_comparison(self):
         """Generate regression comparison plot"""
 
+        flare_classes = {
+            'A1.0': (1e-8, 1e-7),
+            'B1.0': (1e-7, 1e-6),
+            'C1.0': (1e-6, 1e-5),
+            'M1.0': (1e-5, 1e-4),
+            'X1.0': (1e-4, 1e-3)
+        }
+
+        def add_flare_class_axes(ax, min_val, max_val):
+            """Helper function to add flare class secondary axes"""
+            # Create secondary axis for flare classes (top)
+            ax_top = ax.twiny()
+            ax_top.set_xlim(ax.get_xlim())
+            ax_top.set_xscale('log')
+
+            # Create secondary axis for flare classes (right)
+            ax_right = ax.twinx()
+            ax_right.set_ylim(ax.get_ylim())
+            ax_right.set_yscale('log')
+
+            # Set flare class tick positions and labels
+            flare_positions = []
+            flare_labels = []
+            for class_name, (min_flux, max_flux) in flare_classes.items():
+                # Add both min and max boundaries that fall within data range
+                if min_flux >= min_val and min_flux <= max_val:
+                    flare_positions.append(min_flux)
+                    flare_labels.append(f'{class_name}')
+                if max_flux >= min_val and max_flux <= max_val and max_flux != min_flux:
+                    flare_positions.append(max_flux)
+                    flare_labels.append(f'{class_name}')
+
+            if flare_positions:  # Only add if we have valid positions
+                ax_top.set_xticks(flare_positions)
+                ax_top.set_xticklabels(flare_labels)
+                ax_top.tick_params(colors='white')
+
+                # Add minor ticks to secondary axes
+                ax_top.xaxis.set_minor_locator(mticker.LogLocator(base=10, subs='auto', numticks=100))
+                ax_top.tick_params(which='minor', colors='white')
+                #ax_top.grid(True, which='minor', alpha=0.15, linewidth=0.5)
+
+                ax_right.set_yticks(flare_positions)
+                ax_right.set_yticklabels(flare_labels)
+                ax_right.tick_params(colors='white')
+
+                # Add minor ticks to secondary axes
+                ax_right.yaxis.set_minor_locator(mticker.LogLocator(base=10, subs='auto', numticks=100))
+                ax_right.tick_params(which='minor', colors='white')
+                #ax_right.grid(True, which='minor', alpha=0.15, linewidth=0.5)
+
+                # Style the spines
+                for spine in ax_top.spines.values():
+                    spine.set_color('white')
+                for spine in ax_right.spines.values():
+                    spine.set_color('white')
+
+                # Optional: Add grid lines at flare class boundaries
+                for pos in flare_positions:
+                    ax.axvline(x=pos, color='cyan', alpha=0.15,linewidth=0.25)
+                    ax.axhline(y=pos, color='cyan', alpha=0.15,linewidth=0.25)
+
         log_bins = np.logspace(np.log10(min(self.y_true)),
                                np.log10(max(self.y_true)), 100)
-        shared_norm = LogNorm(vmin=1, vmax=None)  # Or specify vmax explicitly
+        shared_norm = LogNorm(vmin=1, vmax=None)
 
         if self.y_baseline is not None:
             fig, (ax2, ax1) = plt.subplots(1, 2, figsize=(15, 6))
@@ -231,17 +294,27 @@ class SolarFlareEvaluator:
         ax1.tick_params(colors='white')
         ax1.set_xscale('log')
         ax1.set_yscale('log')
+
+        # Add minor ticks for main plot
+        ax1.xaxis.set_minor_locator(mticker.LogLocator(base=10, subs='auto', numticks=100))
+        ax1.yaxis.set_minor_locator(mticker.LogLocator(base=10, subs='auto', numticks=100))
+        ax1.tick_params(which='minor', colors='white')
+        ax1.grid(True, which='minor', alpha=0.15, linewidth=0.25, linestyle='--')
+
         for spine in ax1.spines.values():
             spine.set_color('white')
+
+        # Add flare class axes to main plot
+        add_flare_class_axes(ax1, min_val, max_val)
 
         # Baseline model plot if available
         if self.y_baseline is not None and ax2 is not None:
             h2 = ax2.hist2d(self.y_true, self.y_baseline, bins=[log_bins, log_bins],
                             cmap='summer', norm=shared_norm)
 
-            min_val = min(min(self.y_true), min(self.y_baseline))
-            max_val = max(max(self.y_true), max(self.y_baseline))
-            ax2.plot([min_val, max_val], [min_val, max_val],
+            min_val_baseline = min(min(self.y_true), min(self.y_baseline))
+            max_val_baseline = max(max(self.y_true), max(self.y_baseline))
+            ax2.plot([min_val_baseline, max_val_baseline], [min_val_baseline, max_val_baseline],
                      label='Perfect Prediction', color='red', linestyle='--', linewidth=2)
 
             ax2.set_xlabel('Ground Truth Flux', color='white')
@@ -252,16 +325,26 @@ class SolarFlareEvaluator:
             ax2.tick_params(colors='white')
             ax2.set_xscale('log')
             ax2.set_yscale('log')
+
+            # Add minor ticks for baseline plot
+            ax2.xaxis.set_minor_locator(mticker.LogLocator(base=10, subs='auto', numticks=100))
+            ax2.yaxis.set_minor_locator(mticker.LogLocator(base=10, subs='auto', numticks=100))
+            ax2.tick_params(which='minor', colors='white')
+            ax2.grid(True, which='minor', alpha=0.15, linewidth=0.25)
+
             for spine in ax2.spines.values():
                 spine.set_color('white')
 
-        # Colorbar (use h1[3] or h2[3], they’re identical)
-        cbar = fig.colorbar(h1[3], ax=[ax1, ax2] if ax2 else ax1, orientation='vertical', pad=.02)
+            # Add flare class axes to baseline plot
+            add_flare_class_axes(ax2, min_val_baseline, max_val_baseline)
+
+        # Colorbar (use h1[3] or h2[3], they're identical)
+        cbar = fig.colorbar(h1[3], ax=[ax1, ax2] if ax2 else ax1, orientation='vertical', pad=.08)
         cbar.ax.yaxis.set_tick_params(color='white')
         plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
-        cbar.set_label("Count (log scale)", color='white')
+        cbar.set_label("Weighted Count", color='white')
 
-        #plt.tight_layout()
+        # plt.tight_layout()
         plot_path = os.path.join(self.comparison_dir, "regression_comparison.png")
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         plt.close()
@@ -702,7 +785,7 @@ if __name__ == "__main__":
         baseline_csv_path=baseline_results_csv,
         aia_dir=aia_data,
         weight_path=weights_directory,
-        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/171-304"
+        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/testing"
     )
 
     # Run complete evaluation with baseline comparison
