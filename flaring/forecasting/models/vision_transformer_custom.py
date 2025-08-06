@@ -325,8 +325,8 @@ class SXRRegressionDynamicLoss:
         class_params = {
             'quiet': {'min_samples': 200, 'recent_window': 100},
             'c_class': {'min_samples': 200, 'recent_window': 100},
-            'm_class': {'min_samples': 20, 'recent_window': 10},
-            'x_class': {'min_samples': 10, 'recent_window': 5}
+            'm_class': {'min_samples': 100, 'recent_window': 50},
+            'x_class': {'min_samples': 50, 'recent_window': 25}
         }
 
         if len(error_history) < class_params[sxrclass]['min_samples']:
