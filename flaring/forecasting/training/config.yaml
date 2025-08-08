@@ -7,7 +7,7 @@ wavelengths: [131, 193, 211, 304]  # AIA wavelengths in Angstroms
 selected_model: "ViT"  # Options: "cnn", "vit",
 batch_size:    64
 epochs:        250
-oversampling: true
+oversample: true
 balance_strategy: "upsample_minority"
 
 megsai:
