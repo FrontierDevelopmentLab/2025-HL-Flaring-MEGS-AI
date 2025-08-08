@@ -15,7 +15,7 @@ import os
 class AIA_GOESDataset(torch.utils.data.Dataset):
     """Dataset for loading AIA images and SXR values for regression."""
 
-    def __init__(self, aia_dir, sxr_dir, wavelengths=[94, 131, 171, 211, 293, 304], sxr_transform=None,
+    def __init__(self, aia_dir, sxr_dir, wavelengths=[94, 131, 171, 193, 211, 304], sxr_transform=None,
                  target_size=(512, 512), cadence=1, reference_time=None, only_prediction=False, oversample=False,
                  flare_threshold=1e-5, balance_strategy='upsample_minority'):
         self.aia_dir = Path(aia_dir).resolve()
@@ -223,7 +223,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 class AIA_GOESDataModule(LightningDataModule):
     """PyTorch Lightning DataModule for AIA and SXR data."""
 
-    def __init__(self, aia_train_dir, aia_val_dir,aia_test_dir,sxr_train_dir,sxr_val_dir,sxr_test_dir, sxr_norm, batch_size=64, num_workers=4, wavelengths=[94,131,171,211,293,304], cadence = 1, reference_time = None, only_prediction=False, oversample=False ):
+    def __init__(self, aia_train_dir, aia_val_dir,aia_test_dir,sxr_train_dir,sxr_val_dir,sxr_test_dir, sxr_norm, batch_size=64, num_workers=4, wavelengths=[94,131,171,193, 211,304], cadence = 1, reference_time = None, only_prediction=False, oversample=False ):
         super().__init__()
         self.aia_train_dir = aia_train_dir
         self.aia_val_dir = aia_val_dir

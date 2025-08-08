@@ -265,8 +265,8 @@ class SXRRegressionDynamicLoss:
         self.base_weights = {
             'quiet': 1.0,
             'c_class': 2.0,
-            'm_class': 10.0,
-            'x_class': 15.0
+            'm_class': 5.0,
+            'x_class': 10.0
         }
 
     def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
