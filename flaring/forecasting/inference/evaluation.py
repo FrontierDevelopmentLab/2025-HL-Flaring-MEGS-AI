@@ -61,6 +61,8 @@ class SolarFlareEvaluator:
         if self.csv_path and os.path.exists(self.csv_path):
             self.df = pd.read_csv(self.csv_path)
             self.y_true = self.df['groundtruth'].values
+            #add 20% uncertainty to ground truth
+            self.y_true_uncertainty = 0.2 * self.y_true
             self.y_pred = self.df['predictions'].values
             if 'uncertainty' in self.df.columns and self.df['uncertainty'] is not None:
                 self.y_uncertainty = self.df['uncertainty'].values
@@ -170,9 +172,6 @@ class SolarFlareEvaluator:
 
         # Generate comparison plots
         self._plot_regression_comparison()
-        if self.y_baseline is not None:
-            self._plot_error_comparison()
-            self._plot_metrics_comparison(metrics_list)
 
         return metrics_df
 
@@ -350,106 +349,6 @@ class SolarFlareEvaluator:
         plt.close()
         print(f"Saved regression comparison plot to {plot_path}")
 
-    def _plot_error_comparison(self):
-        """Generate error comparison plots"""
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
-
-        # Residuals comparison
-        main_residuals = self.y_pred - self.y_true
-        baseline_residuals = self.y_baseline - self.y_true
-
-        ax1.scatter(self.y_true, main_residuals, alpha=0.5, label='Main Model', color='blue')
-        ax1.scatter(self.y_true, baseline_residuals, alpha=0.5, label='Baseline Model', color='red')
-        ax1.axhline(y=0, color='k', linestyle='--', alpha=0.7)
-        ax1.set_xlabel('Ground Truth')
-        ax1.set_ylabel('Residuals')
-        ax1.set_title('Residuals vs Ground Truth')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        ax1.set_xscale('log')
-        ax1.set_yscale('log')
-
-        # Error histograms
-        ax2.hist(np.abs(main_residuals), bins=30, alpha=0.7, label='Main Model', color='blue')
-        ax2.hist(np.abs(baseline_residuals), bins=30, alpha=0.7, label='Baseline Model', color='red')
-        ax2.set_xlabel('Absolute Error')
-        ax2.set_ylabel('Frequency')
-        ax2.set_title('Error Distribution')
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
-
-        # Prediction scatter comparison
-        ax3.scatter(self.y_baseline, self.y_pred, alpha=0.5, color='purple')
-        min_val = min(min(self.y_baseline), min(self.y_pred))
-        max_val = max(max(self.y_baseline), max(self.y_pred))
-        ax3.plot([min_val, max_val], [min_val, max_val], '--k', alpha=0.7)
-        ax3.set_xlabel('Baseline Predictions')
-        ax3.set_ylabel('Main Model Predictions')
-        ax3.set_title('Model Predictions Comparison')
-        ax3.grid(True, alpha=0.3)
-        ax3.set_xscale('log')
-        ax3.set_yscale('log')
-
-        # Error reduction plot
-        error_improvement = np.abs(baseline_residuals) - np.abs(main_residuals)
-        ax4.hist(error_improvement, bins=30, alpha=0.7, color='green')
-        ax4.axvline(x=0, color='k', linestyle='--', alpha=0.7)
-        ax4.set_xlabel('Error Reduction (Baseline - Main)')
-        ax4.set_ylabel('Frequency')
-        ax4.set_title('Error Improvement Distribution')
-        ax4.grid(True, alpha=0.3)
-        ax4.set_xscale('log')
-        ax4.set_yscale('log')
-
-        plt.tight_layout()
-        plot_path = os.path.join(self.comparison_dir, "error_comparison.png")
-        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"Saved error comparison plot to {plot_path}")
-
-    def _plot_metrics_comparison(self, metrics_list):
-        """Generate metrics comparison bar plot"""
-        main_metrics = metrics_list[0]
-        baseline_metrics = metrics_list[1]
-
-        metrics_names = ['RMSE', 'MSE', 'MAE', 'R2']
-        main_values = [main_metrics[m] for m in metrics_names]
-        baseline_values = [baseline_metrics[m] for m in metrics_names]
-
-        x = np.arange(len(metrics_names))
-        width = 0.35
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-        bars1 = ax.bar(x - width / 2, main_values, width, label='Main Model', color='blue', alpha=0.7)
-        bars2 = ax.bar(x + width / 2, baseline_values, width, label='Baseline Model', color='red', alpha=0.7)
-
-        ax.set_xlabel('Metrics')
-        ax.set_ylabel('Values')
-        ax.set_title('Performance Metrics Comparison')
-        ax.set_xticks(x)
-        ax.set_xticklabels(metrics_names)
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-
-        # Add value labels on bars
-        def add_value_labels(bars):
-            for bar in bars:
-                height = bar.get_height()
-                ax.annotate(f'{height:.3f}',
-                            xy=(bar.get_x() + bar.get_width() / 2, height),
-                            xytext=(0, 3),  # 3 points vertical offset
-                            textcoords="offset points",
-                            ha='center', va='bottom', fontsize=8)
-
-        add_value_labels(bars1)
-        add_value_labels(bars2)
-
-        plt.tight_layout()
-        plot_path = os.path.join(self.comparison_dir, "metrics_comparison.png")
-        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"Saved metrics comparison plot to {plot_path}")
-
     @staticmethod
     def init_worker(csv_data, baseline_csv_data):
         """Initialize each worker process with CSV data"""
@@ -464,16 +363,18 @@ class SolarFlareEvaluator:
         csv_data = pd.read_csv(self.csv_path)
         if 'timestamp' in csv_data.columns:
             csv_data['timestamp'] = pd.to_datetime(csv_data['timestamp'])
-
+        csv_data['groundtruth_uncertainty'] = 0.2 * csv_data['groundtruth']  # Add 20% uncertainty to ground truth
         # Load baseline CSV
         try:
-            baseline_data = pd.read_csv(self.baseline_csv_path)
-            if 'timestamp' in baseline_data.columns:
-                baseline_data['timestamp'] = pd.to_datetime(baseline_data['timestamp'])
+            if self.baseline_csv_path:
+                baseline_data = pd.read_csv(self.baseline_csv_path)
+                if 'timestamp' in baseline_data.columns:
+                    baseline_data['timestamp'] = pd.to_datetime(baseline_data['timestamp'])
+            else:
+                baseline_data = None
         except:
             baseline_data = None
         return csv_data, baseline_data
-
 
     def load_aia_image(self, timestamp):
         """Load AIA image for given timestamp"""
@@ -496,7 +397,7 @@ class SolarFlareEvaluator:
             print(f"Could not load attention map for {timestamp}: {e}")
             return None
 
-    def get_sxr_data_for_timestamp(self, timestamp, window_hours=12):
+    def get_sxr_data_for_timestamp(self, timestamp, window_hours=16):
         """Get SXR data around the given timestamp from CSV files"""
         try:
             # Access global CSV data loaded in worker
@@ -506,23 +407,39 @@ class SolarFlareEvaluator:
 
             # Find matching row in main model CSV
             main_row = csv_data_global[csv_data_global['timestamp'] == target_time]
-            baseline_row = baseline_csv_data_global[baseline_csv_data_global['timestamp'] == target_time]
+            baseline_row = baseline_csv_data_global[baseline_csv_data_global[
+                                                        'timestamp'] == target_time] if baseline_csv_data_global is not None else pd.DataFrame()
 
             if main_row.empty:
                 print(f"No main model data found for timestamp {timestamp}")
                 return None, None, None
 
+            # Extract baseline predictions
             if baseline_row.empty:
                 print(f"No baseline data found for timestamp {timestamp}")
                 baseline_pred = None
+                baseline_uncertainty = None
             else:
                 baseline_pred = baseline_row.iloc[0]['predictions']
+                if 'uncertainty' in baseline_row.columns:
+                    baseline_uncertainty = baseline_row.iloc[0]['uncertainty']
+                else:
+                    baseline_uncertainty = None
 
-            # Extract data using correct column names
+            # Extract main model uncertainty
+            if 'uncertainty' in main_row.columns:
+                main_uncertainty = main_row.iloc[0]['uncertainty']
+            else:
+                main_uncertainty = None
+
+            # Create current data dictionary
             current_data = {
                 'groundtruth': main_row.iloc[0]['groundtruth'],
+                'groundtruth_uncertainty': main_row.iloc[0]['groundtruth_uncertainty'],
                 'predictions': main_row.iloc[0]['predictions'],
-                'baseline_predictions': baseline_row.iloc[0]['predictions'] if not baseline_row.empty else None,
+                'uncertainty': main_uncertainty,
+                'baseline_predictions': baseline_pred,
+                'baseline_uncertainty': baseline_uncertainty,
                 'timestamp': target_time
             }
 
@@ -536,21 +453,34 @@ class SolarFlareEvaluator:
                 (csv_data_global['timestamp'] <= time_window_end)
                 ].copy()
 
-            baseline_window = baseline_csv_data_global[
-                (baseline_csv_data_global['timestamp'] >= time_window_start) &
-                (baseline_csv_data_global['timestamp'] <= time_window_end)
-                ].copy()
-
             # Merge the windows for plotting
-            window_data = main_window[['timestamp', 'groundtruth', 'predictions']].copy()
+            window_data = main_window[['timestamp', 'groundtruth', 'groundtruth_uncertainty' , 'predictions']].copy()
 
-            if not baseline_window.empty:
-                # Merge baseline predictions
-                baseline_pred_col = baseline_window[['timestamp', 'predictions']].rename(
-                    columns={'predictions': 'baseline_predictions'})
-                window_data = window_data.merge(baseline_pred_col, on='timestamp', how='left')
+            # Add main model uncertainty if available
+            if 'uncertainty' in main_window.columns:
+                window_data['uncertainty'] = main_window['uncertainty']
+
+            if baseline_csv_data_global is not None:
+                baseline_window = baseline_csv_data_global[
+                    (baseline_csv_data_global['timestamp'] >= time_window_start) &
+                    (baseline_csv_data_global['timestamp'] <= time_window_end)
+                    ].copy()
+
+                if not baseline_window.empty:
+                    # Merge baseline predictions
+                    baseline_cols = ['timestamp', 'predictions']
+                    if 'uncertainty' in baseline_window.columns:
+                        baseline_cols.append('uncertainty')
+
+                    baseline_pred_col = baseline_window[baseline_cols].rename(
+                        columns={'predictions': 'baseline_predictions', 'uncertainty': 'baseline_uncertainty'})
+                    window_data = window_data.merge(baseline_pred_col, on='timestamp', how='left')
+                else:
+                    window_data['baseline_predictions'] = None
+                    window_data['baseline_uncertainty'] = None
             else:
                 window_data['baseline_predictions'] = None
+                window_data['baseline_uncertainty'] = None
 
             return window_data, current_data, target_time
 
@@ -559,7 +489,7 @@ class SolarFlareEvaluator:
             return None, None, None
 
     def generate_frame_worker(self, timestamp):
-        """Worker function to generate a single frame"""
+        """Worker function to generate a single frame with uncertainty bands"""
         try:
             print(f"Worker {os.getpid()}: Processing {timestamp}")
 
@@ -578,64 +508,131 @@ class SolarFlareEvaluator:
             save_path = os.path.join(self.frames_dir, f"{timestamp}.png")
 
             # Create figure
-            fig = plt.figure(figsize=(22, 8))  # Made wider to accommodate three lines
+            fig = plt.figure(figsize=(20, 8))
             fig.patch.set_facecolor('#1a1a2e')
-            gs = fig.add_gridspec(2, 4, width_ratios=[1, 1, 1, 2.8], hspace=0.2, wspace=0.2)
+            gs_left = fig.add_gridspec(2, 3, left=0.05, right=0.55, width_ratios=[1, 1, 1], hspace=0.1, wspace=0.15)
+
+            # Right gridspec for SXR plot (column 3) with more padding
+            gs_right = fig.add_gridspec(2, 1, left=0.60, right=0.95, hspace=0.1)
 
             wavs = ['94', '131', '171', '193', '211', '304']
             att_max = np.percentile(attention_data, 100)
             att_min = np.percentile(attention_data, 0)
             att_norm = AsinhNorm(vmin=att_min, vmax=att_max, clip=False)
-
+            max_attention_idx = np.unravel_index(np.argmax(attention_data), attention_data.shape)
+            max_y, max_x = max_attention_idx
             # Plot AIA images with attention maps
             for i in range(6):
                 row = i // 3
                 col = i % 3
-                ax = fig.add_subplot(gs[row, col])
+                ax = fig.add_subplot(gs_left[row, col])
 
                 aia_img = aia_data[i]
                 ax.imshow(aia_img, cmap="gray", origin='lower')
-                ax.imshow(attention_data, cmap='hot', origin='lower', alpha=0.35, norm=att_norm)
+                ax.imshow(attention_data, cmap='hot', origin='lower', alpha=0.35)
+                # Plot star at maximum attention location
+                # ax.plot(max_x, max_y, marker='*', markersize=10, color='cyan',
+                #         markeredgecolor='white', markeredgewidth=1)
                 ax.set_title(f'AIA {wavs[i]} Å', fontsize=10, color='white')
                 ax.axis('off')
 
-            # Plot SXR data
-            sxr_ax = fig.add_subplot(gs[:, 3])
+            # Plot SXR data with uncertainty bands
+            sxr_ax = fig.add_subplot(gs_right[:, 0])
             sxr_ax.set_facecolor('#2a2a3e')
 
             if sxr_window is not None and not sxr_window.empty:
-                # Plot ground truth
-                sxr_ax.plot(sxr_window['timestamp'], sxr_window['groundtruth'], label='Ground Truth', linewidth=3, alpha=1, markersize=5, color = "#F78E69")
+                # Plot ground truth (no uncertainty)
+                sxr_ax.plot(sxr_window['timestamp'], sxr_window['groundtruth'],
+                            label='Ground Truth', linewidth=1.5, alpha=1, markersize=5, color="#F78E69")
 
-                # Plot new model predictions
-                sxr_ax.plot(sxr_window['timestamp'], sxr_window['predictions'], label='ViT Model', linewidth=3, alpha=1, markersize=5, color = "#C0B9DD")
+                gt = sxr_window['groundtruth'].values
+                uncertainties = sxr_window['groundtruth_uncertainty'].values
 
-                # Plot baseline predictions if available
-                if 'baseline_predictions' in sxr_window.columns and sxr_window['baseline_predictions'].notna().any():
-                    sxr_ax.plot(sxr_window['timestamp'], sxr_window['baseline_predictions'], label='Baseline Model', linewidth=3, alpha=1, markersize=5, color = "#94ECBE")
+                # Create upper and lower bounds (assuming uncertainty is standard deviation)
+                upper_bound = gt + uncertainties
+                lower_bound = gt - uncertainties
+
+                # Ensure bounds are positive for log scale
+                lower_bound = np.maximum(lower_bound, 1e-12)
+
+                sxr_ax.fill_between(sxr_window['timestamp'], lower_bound, upper_bound,
+                                    alpha=0.3, color="#F78E69")
+
+                # Plot ViT model predictions with uncertainty bands
+                vit_prediction_line = sxr_ax.plot(sxr_window['timestamp'], sxr_window['predictions'],
+                                                  label='ViT Model', linewidth=1.5, alpha=1, markersize=5,
+                                                  color="#C0B9DD")
+
+                # Add uncertainty bands for ViT model if available
+                if 'uncertainty' in sxr_window.columns and sxr_window['uncertainty'].notna().any():
+                    predictions = sxr_window['predictions'].values
+                    uncertainties = sxr_window['uncertainty'].values
+
+                    # Create upper and lower bounds (assuming uncertainty is standard deviation)
+                    upper_bound = predictions + uncertainties
+                    lower_bound = predictions - uncertainties
+
+                    # Ensure bounds are positive for log scale
+                    lower_bound = np.maximum(lower_bound, 1e-12)
+
+                    sxr_ax.fill_between(sxr_window['timestamp'], lower_bound, upper_bound,
+                                        alpha=0.3, color="#C0B9DD")
+
+                # Plot baseline predictions with uncertainty bands if available
+                if 'baseline_predictions' in sxr_window.columns and sxr_window[
+                    'baseline_predictions'].notna().any():
+                    baseline_line = sxr_ax.plot(sxr_window['timestamp'], sxr_window['baseline_predictions'],
+                                                label='Baseline Model', linewidth=1.5, alpha=1, markersize=5,
+                                                color="#94ECBE")
+
+                    # Add uncertainty bands for baseline model if available
+                    if 'baseline_uncertainty' in sxr_window.columns and sxr_window[
+                        'baseline_uncertainty'].notna().any():
+                        baseline_predictions = sxr_window['baseline_predictions'].values
+                        baseline_uncertainties = sxr_window['baseline_uncertainty'].values
+
+                        # Create upper and lower bounds
+                        baseline_upper = baseline_predictions + baseline_uncertainties
+                        baseline_lower = baseline_predictions - baseline_uncertainties
+
+                        # Ensure bounds are positive for log scale
+                        baseline_lower = np.maximum(baseline_lower, 1e-12)
+
+                        sxr_ax.fill_between(sxr_window['timestamp'], baseline_lower, baseline_upper,
+                                            alpha=0.3, color="#94ECBE")
 
                 # Mark current time
                 if sxr_current is not None:
                     sxr_ax.axvline(target_time, color='white', linestyle='--',
                                    linewidth=2, alpha=0.8, label='Current Time')
 
-                    # Create info text with all available values
-                    info_lines = [
-                        "Current Values:",
-                        f"GT: {sxr_current['groundtruth']:.2e}",
-                        f"ViT: {sxr_current['predictions']:.2e}"
-                    ]
+                    # Create info text with all available values including uncertainties
+                    info_lines = ["Current Values:",
+                                  f"GT: {sxr_current['groundtruth']:.2e}",
+                                  f"ViT: {sxr_current['predictions']:.2e}"]
+
+                    # Add ViT uncertainty if available
+                    if sxr_current['uncertainty'] is not None:
+                        info_lines.append(f"ViT σ: {sxr_current['uncertainty']:.2e}")
+
+                    # Add baseline prediction if available
                     if sxr_current['baseline_predictions'] is not None:
                         info_lines.append(f"Base: {sxr_current['baseline_predictions']:.2e}")
+
+                        # Add baseline uncertainty if available
+                        if sxr_current['baseline_uncertainty'] is not None:
+                            info_lines.append(f"Base σ: {sxr_current['baseline_uncertainty']:.2e}")
 
                     info_text = "\n".join(info_lines)
                     sxr_ax.text(0.02, 0.98, info_text, transform=sxr_ax.transAxes,
                                 fontsize=8, color='white', verticalalignment='top',
                                 bbox=dict(boxstyle='round', facecolor='black', alpha=0.7))
 
+                sxr_ax.set_xlim([pd.to_datetime(timestamp) - pd.Timedelta(hours=8),pd.to_datetime(timestamp) + pd.Timedelta(hours=8)])
+                sxr_ax.set_ylim([5e-7, 5e-4])  # Set y-limits for SXR data
                 sxr_ax.set_ylabel('SXR Flux', fontsize=10, color='white')
                 sxr_ax.set_xlabel('Time', fontsize=10, color='white')
-                sxr_ax.set_title('SXR Data Comparison', fontsize=12, color='white')
+                sxr_ax.set_title('SXR Data Comparison with Uncertainties', fontsize=12, color='white')
                 sxr_ax.legend(fontsize=8, loc='upper right')
                 legend1 = sxr_ax.legend()
                 legend1.get_frame().set_facecolor('black')
@@ -655,7 +652,7 @@ class SolarFlareEvaluator:
                 sxr_ax.text(0.5, 0.5, 'No SXR Data\nAvailable',
                             transform=sxr_ax.transAxes, fontsize=12, color='white',
                             horizontalalignment='center', verticalalignment='center')
-                sxr_ax.set_title('SXR Data Comparison', fontsize=12, color='white')
+                sxr_ax.set_title('SXR Data Comparison with Uncertainties', fontsize=12, color='white')
 
             for spine in sxr_ax.spines.values():
                 spine.set_color('white')
@@ -674,7 +671,7 @@ class SolarFlareEvaluator:
             return None
 
     def create_attention_movie(self, timestamps):
-        """Generate attention visualization movie with baseline comparison"""
+        """Generate attention visualization movie with baseline comparison and uncertainties"""
         print(f"Generated {len(timestamps)} timestamps to process")
 
         # Load CSV data once
@@ -714,7 +711,7 @@ class SolarFlareEvaluator:
         # Sort frame paths by timestamp to ensure correct order
         frame_paths.sort(key=lambda x: os.path.basename(x))
 
-        movie_path = os.path.join(self.output_dir, "AIA_video.mp4")
+        movie_path = os.path.join(self.output_dir, "AIA_video_with_uncertainties.mp4")
         with imageio.get_writer(movie_path, fps=30) as writer:
             for frame_path in frame_paths:
                 if os.path.exists(frame_path):
@@ -737,8 +734,8 @@ class SolarFlareEvaluator:
             print("Frame files deleted")
 
     def run_full_evaluation(self, timestamps=None):
-        """Run complete evaluation pipeline with baseline comparison"""
-        print("=== Solar Flare Evaluation with Baseline Comparison ===")
+        """Run complete evaluation pipeline with baseline comparison and uncertainties"""
+        print("=== Solar Flare Evaluation with Baseline Comparison and Uncertainties ===")
         print(f"Output will be saved to: {self.output_dir}")
 
         # Load all data
@@ -754,25 +751,26 @@ class SolarFlareEvaluator:
 
         # Visual evaluation if timestamps provided
         if timestamps:
-            print("\nGenerating attention visualizations...")
+            print("\nGenerating attention visualizations with uncertainties...")
             self.create_attention_movie(timestamps)
 
         print("\nEvaluation complete!")
         return metrics_df
 
 
-# Example Usage
+
+
 if __name__ == "__main__":
     # Example paths - replace with your actual paths
-    vit_csv = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/output/vit-39-mc-results.csv"
+    vit_csv = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/output/vit-90-mc-results.csv"
     baseline_results_csv = ""
     aia_data = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/AIA/test/"
-    weights_directory = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/vit-39epoch/"
+    weights_directory = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/vit-90epoch/"
 
     # Sample timestamps - Fixed the datetime generation
-    start_time = datetime(2023, 8, 5)
-    end_time = datetime(2023, 8, 10)
-    interval = timedelta(minutes=1)  # Changed from minutes=60 to hours=1 for clarity
+    start_time = datetime(2023, 8, 1)
+    end_time = datetime(2023, 8, 14)
+    interval = timedelta(minutes=5)  # Changed from minutes=60 to hours=1 for clarity
     timestamps = []
     current_time = start_time
     while current_time <= end_time:
@@ -785,8 +783,8 @@ if __name__ == "__main__":
         baseline_csv_path=baseline_results_csv,
         aia_dir=aia_data,
         weight_path=weights_directory,
-        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/testing"
+        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/90-mc-dropout"
     )
 
-    # Run complete evaluation with baseline comparison
+    # Run complete evaluation with baseline comparison and uncertainties
     evaluator.run_full_evaluation(timestamps=timestamps)

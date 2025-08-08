@@ -4,10 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="enhance evaluation plots; added flare class axes">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -131,7 +134,7 @@
       <workItem from="1754443347602" duration="1827000" />
       <workItem from="1754482805314" duration="230000" />
       <workItem from="1754483043965" duration="195000" />
-      <workItem from="1754483254382" duration="20486000" />
+      <workItem from="1754483254382" duration="55570000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -397,7 +400,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754500617537</updated>
     </task>
-    <option name="localTasksCounter" value="37" />
+    <task id="LOCAL-00037" summary="enhance evaluation plots; added flare class axes">
+      <option name="closed" value="true" />
+      <created>1754506057840</created>
+      <option name="number" value="00037" />
+      <option name="presentableId" value="LOCAL-00037" />
+      <option name="project" value="LOCAL" />
+      <updated>1754506057840</updated>
+    </task>
+    <option name="localTasksCounter" value="38" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -415,7 +426,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="refactor model configuration; update vit parameters and checkpoint callback monitor" />
     <MESSAGE value="refactor model configuration and loss functions; update batch size, patch size, and logging metrics" />
     <MESSAGE value="refactor file structure; rename and reorganize model, callback, and configuration files; added configuration file for inference" />
     <MESSAGE value="added plotly graphs for inference" />
@@ -440,6 +450,18 @@
     <MESSAGE value="updated the weighted loss" />
     <MESSAGE value="added some additional metrics to analyze the validation loss per class" />
     <MESSAGE value="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation" />
-    <option name="LAST_COMMIT_MESSAGE" value="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation" />
+    <MESSAGE value="enhance evaluation plots; added flare class axes" />
+    <option name="LAST_COMMIT_MESSAGE" value="enhance evaluation plots; added flare class axes" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb</url>
+          <line>1057</line>
+          <option name="timeStamp" value="5" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

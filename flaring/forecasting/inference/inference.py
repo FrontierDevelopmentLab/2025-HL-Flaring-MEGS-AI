@@ -164,6 +164,9 @@ def evaluate_model_on_dataset_mc_dropout(model, dataset, batch_size=16, times=No
 
         # Perform MC dropout runs for this batch
         for run in range(runs):
+            #Set seed based on run
+            torch.manual_seed(run)  # Ensure different dropout masks for each run
+
             model.train()  # Enable dropout
 
             with torch.no_grad():

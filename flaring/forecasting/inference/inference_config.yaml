@@ -1,10 +1,10 @@
 # Base directories - change these to switch datasets
 base_data_dir: "/mnt/data/ML-Ready-mixed/ML-Ready-mixed"  # Change this line for different datasets
-output_path: "${base_data_dir}/output/vit-39-mc-results.csv"
-weight_path: "${base_data_dir}/vit-39epoch/"
+output_path: "${base_data_dir}/output/megs-final-mc-results.csv"
+weight_path: "${base_data_dir}/megs-finalepoch/"
 mc:
   active: "true"
-  runs: 50
+  runs: 250
 # Enable or disable MC Dropout
 # Data paths (automatically constructed from base directories)
 SolO: "false"
@@ -12,7 +12,7 @@ SolO_data:
     solo_img_dir: "/mnt/data/ML-Ready_clean/SolO/SolO/ML-Ready-SolO"
     sxr_dir: "${base_data_dir}/SXR"
     sxr_norm_path: "${base_data_dir}/SolO/SXR/normalized_sxr.npy"
-model: "vit"  # Options: "cnn", "vit", "ViT Custom"
+model: "hybrid"  # Options: "cnn", "vit", "ViT Custom"
 wavelengths: [94, 131, 171, 193, 211, 304]  # AIA wavelengths in Angstroms
 data:
   aia_dir:
@@ -22,5 +22,5 @@ data:
   sxr_norm_path:
     "${base_data_dir}/SXR/normalized_sxr.npy"
   checkpoint_path:
-    "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/new-checkpoint/Original ViT Model-epoch=39-val_loss=0.0574.ckpt"
+    "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/new-checkpoint/megsai-added-data-final-20250807_065956.pth"
 
