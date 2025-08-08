@@ -99,6 +99,8 @@ data_loader = AIA_GOESDataModule(
     num_workers=os.cpu_count(),
     sxr_norm=sxr_norm,
     wavelengths=training_wavelengths,
+    oversample=config_data['oversample'],
+    balance_strategy=config_data['balance_strategy'],
 )
 data_loader.setup()
 

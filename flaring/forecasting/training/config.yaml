@@ -5,8 +5,10 @@ base_checkpoint_dir: "/mnt/data/ML-Ready-mixed/ML-Ready-mixed"    # Change this 
 wavelengths: [131, 193, 211, 304]  # AIA wavelengths in Angstroms
 # Model configuration
 selected_model: "ViT"  # Options: "cnn", "vit",
-batch_size:    8
+batch_size:    64
 epochs:        250
+oversampling: true
+balance_strategy: "upsample_minority"
 
 megsai:
   architecture: "cnn"
@@ -17,10 +19,10 @@ megsai:
 
 vit_custom:
     embed_dim: 512
-    num_channels: 6
+    num_channels: 4
     num_classes: 1
-    patch_size: 8
-    num_patches: 4096
+    patch_size: 16
+    num_patches: 1024
     hidden_dim: 512
     num_heads: 8
     num_layers: 6
@@ -46,5 +48,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: vit-patch-size-8-4-wavelengths-lower-weights
+  wb_name: vit-patch-size-16-4-wavelengths-lower-weights-oversampling
   notes: Regression from AIA images (4 channels) to GOES SXR flux

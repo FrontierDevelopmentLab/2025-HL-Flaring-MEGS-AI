@@ -223,7 +223,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 class AIA_GOESDataModule(LightningDataModule):
     """PyTorch Lightning DataModule for AIA and SXR data."""
 
-    def __init__(self, aia_train_dir, aia_val_dir,aia_test_dir,sxr_train_dir,sxr_val_dir,sxr_test_dir, sxr_norm, batch_size=64, num_workers=4, wavelengths=[94,131,171,193, 211,304], cadence = 1, reference_time = None, only_prediction=False, oversample=False ):
+    def __init__(self, aia_train_dir, aia_val_dir,aia_test_dir,sxr_train_dir,sxr_val_dir,sxr_test_dir, sxr_norm, batch_size=64, num_workers=4, wavelengths=[94,131,171,193, 211,304], cadence = 1, reference_time = None, only_prediction=False, oversample=False, balance_strategy='upsample_minority'):
         super().__init__()
         self.aia_train_dir = aia_train_dir
         self.aia_val_dir = aia_val_dir
@@ -239,6 +239,7 @@ class AIA_GOESDataModule(LightningDataModule):
         self.reference_time = reference_time
         self.only_prediction = only_prediction
         self.oversample = oversample
+        self.balance_strategy = balance_strategy
 
 
     def setup(self, stage=None):
@@ -252,9 +253,9 @@ class AIA_GOESDataModule(LightningDataModule):
             cadence = 1,
             reference_time = None,
             only_prediction = False,
-            oversample = False,
+            oversample = self.oversample,
             flare_threshold = 1e-5,
-            balance_strategy = 'upsample_minority'
+            balance_strategy = self.balance_strategy
         )
 
         self.val_ds = AIA_GOESDataset(
