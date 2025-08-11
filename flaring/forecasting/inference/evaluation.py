@@ -762,10 +762,10 @@ class SolarFlareEvaluator:
 
 if __name__ == "__main__":
     # Example paths - replace with your actual paths
-    vit_csv = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/output/vit-90-mc-results.csv"
+    vit_csv = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/output/4-wavelengths.csv"
     baseline_results_csv = ""
     aia_data = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/AIA/test/"
-    weights_directory = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/vit-90epoch/"
+    weights_directory = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/4-wavelengths/"
 
     # Sample timestamps - Fixed the datetime generation
     start_time = datetime(2023, 8, 1)
@@ -783,7 +783,7 @@ if __name__ == "__main__":
         baseline_csv_path=baseline_results_csv,
         aia_dir=aia_data,
         weight_path=weights_directory,
-        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/90-mc-dropout"
+        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/4-wavelengths"
     )
 
     # Run complete evaluation with baseline comparison and uncertainties
