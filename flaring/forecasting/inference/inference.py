@@ -361,6 +361,11 @@ def main():
             sxr_dir=config_data['SolO_data']['sxr_dir'] + '/test', wavelengths=[94,131], only_prediction=True
         )
         print(dataset)
+    elif config_data['Stereo'] == "true":
+        dataset = AIA_GOESDataset(
+            aia_dir=config_data['Stereo_data']['stereo_img_dir'],
+            sxr_dir=config_data['Stereo_data']['sxr_dir'] + '/test', wavelengths= [94,131,171,193], only_prediction=True
+        )
     else:
         dataset = AIA_GOESDataset(
             aia_dir=config_data['data']['aia_dir'] + '/test',

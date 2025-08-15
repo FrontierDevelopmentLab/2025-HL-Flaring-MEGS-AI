@@ -3,7 +3,7 @@ import glob
 from multiprocessing import Pool
 from datetime import timedelta, datetime
 
-import imageio
+import imageio.v2 as imageio
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -263,7 +263,7 @@ class SolarFlareEvaluator:
             fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
             ax2 = None
 
-        fig.patch.set_facecolor('#1a1a2e')
+        #fig.patch.set_facecolor('#1a1a2e')
         sns.set_palette("husl")
         ax1.set_facecolor('#2d2d44')
         if ax2 is not None:
@@ -345,7 +345,7 @@ class SolarFlareEvaluator:
 
         # plt.tight_layout()
         plot_path = os.path.join(self.comparison_dir, "regression_comparison.png")
-        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.savefig(plot_path, dpi=150)
         plt.close()
         print(f"Saved regression comparison plot to {plot_path}")
 
@@ -509,7 +509,7 @@ class SolarFlareEvaluator:
 
             # Create figure
             fig = plt.figure(figsize=(20, 8))
-            fig.patch.set_facecolor('#1a1a2e')
+            #fig.patch.set_facecolor('#1a1a2e')
             gs_left = fig.add_gridspec(2, 3, left=0.05, right=0.55, width_ratios=[1, 1, 1], hspace=0.1, wspace=0.15)
 
             # Right gridspec for SXR plot (column 3) with more padding
@@ -555,8 +555,8 @@ class SolarFlareEvaluator:
                 # Ensure bounds are positive for log scale
                 lower_bound = np.maximum(lower_bound, 1e-12)
 
-                sxr_ax.fill_between(sxr_window['timestamp'], lower_bound, upper_bound,
-                                    alpha=0.3, color="#F78E69")
+                #sxr_ax.fill_between(sxr_window['timestamp'], lower_bound, upper_bound,
+                                    #alpha=0.3, color="#F78E69")
 
                 # Plot ViT model predictions with uncertainty bands
                 vit_prediction_line = sxr_ax.plot(sxr_window['timestamp'], sxr_window['predictions'],
@@ -599,7 +599,7 @@ class SolarFlareEvaluator:
                         baseline_lower = np.maximum(baseline_lower, 1e-12)
 
                         sxr_ax.fill_between(sxr_window['timestamp'], baseline_lower, baseline_upper,
-                                            alpha=0.3, color="#94ECBE")
+                                           alpha=0.3, color="#94ECBE")
 
                 # Mark current time
                 if sxr_current is not None:
@@ -658,8 +658,8 @@ class SolarFlareEvaluator:
                 spine.set_color('white')
 
             plt.suptitle(f'Timestamp: {timestamp}', color='white', fontsize=14)
-            plt.tight_layout()
-            plt.savefig(save_path, dpi=150, facecolor='#1a1a2e')
+            #plt.tight_layout()
+            plt.savefig(save_path, dpi=150, facecolor='black')
             plt.close()
 
             print(f"Worker {os.getpid()}: Completed {timestamp}")
@@ -712,7 +712,7 @@ class SolarFlareEvaluator:
         frame_paths.sort(key=lambda x: os.path.basename(x))
 
         movie_path = os.path.join(self.output_dir, "AIA_video_with_uncertainties.mp4")
-        with imageio.get_writer(movie_path, fps=30) as writer:
+        with imageio.get_writer(movie_path, fps=30, codec='libx264', format='ffmpeg') as writer:
             for frame_path in frame_paths:
                 if os.path.exists(frame_path):
                     image = imageio.imread(frame_path)
@@ -765,12 +765,12 @@ if __name__ == "__main__":
     vit_csv = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/output/4-wavelengths.csv"
     baseline_results_csv = ""
     aia_data = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/AIA/test/"
-    weights_directory = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/4-wavelengths/"
+    weights_directory = "/mnt/data/ML-Ready-mixed/ML-Ready-mixed/4-wavelengths"
 
     # Sample timestamps - Fixed the datetime generation
     start_time = datetime(2023, 8, 1)
     end_time = datetime(2023, 8, 14)
-    interval = timedelta(minutes=5)  # Changed from minutes=60 to hours=1 for clarity
+    interval = timedelta(minutes=20)  # Changed from minutes=60 to hours=1 for clarity
     timestamps = []
     current_time = start_time
     while current_time <= end_time:
@@ -783,8 +783,9 @@ if __name__ == "__main__":
         baseline_csv_path=baseline_results_csv,
         aia_dir=aia_data,
         weight_path=weights_directory,
-        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/4-wavelengths"
+        output_dir="/mnt/data/ML-Ready-mixed/ML-Ready-mixed/solar_flare_comparison_results/4-wavelength-results"
     )
 
     # Run complete evaluation with baseline comparison and uncertainties
     evaluator.run_full_evaluation(timestamps=timestamps)
+    #evaluator.create_attention_movie(timestamps)

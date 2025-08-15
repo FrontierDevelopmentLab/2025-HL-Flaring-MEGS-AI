@@ -4,12 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="enhance evaluation plots; added flare class axes">
+    <list default="true" id="e883d810-3b4e-470d-b72e-9ed3eee941a0" name="Changes" comment="update evaluation and inference configuration for 4-wavelengths dataset">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/evaluation.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/inference/inference_config.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/forecasting/training/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flaring/notebook_tests/aia_visualization_filter.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/notebook_tests/aia_visualization_filter.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -135,6 +136,15 @@
       <workItem from="1754482805314" duration="230000" />
       <workItem from="1754483043965" duration="195000" />
       <workItem from="1754483254382" duration="55570000" />
+      <workItem from="1754661837523" duration="32924000" />
+      <workItem from="1754949280985" duration="1853000" />
+      <workItem from="1755012015116" duration="134000" />
+      <workItem from="1755012234233" duration="16222000" />
+      <workItem from="1755110862054" duration="4930000" />
+      <workItem from="1755182186851" duration="7000" />
+      <workItem from="1755182816790" duration="16256000" />
+      <workItem from="1755274543631" duration="1138000" />
+      <workItem from="1755289237970" duration="352000" />
     </task>
     <task id="LOCAL-00004" summary="update train code to save model as .pth, creating plotting jupyter notebook, updated inference code to accept checkpoints">
       <option name="closed" value="true" />
@@ -408,7 +418,47 @@
       <option name="project" value="LOCAL" />
       <updated>1754506057840</updated>
     </task>
-    <option name="localTasksCounter" value="38" />
+    <task id="LOCAL-00038" summary="refactor evaluation and inference code; add uncertainty handling and update model parameters">
+      <option name="closed" value="true" />
+      <created>1754666197648</created>
+      <option name="number" value="00038" />
+      <option name="presentableId" value="LOCAL-00038" />
+      <option name="project" value="LOCAL" />
+      <updated>1754666197648</updated>
+    </task>
+    <task id="LOCAL-00039" summary="small fixes to data loader wavelengths">
+      <option name="closed" value="true" />
+      <created>1754677152392</created>
+      <option name="number" value="00039" />
+      <option name="presentableId" value="LOCAL-00039" />
+      <option name="project" value="LOCAL" />
+      <updated>1754677152392</updated>
+    </task>
+    <task id="LOCAL-00040" summary="update configuration for data loading to enable oversampling;">
+      <option name="closed" value="true" />
+      <created>1754678561074</created>
+      <option name="number" value="00040" />
+      <option name="presentableId" value="LOCAL-00040" />
+      <option name="project" value="LOCAL" />
+      <updated>1754678561074</updated>
+    </task>
+    <task id="LOCAL-00041" summary="update configuration for data loading to enable oversampling;">
+      <option name="closed" value="true" />
+      <created>1754678590926</created>
+      <option name="number" value="00041" />
+      <option name="presentableId" value="LOCAL-00041" />
+      <option name="project" value="LOCAL" />
+      <updated>1754678590926</updated>
+    </task>
+    <task id="LOCAL-00042" summary="update evaluation and inference configuration for 4-wavelengths dataset">
+      <option name="closed" value="true" />
+      <created>1754927662181</created>
+      <option name="number" value="00042" />
+      <option name="presentableId" value="LOCAL-00042" />
+      <option name="project" value="LOCAL" />
+      <updated>1754927662181</updated>
+    </task>
+    <option name="localTasksCounter" value="43" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -426,10 +476,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="refactor model configuration and loss functions; update batch size, patch size, and logging metrics" />
-    <MESSAGE value="refactor file structure; rename and reorganize model, callback, and configuration files; added configuration file for inference" />
-    <MESSAGE value="added plotly graphs for inference" />
-    <MESSAGE value="add FastViT model for solar flare prediction; update configuration files and optimize inference batch processing" />
     <MESSAGE value="refactor model configuration and training scripts; update weight paths, batch size, and learning rate scheduler; add plotting functionality for attention maps" />
     <MESSAGE value="refactor training and inference scripts; update model configuration, batch size, and weight paths; enhance data loading with prefetching; add support for loading checkpoints, added new weight to loss to mitigate few m / x class points" />
     <MESSAGE value="update plotting script to change output video name and adjust timestamp generation interval;" />
@@ -451,15 +497,19 @@
     <MESSAGE value="added some additional metrics to analyze the validation loss per class" />
     <MESSAGE value="refactor evaluation and inference code; add support for uncertainty in predictions and implement MC Dropout evaluation" />
     <MESSAGE value="enhance evaluation plots; added flare class axes" />
-    <option name="LAST_COMMIT_MESSAGE" value="enhance evaluation plots; added flare class axes" />
+    <MESSAGE value="refactor evaluation and inference code; add uncertainty handling and update model parameters" />
+    <MESSAGE value="small fixes to data loader wavelengths" />
+    <MESSAGE value="update configuration for data loading to enable oversampling;" />
+    <MESSAGE value="update evaluation and inference configuration for 4-wavelengths dataset" />
+    <option name="LAST_COMMIT_MESSAGE" value="update evaluation and inference configuration for 4-wavelengths dataset" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
           <url>file://$PROJECT_DIR$/flaring/notebook_tests/plotting_test_results.ipynb</url>
-          <line>1057</line>
-          <option name="timeStamp" value="5" />
+          <line>1</line>
+          <option name="timeStamp" value="7" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
