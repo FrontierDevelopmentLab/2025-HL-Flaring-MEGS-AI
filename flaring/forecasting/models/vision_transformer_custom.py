@@ -21,6 +21,7 @@ def unnormalize_sxr(normalized_values, sxr_norm):
 class ViT(pl.LightningModule):
     def __init__(self, model_kwargs, sxr_norm):
         super().__init__()
+        self.model_kwargs = model_kwargs
         self.lr = model_kwargs['lr']
         self.save_hyperparameters()
         filtered_kwargs = dict(model_kwargs)
@@ -61,6 +62,8 @@ class ViT(pl.LightningModule):
 
     def _calculate_loss(self, batch, mode="train"):
         imgs, sxr = batch
+        # if mode == "train":
+        #     imgs = self.apply_wavelength_dropout(imgs, dropout_prob=0.3)
         preds = self.model(imgs)
         preds_squeezed = torch.squeeze(preds)
 
@@ -108,7 +111,18 @@ class ViT(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         self._calculate_loss(batch, mode="test")
 
+    def apply_wavelength_dropout(self, x, dropout_prob=0.3):
+        """Randomly zero out some wavelengths during training"""
+        if self.training and torch.rand(1).item() < dropout_prob:
+            # x shape: [B, H, W, num_channels]
+            num_keep = torch.randint(1, self.model_kwargs['num_channels'], (1,)).item()
+            keep_indices = torch.randperm(self.model_kwargs['num_channels'])[:num_keep]
 
+            mask = torch.zeros(self.model_kwargs['num_channels'], device=x.device)
+            mask[keep_indices] = 1.0
+
+            x = x * mask.view(1, 1, 1, -1)
+        return x
 
 
 class VisionTransformer(nn.Module):
@@ -265,8 +279,8 @@ class SXRRegressionDynamicLoss:
         self.base_weights = {
             'quiet': 1.0,
             'c_class': 2.0,
-            'm_class': 5.0,
-            'x_class': 10.0
+            'm_class': 10.0,
+            'x_class': 20.0
         }
 
     def calculate_loss(self, preds_squeezed, sxr, sxr_un, preds_squeezed_un):
@@ -285,7 +299,7 @@ class SXRRegressionDynamicLoss:
             self.quiet_errors, max_multiplier=1.5, min_multiplier=0.5, sensitivity=2.0, sxrclass = 'quiet'
         )
         c_mult = self._get_performance_multiplier(
-            self.c_errors, max_multiplier=3.0, min_multiplier=0.7, sensitivity=2.5, sxrclass = 'c_class'
+            self.c_errors, max_multiplier=2.0, min_multiplier=0.7, sensitivity=2.5, sxrclass = 'c_class'
         )
         m_mult = self._get_performance_multiplier(
             self.m_errors, max_multiplier=7.0, min_multiplier=0.8, sensitivity=3.0, sxrclass = 'm_class'
@@ -310,7 +324,7 @@ class SXRRegressionDynamicLoss:
         weights = weights / (mean_weight + 1e-8)
 
         # Clamp extreme weights
-        weights = torch.clamp(weights, min=0.1, max=40.0)
+        weights = torch.clamp(weights, min=0.01, max=40.0)
 
         # Save for logging
         self.current_multipliers = {
@@ -330,10 +344,10 @@ class SXRRegressionDynamicLoss:
         """Class-dependent performance multiplier"""
 
         class_params = {
-            'quiet': {'min_samples': 200, 'recent_window': 100},
-            'c_class': {'min_samples': 200, 'recent_window': 100},
-            'm_class': {'min_samples': 200, 'recent_window': 100},
-            'x_class': {'min_samples': 200, 'recent_window': 100}
+            'quiet': {'min_samples': 500, 'recent_window': 300},
+            'c_class': {'min_samples': 500, 'recent_window': 300},
+            'm_class': {'min_samples': 500, 'recent_window': 300},
+            'x_class': {'min_samples': 500, 'recent_window': 300}
         }
 
         if len(error_history) < class_params[sxrclass]['min_samples']:

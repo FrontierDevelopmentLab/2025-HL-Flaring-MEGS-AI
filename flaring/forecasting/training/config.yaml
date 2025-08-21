@@ -2,7 +2,7 @@
 #Base directories - change these to switch datasets
 base_data_dir: "/mnt/data/ML-Ready-mixed/ML-Ready-mixed"  # Change this line for different datasets
 base_checkpoint_dir: "/mnt/data/ML-Ready-mixed/ML-Ready-mixed"    # Change this line for different datasets
-wavelengths: [171, 193, 211]  # AIA wavelengths in Angstroms
+wavelengths: [94, 131, 171, 193, 211, 304]  # AIA wavelengths in Angstroms
 # Model configuration
 selected_model: "ViT"  # Options: "cnn", "vit",
 batch_size:    64
@@ -19,7 +19,7 @@ megsai:
 
 vit_custom:
     embed_dim: 512
-    num_channels: 3
+    num_channels: 6
     num_classes: 1
     patch_size: 16
     num_patches: 1024
@@ -48,5 +48,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: vit-patch-size-16-3-correct-wavelengths-lower-weights-oversampling
-  notes: Regression from AIA images (3 channels) to GOES SXR flux
+  wb_name: vit-patch-size-16-6-wavelengths-with-dropout-oversampling
+  notes: Regression from AIA images (6 channels) to GOES SXR flux
