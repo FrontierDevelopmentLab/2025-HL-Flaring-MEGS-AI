@@ -15,24 +15,69 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 #norm = np.load("/mnt/data/ML-Ready_clean/mixed_data/SXR/normalized_sxr.npy")
 
-def normalize_sxr(unnormalized_values, sxr_norm):
-    """Convert from unnormalized to normalized space"""
+def normalize_sxr(unnormalized_values, sxr_norm, channel_idx=None):
+    """Convert from unnormalized to normalized space
+    
+    Args:
+        unnormalized_values: Tensor of unnormalized values
+        sxr_norm: Normalization parameters - can be:
+            - Single array [mean, std] for backward compatibility
+            - Dict with 'a' and 'b' keys for separate normalization
+        channel_idx: Index of channel (0 for 'a', 1 for 'b') if using separate normalization
+    """
     log_values = torch.log10(unnormalized_values + 1e-8)
-    normalized = (log_values - float(sxr_norm[0].item())) / float(sxr_norm[1].item())
+    
+    if isinstance(sxr_norm, dict):
+        # Separate normalization for each channel
+        if channel_idx is None:
+            raise ValueError("channel_idx must be provided when using separate normalization")
+        channel_key = 'a' if channel_idx == 0 else 'b'
+        mean = float(sxr_norm[channel_key][0].item())
+        std = float(sxr_norm[channel_key][1].item())
+    else:
+        # Single normalization (backward compatibility)
+        mean = float(sxr_norm[0].item())
+        std = float(sxr_norm[1].item())
+    
+    normalized = (log_values - mean) / std
     return normalized
 
-def unnormalize_sxr(normalized_values, sxr_norm):
-    return 10 ** (normalized_values * float(sxr_norm[1].item()) + float(sxr_norm[0].item())) - 1e-8
+def unnormalize_sxr(normalized_values, sxr_norm, channel_idx=None):
+    """Convert from normalized to unnormalized space
+    
+    Args:
+        normalized_values: Tensor of normalized values
+        sxr_norm: Normalization parameters - can be:
+            - Single array [mean, std] for backward compatibility
+            - Dict with 'a' and 'b' keys for separate normalization
+        channel_idx: Index of channel (0 for 'a', 1 for 'b') if using separate normalization
+    """
+    if isinstance(sxr_norm, dict):
+        # Separate normalization for each channel
+        if channel_idx is None:
+            raise ValueError("channel_idx must be provided when using separate normalization")
+        channel_key = 'a' if channel_idx == 0 else 'b'
+        mean = float(sxr_norm[channel_key][0].item())
+        std = float(sxr_norm[channel_key][1].item())
+    else:
+        # Single normalization (backward compatibility)
+        mean = float(sxr_norm[0].item())
+        std = float(sxr_norm[1].item())
+    
+    return 10 ** (normalized_values * std + mean) - 1e-8
 
 class ViTLocal(pl.LightningModule):
-    def __init__(self, model_kwargs, sxr_norm, base_weights=None):
+    def __init__(self, model_kwargs, sxr_norm, base_weights=None, sxr_channels=['a', 'b']):
         super().__init__()
         self.model_kwargs = model_kwargs
         self.lr = model_kwargs['lr']
+        self.sxr_channels = sxr_channels  # ['a', 'b'] or ['b'] or ['a']
         self.save_hyperparameters()
         filtered_kwargs = dict(model_kwargs)
         filtered_kwargs.pop('lr', None)
         filtered_kwargs.pop('num_classes', None)
+        # Add num_output_channels to the model kwargs
+        filtered_kwargs['num_output_channels'] = len(sxr_channels)
         self.model = VisionTransformerLocal(**filtered_kwargs)
         #Set the base weights based on the number of samples in each class within training data
         self.base_weights = base_weights
@@ -71,52 +116,106 @@ class ViTLocal(pl.LightningModule):
     # M/X Class Flare Detection Optimized Weights
 
     def _calculate_loss(self, batch, mode="train"):
-        imgs, sxr = batch
-        raw_preds, raw_patch_contributions = self.model(imgs,self.sxr_norm)
-        raw_preds_squeezed = torch.squeeze(raw_preds)
-        sxr_un = unnormalize_sxr(sxr, self.sxr_norm)
+        imgs, sxr = batch  # sxr is [B, num_channels] based on sxr_channels config
+        raw_preds, raw_patch_contributions = self.model(imgs, self.sxr_norm)  # raw_preds is [B, num_channels]
+                
+        
+        # Unnormalize using appropriate normalization for each channel
+        sxr_un = torch.zeros_like(sxr)
+        for i in range(len(self.sxr_channels)):
+            if isinstance(self.sxr_norm, dict):
+                # Use separate normalization for each channel
+                sxr_un[:, i] = unnormalize_sxr(sxr[:, i], self.sxr_norm, channel_idx=i)
+            else:
+                # Use single normalization (backward compatibility)
+                sxr_un[:, i] = unnormalize_sxr(sxr[:, i], self.sxr_norm)
 
-        norm_preds_squeezed = normalize_sxr(raw_preds_squeezed, self.sxr_norm)
-        # Use adaptive rare event loss
-        loss, weights = self.adaptive_loss.calculate_loss(
-            norm_preds_squeezed, sxr, sxr_un
+        # The model outputs raw SXR values, so we need to normalize them for loss calculation
+        # Handle shape: if only 1 channel and raw_preds is [B, 1], keep it that way
+        if len(self.sxr_channels) == 1 and len(raw_preds.shape) == 2 and raw_preds.shape[1] == 1:
+            # Single channel case: normalize directly
+            if isinstance(self.sxr_norm, dict):
+                norm_preds = normalize_sxr(raw_preds.squeeze(-1), self.sxr_norm, channel_idx=0).unsqueeze(-1)
+            else:
+                norm_preds = normalize_sxr(raw_preds.squeeze(-1), self.sxr_norm).unsqueeze(-1)
+        else:
+            # Multi-channel or different shape: normalize each channel
+            norm_preds = torch.zeros_like(raw_preds)
+            for i in range(len(self.sxr_channels)):
+                if isinstance(self.sxr_norm, dict):
+                    # Use separate normalization for each channel
+                    norm_preds[:, i] = normalize_sxr(raw_preds[:, i], self.sxr_norm, channel_idx=i)
+                else:
+                    # Use single normalization (backward compatibility)
+                    norm_preds[:, i] = normalize_sxr(raw_preds[:, i], self.sxr_norm)
+        
+        # Find SXR-B index for adaptive loss calculation
+        sxr_b_idx = None
+        for i, channel in enumerate(self.sxr_channels):
+            if channel == 'b':
+                sxr_b_idx = i
+                break
+        
+        if sxr_b_idx is None:
+            raise ValueError("SXR-B channel not found in sxr_channels. Must include 'b' channel.")
+        
+        #print(f"raw_preds: {raw_preds}")
+        # Calculate adaptive loss only for SXR-B
+        # Note: dataloader guarantees SXR-A at index 0, SXR-B at index 1 (if both present)
+        adaptive_loss, adaptive_weights = self.adaptive_loss.calculate_loss(
+            norm_preds[:, sxr_b_idx], sxr[:, sxr_b_idx], sxr_un[:, sxr_b_idx]
         )
 
-        #Also calculate huber loss for logging
-        huber_loss = F.huber_loss(norm_preds_squeezed, sxr, delta=.3)
-        #huber_loss = F.mse_loss(norm_preds_squeezed, sxr)
+        if len(self.sxr_channels) == 2:
+            # Calculate SXR-A loss (unweighted)
+            huber_loss_a = F.huber_loss(norm_preds[:, 0], sxr[:, 0], delta=0.3, reduction='mean')
+
+            # Detach to get current magnitudes (don't affect gradients)
+            loss_a_magnitude = huber_loss_a.detach()
+            loss_b_magnitude = adaptive_loss.detach()
+
+            # Normalize and apply 30/70 split
+            # This ensures the gradient contributions are actually 30/70
+            total_magnitude = loss_a_magnitude + loss_b_magnitude + 1e-10  # avoid division by zero
+
+            weighted_a_loss = huber_loss_a * (0.3 / (loss_a_magnitude / total_magnitude + 1e-10))
+            adaptive_loss_scaled = adaptive_loss * (0.7 / (loss_b_magnitude / total_magnitude + 1e-10))
+
+            loss = adaptive_loss_scaled + weighted_a_loss
+            
+            # Debug: log raw values for both channels
+            if mode == "train":
+                self.log("debug/raw_pred_a_mean", raw_preds[:, 0].mean(), on_step=True, on_epoch=False)
+                self.log("debug/raw_pred_b_mean", raw_preds[:, 1].mean(), on_step=True, on_epoch=False)
+                self.log("debug/norm_pred_a_mean", norm_preds[:, 0].mean(), on_step=True, on_epoch=False)
+                self.log("debug/norm_pred_b_mean", norm_preds[:, 1].mean(), on_step=True, on_epoch=False)
+                self.log("debug/target_a_mean", sxr[:, 0].mean(), on_step=True, on_epoch=False)
+                self.log("debug/target_b_mean", sxr[:, 1].mean(), on_step=True, on_epoch=False)
+                self.log("debug/huber_loss_a_mean", huber_loss_a.mean(), on_step=True, on_epoch=False)
+        else:
+            weighted_a_loss = 0.0
+            loss = adaptive_loss
 
 
-        # Log adaptation info
+        loss = adaptive_loss + weighted_a_loss
+#log the losses during training
         if mode == "train":
-            # Always log learning rate (every step)
-            current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
-            self.log('learning_rate', current_lr, on_step=True, on_epoch=False,
-                     prog_bar=True, logger=True, sync_dist=True)
+            self.log("weighted_b_loss", adaptive_loss, on_step=True, on_epoch=True)
+            self.log("weighted_a_loss", weighted_a_loss, on_step=True, on_epoch=True)
+            self.log("total_loss", loss, on_step=True, on_epoch=True)
+            #log the weights during training for each flare class
+            # Log the current adaptive multipliers/weights for each flare class instead of element-wise weights
+            current_multipliers = self.adaptive_loss.current_multipliers
+            self.log("adaptive_weights_quiet", current_multipliers['quiet_weight'], on_step=True, on_epoch=True)
+            self.log("adaptive_weights_c_class", current_multipliers['c_weight'], on_step=True, on_epoch=True)
+            self.log("adaptive_weights_m_class", current_multipliers['m_weight'], on_step=True, on_epoch=True)
+            self.log("adaptive_weights_x_class", current_multipliers['x_weight'], on_step=True, on_epoch=True)
+        elif mode == "val":
+            self.log("val_weighted_b_loss", adaptive_loss, on_step=False, on_epoch=True)
+            self.log("val_weighted_a_loss", weighted_a_loss, on_step=False, on_epoch=True)
+            self.log("val_total_loss", loss, on_step=False, on_epoch=True)
 
-
-            #self.log("sparsity_entropy_loss", sparsity_or_entropy, on_step=True, on_epoch=True, )
-            self.log("train_total_loss", loss, on_step=True, on_epoch=True,
-                     prog_bar=True, logger=True, sync_dist=True)
-            self.log("train_huber_loss", huber_loss, on_step=True, on_epoch=True,
-                     prog_bar=True, logger=True, sync_dist=True)
-
-            # Detailed diagnostics only every 200 steps
-            if self.global_step % 200 == 0:
-                multipliers = self.adaptive_loss.get_current_multipliers()
-                for key, value in multipliers.items():
-                    self.log(f"adaptive/{key}", value, on_step=True, on_epoch=False)
-
-                self.log("adaptive/avg_weight", weights.mean(), on_step=True, on_epoch=False)
-                self.log("adaptive/max_weight", weights.max(), on_step=True, on_epoch=False)
-
-        if mode == "val":
-            # Validation: typically only log epoch aggregates
-            multipliers = self.adaptive_loss.get_current_multipliers()
-            for key, value in multipliers.items():
-                self.log(f"val/adaptive/{key}", value, on_step=False, on_epoch=True)
-            self.log("val_total_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-            self.log("val_huber_loss", huber_loss, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+    
 
         return loss
 
@@ -154,6 +253,7 @@ class VisionTransformerLocal(nn.Module):
             patch_size,
             num_patches,
             dropout,
+            num_output_channels=2,
 
     ):
         """Vision Transformer that outputs flux contributions per patch.
@@ -183,7 +283,7 @@ class VisionTransformerLocal(nn.Module):
             for _ in range(num_layers)
         ])
 
-        self.mlp_head = nn.Sequential(nn.LayerNorm(embed_dim), nn.Linear(embed_dim, 1))
+        self.mlp_head = nn.Sequential(nn.LayerNorm(embed_dim), nn.Linear(embed_dim, num_output_channels))  # Output configurable number of SXR channels
         self.dropout = nn.Dropout(dropout)
 
         # Parameters/Embeddings
@@ -216,18 +316,34 @@ class VisionTransformerLocal(nn.Module):
                 x = block(x)
 
         patch_embeddings = x.transpose(0, 1)  # [B, num_patches, embed_dim]
-        patch_logits = self.mlp_head(patch_embeddings).squeeze(-1)  # normalized log predictions [B, num_patches]
+        patch_logits = self.mlp_head(patch_embeddings)  # [B, num_patches, num_output_channels] - normalized log predictions
 
-        # --- Convert to raw SXR ---
-        mean, std = sxr_norm  # in log10 space
-        patch_flux_raw = torch.clamp(10 ** (patch_logits * std + mean)- 1e-8, min=1e-15, max=1)
-
-        # Sum over patches for raw global flux
-        global_flux_raw = patch_flux_raw.sum(dim=1, keepdim=True)
+    
+        # Convert to raw flux with MUCH looser clamps
+        if isinstance(sxr_norm, dict):
+            patch_flux_raw = torch.zeros_like(patch_logits)
+            for i in range(patch_logits.shape[-1]):
+                channel_key = 'a' if i == 0 else 'b'
+                mean = float(sxr_norm[channel_key][0].item())
+                std = float(sxr_norm[channel_key][1].item())
+                # Key fix: Don't clamp individual patches so aggressively
+                # Let the model learn the right scale
+                patch_flux_raw[:, :, i] = torch.exp(
+                    (patch_logits[:, :, i] * std + mean) * np.log(10)
+                )  # Using exp instead of 10** can be more stable
+        else:
+            mean, std = sxr_norm
+            patch_flux_raw = torch.exp((patch_logits * std + mean) * np.log(10))
         
-        # Ensure global flux is never zero (add small epsilon if needed)
-        global_flux_raw = torch.clamp(global_flux_raw, min=1e-15)
-
+        # Only clamp patches very loosely (or not at all)
+        patch_flux_raw = torch.clamp(patch_flux_raw, min=1e-12, max=10.0)  # Much wider range
+        
+        # Sum patches
+        global_flux_raw = patch_flux_raw.sum(dim=1)
+        
+        # Clamp global sum (this is your actual prediction)
+        global_flux_raw = torch.clamp(global_flux_raw, min=1e-10, max=10.0)  # Wider range
+        
         if return_attention:
             return global_flux_raw, attention_weights, patch_flux_raw
         else:

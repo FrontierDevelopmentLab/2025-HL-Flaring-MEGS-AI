@@ -24,7 +24,7 @@ warnings.filterwarnings('ignore')
 
 class FluxContributionAnalyzer:
     def __init__(self, config_path=None, flux_path=None, predictions_csv=None, aia_path=None, attention_path=None,
-                 grid_size=(32, 32), patch_size=16, input_size=512, time_period=None):
+                 sxr_path=None, grid_size=(32, 32), patch_size=16, input_size=512, time_period=None):
         """
         Initialize the flux contribution analyzer
 
@@ -34,6 +34,7 @@ class FluxContributionAnalyzer:
             predictions_csv: Path to CSV file with predictions and timestamps
             aia_path: Path to directory containing AIA numpy files
             attention_path: Optional path to attention weights directory
+            sxr_path: Optional path to SXR data directory
             grid_size: Size of the flux contribution grid
             patch_size: Size of each patch in pixels
             input_size: Input image size
@@ -49,6 +50,7 @@ class FluxContributionAnalyzer:
             flux_path = self.config['flux_path'].replace('${base_data_dir}', base_dir)
             predictions_csv = self.config['output_path'].replace('${base_data_dir}', base_dir)
             aia_path = self.config['aia_path'].replace('${base_data_dir}', base_dir)
+            sxr_path = self.config.get('sxr_path', '').replace('${base_data_dir}', base_dir) if self.config.get('sxr_path') else None
             
             # Extract analysis parameters
             self.analysis_config = self.config.get('analysis', {})
@@ -57,10 +59,12 @@ class FluxContributionAnalyzer:
             
             # Extract time period
             time_period_config = self.analysis_config.get('time_period', {})
-            if time_period_config.get('start_time') and time_period_config.get('end_time'):
+            start_time = time_period_config.get('start_time', '')
+            end_time = time_period_config.get('end_time', '')
+            if start_time and end_time and start_time.strip() and end_time.strip():
                 time_period = {
-                    'start_time': time_period_config['start_time'],
-                    'end_time': time_period_config['end_time']
+                    'start_time': start_time,
+                    'end_time': end_time
                 }
         else:
             self.config = {}
@@ -71,6 +75,7 @@ class FluxContributionAnalyzer:
         self.flux_path = Path(flux_path)
         self.aia_path = Path(aia_path) if aia_path else None
         self.attention_path = Path(attention_path) if attention_path else None
+        self.sxr_path = Path(sxr_path) if sxr_path else None
         self.predictions_df = pd.read_csv(predictions_csv)
         self.grid_size = grid_size
         self.patch_size = patch_size
@@ -135,7 +140,16 @@ class FluxContributionAnalyzer:
         """Load flux contributions for a specific timestamp"""
         flux_file = self.flux_path / f"{timestamp}"
         if flux_file.exists():
-            return np.loadtxt(flux_file, delimiter=',')
+            try:
+                flux_data = np.loadtxt(flux_file, delimiter=',')
+                # Ensure the data is numeric
+                if flux_data.dtype.kind in ['U', 'S']:  # String or bytes
+                    print(f"Warning: Flux data for {timestamp} is string type, converting to float")
+                    flux_data = flux_data.astype(float)
+                return flux_data
+            except Exception as e:
+                print(f"Error loading flux file {flux_file}: {e}")
+                return None
         return None
 
 
@@ -201,6 +215,11 @@ class FluxContributionAnalyzer:
                     mean_flux = np.mean(region_flux)
                     #calculate sum
                     sum_flux = np.sum(region_flux)
+                    
+                    # Debug: Check if sum_flux is numeric
+                    if not np.isfinite(sum_flux):
+                        print(f"Warning: Non-finite sum_flux value {sum_flux} for region at {timestamp}")
+                        continue
 
                     # Get region centroid
                     coords = np.where(region_mask)
@@ -213,20 +232,28 @@ class FluxContributionAnalyzer:
                     flare_events.append({
                         'timestamp': timestamp,
                         'datetime': row['datetime'],
-                        'prediction': row['predictions'],
-                        'groundtruth': row.get('groundtruth', None),
-                        'region_size': region_size,
-                        'max_flux': max_flux,
-                        'mean_flux': mean_flux,
-                        'sum_flux': sum_flux,
-                        'centroid_patch_y': centroid_y,
-                        'centroid_patch_x': centroid_x,
-                        'centroid_img_y': img_y,
-                        'centroid_img_x': img_x,
-                        'threshold': threshold
+                        'prediction': float(row['predictions']),
+                        'groundtruth': float(row.get('groundtruth', 0)) if pd.notna(row.get('groundtruth', None)) else None,
+                        'region_size': int(region_size),
+                        'max_flux': float(max_flux),
+                        'mean_flux': float(mean_flux),
+                        'sum_flux': float(sum_flux),
+                        'centroid_patch_y': float(centroid_y),
+                        'centroid_patch_x': float(centroid_x),
+                        'centroid_img_y': float(img_y),
+                        'centroid_img_x': float(img_x),
+                        'threshold': float(threshold)
                     })
 
         self.flare_events_df = pd.DataFrame(flare_events)
+        
+        # Ensure numeric columns are properly typed
+        numeric_columns = ['region_size', 'max_flux', 'mean_flux', 'sum_flux', 'centroid_patch_y', 
+                          'centroid_patch_x', 'centroid_img_y', 'centroid_img_x', 'threshold']
+        for col in numeric_columns:
+            if col in self.flare_events_df.columns:
+                self.flare_events_df[col] = pd.to_numeric(self.flare_events_df[col], errors='coerce')
+        
         print(f"Detected {len(flare_events)} potential flare events")
         return self.flare_events_df
 
@@ -245,7 +272,25 @@ class FluxContributionAnalyzer:
             print("Please run detect_flare_events() first")
             return pd.DataFrame()
         
-        # Filter regions by sum_flux threshold (not prediction threshold)
+        # Ensure sum_flux is numeric and filter regions by sum_flux threshold
+        self.flare_events_df['sum_flux'] = pd.to_numeric(self.flare_events_df['sum_flux'], errors='coerce')
+        
+        # Debug: Check data types and values
+        print(f"sum_flux dtype: {self.flare_events_df['sum_flux'].dtype}")
+        print(f"sum_flux sample values: {self.flare_events_df['sum_flux'].head()}")
+        print(f"sum_flux has NaN: {self.flare_events_df['sum_flux'].isna().any()}")
+        print(f"threshold type: {type(threshold)}, value: {threshold}")
+        
+        # Ensure threshold is numeric
+        threshold = float(threshold)
+        print(f"converted threshold type: {type(threshold)}, value: {threshold}")
+        
+        # Remove any rows with NaN sum_flux values
+        valid_flux_mask = self.flare_events_df['sum_flux'].notna()
+        if not valid_flux_mask.all():
+            print(f"Warning: {valid_flux_mask.sum()} out of {len(self.flare_events_df)} rows have valid sum_flux values")
+            self.flare_events_df = self.flare_events_df[valid_flux_mask].copy()
+        
         high_flux_regions = self.flare_events_df[self.flare_events_df['sum_flux'] >= threshold].copy()
         
         if len(high_flux_regions) == 0:
@@ -277,6 +322,13 @@ class FluxContributionAnalyzer:
         
         simultaneous_df = pd.DataFrame(simultaneous_events)
         
+        # Ensure numeric columns are properly typed
+        numeric_columns = ['group_id', 'region_size', 'max_flux', 'sum_flux', 'centroid_img_y', 
+                          'centroid_img_x', 'group_size']
+        for col in numeric_columns:
+            if col in simultaneous_df.columns:
+                simultaneous_df[col] = pd.to_numeric(simultaneous_df[col], errors='coerce')
+        
         if len(simultaneous_df) > 0:
             print(f"Detected {len(simultaneous_groups)} timestamps with simultaneous flares")
             print(f"Total simultaneous events: {len(simultaneous_df)}")
@@ -306,9 +358,92 @@ class FluxContributionAnalyzer:
             return np.loadtxt(attention_file, delimiter=',')
         return None
 
+    def load_sxr_data(self, start_time, end_time):
+        """Load SXR data for a time range"""
+        if self.sxr_path is None or not self.sxr_path.exists():
+            return None
+        
+        try:
+            # Look for SXR data files (try both .npy and .csv formats)
+            sxr_files = list(self.sxr_path.glob("*.npy")) + list(self.sxr_path.glob("*.csv"))
+            if not sxr_files:
+                print(f"No SXR data files found in {self.sxr_path}")
+                return None
+            
+            # Check if we have .npy files (individual timestamp files)
+            npy_files = list(self.sxr_path.glob("*.npy"))
+            if npy_files:
+                return self._load_sxr_npy_files(start_time, end_time, npy_files)
+            
+            # Otherwise, try CSV format
+            csv_files = list(self.sxr_path.glob("*.csv"))
+            if csv_files:
+                return self._load_sxr_csv_file(start_time, end_time, csv_files[0])
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error loading SXR data: {e}")
+            return None
+
+    def _load_sxr_npy_files(self, start_time, end_time, npy_files):
+        """Load SXR data from individual .npy files"""
+        sxr_data = []
+        
+        for npy_file in npy_files:
+            try:
+                # Extract timestamp from filename
+                timestamp_str = npy_file.stem
+                timestamp = pd.to_datetime(timestamp_str)
+                
+                # Check if timestamp is in range
+                if start_time <= timestamp <= end_time:
+                    # Load the flux value
+                    flux_data = np.load(npy_file)
+                    if flux_data.size > 0:
+                        flux_value = float(flux_data.item() if flux_data.size == 1 else flux_data[0])
+                        sxr_data.append({
+                            'datetime': timestamp,
+                            'flux': flux_value
+                        })
+            except Exception as e:
+                print(f"Error loading {npy_file}: {e}")
+                continue
+        
+        if not sxr_data:
+            print(f"No SXR data found in time range {start_time} to {end_time}")
+            return None
+        
+        sxr_df = pd.DataFrame(sxr_data)
+        return sxr_df.sort_values('datetime')
+
+    def _load_sxr_csv_file(self, start_time, end_time, csv_file):
+        """Load SXR data from CSV file"""
+        sxr_df = pd.read_csv(csv_file)
+        
+        # Convert timestamp column to datetime
+        if 'timestamp' in sxr_df.columns:
+            sxr_df['datetime'] = pd.to_datetime(sxr_df['timestamp'])
+        elif 'time' in sxr_df.columns:
+            sxr_df['datetime'] = pd.to_datetime(sxr_df['time'])
+        else:
+            print("SXR data must have 'timestamp' or 'time' column")
+            return None
+        
+        # Filter by time range
+        mask = (sxr_df['datetime'] >= start_time) & (sxr_df['datetime'] <= end_time)
+        filtered_sxr = sxr_df[mask].copy()
+        
+        if len(filtered_sxr) == 0:
+            print(f"No SXR data found in time range {start_time} to {end_time}")
+            return None
+        
+        return filtered_sxr.sort_values('datetime')
+
 
     def plot_flux_contribution_heatmap(self, timestamp, save_path=None, show_attention=True, 
-                                       threshold_percentile=None, min_patches=None, max_patches=None):
+                                       threshold_percentile=None, min_patches=None, max_patches=None, 
+                                       show_sxr=False, sxr_hours=4):
         """Plot flux contribution heatmap for a specific timestamp with detected regions highlighted"""
         flux_contrib = self.load_flux_contributions(timestamp)
         aia = self.load_aia_image(timestamp) if show_attention else None
@@ -328,8 +463,20 @@ class FluxContributionAnalyzer:
         # Get prediction data for this timestamp
         pred_data = self.predictions_df[self.predictions_df['timestamp'] == timestamp].iloc[0]
 
-        fig, axes = plt.subplots(1, 2 if aia is not None else 1,
-                                 figsize=(15 if aia is not None else 8, 6))
+        # Load SXR data if requested
+        sxr_data = None
+        if show_sxr and self.sxr_path:
+            event_time = pd.to_datetime(timestamp)
+            start_time = event_time - pd.Timedelta(hours=sxr_hours)
+            end_time = event_time + pd.Timedelta(hours=sxr_hours)
+            sxr_data = self.load_sxr_data(start_time, end_time)
+
+        # Determine number of subplots
+        num_plots = 1
+        if sxr_data is not None:
+            num_plots += 1
+
+        fig, axes = plt.subplots(1, num_plots, figsize=(14 if sxr_data is not None else 6, 6))
         if not isinstance(axes, np.ndarray):
             axes = [axes]
 
@@ -386,49 +533,159 @@ class FluxContributionAnalyzer:
                     'mask': region_mask
                 })
 
-        # Plot flux contributions
-        im1 = axes[0].imshow(flux_contrib_display, cmap='hot', interpolation='nearest', origin='lower')
-
-        # Highlight detected regions with colored outlines
-        for i, region in enumerate(detected_regions):
-            # Create contour around the region
-            axes[0].contour(region['mask'].astype(int), levels=[0.5],
-                            colors=[region_colors[i % len(region_colors)]], linewidths=2)
-
-            # Add region label with sum flux
-            axes[0].text(region['label_x'], region['label_y'],
-                         f"R{region['id']}\n{region['sum_flux']:.1e}",
-                         ha='center', va='center', fontsize=8, fontweight='bold',
-                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
-
-        # Build title with both prediction and ground truth
-        title_text = f'Flux Contributions with Detected Regions\n{timestamp}\nPrediction: {pred_data["predictions"]:.2e}'
+        # Resize flux contributions from 32x32 patches to 512x512 pixels for overlay
+        # Each 32x32 patch represents a 16x16 pixel region, so we need to upscale by 16x
+        flux_contrib_resized = self.resize_flux_to_image_size(flux_contrib_display)
         
-        # Add ground truth if available
-        if 'groundtruth' in pred_data and not pd.isna(pred_data['groundtruth']):
-            title_text += f'\nActual: {pred_data["groundtruth"]:.2e}'
-        
-        if detected_regions:
-            total_region_flux = sum(r['sum_flux'] for r in detected_regions)
-            title_text += f'\nTotal Region Flux: {total_region_flux:.2e} ({len(detected_regions)} regions)'
-
-        axes[0].set_title(title_text)
-        axes[0].set_xlabel('Patch X')
-        axes[0].set_ylabel('Patch Y')
-
-        # Add colorbar
-        cbar1 = plt.colorbar(im1, ax=axes[0])
-        cbar1.set_label('Flux Contribution')
-
-        # Add grid
-        axes[0].set_xticks(np.arange(-0.5, self.grid_size[1], 1), minor=True)
-        axes[0].set_yticks(np.arange(-0.5, self.grid_size[0], 1), minor=True)
-        axes[0].grid(which='minor', color='white', linestyle='-', linewidth=0.5, alpha=0.3)
-
+        # Create overlay plot
         if aia is not None:
-            im2 = axes[1].imshow(aia, cmap='Blues', interpolation='nearest', origin='lower')
-            axes[1].set_title(f'AIA Image 94 Å\n{timestamp}')
-            axes[1].grid(which='minor', color='white', linestyle='-', linewidth=0.5, alpha=0.3)
+            # Show AIA image as background
+            axes[0].imshow(aia, cmap='Blues', interpolation='nearest', origin='lower', alpha=1)
+            
+            # Overlay flux contributions with transparency
+            # im1 = axes[0].imshow(flux_contrib_resized, cmap='hot', interpolation='nearest', 
+            #                     origin='lower', alpha=0.8, vmin=0, vmax=np.percentile(flux_contrib_resized, 95))
+            
+            # Highlight detected regions with colored outlines (resized to 512x512)
+            for i, region in enumerate(detected_regions):
+                # Resize region mask to 512x512
+                region_mask_resized = self.resize_flux_to_image_size(region['mask'].astype(float))
+                
+                # Create contour around the region
+                axes[0].contour(region_mask_resized, levels=[0.5],
+                                colors=[region_colors[i % len(region_colors)]], linewidths=2)
+
+                # Add region label with sum flux (convert coordinates to 512x512)
+                label_y_resized = region['label_y'] * (512 / self.grid_size[0])
+                label_x_resized = region['label_x'] * (512 / self.grid_size[1])
+                
+                axes[0].text(label_x_resized, label_y_resized,
+                             f"R{region['id']}\n{region['sum_flux']:.1e}",
+                             ha='center', va='center', fontsize=8, fontweight='bold',
+                             bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
+            
+            # Build title with both prediction and ground truth
+            title_text = f'{timestamp} - FOXES Prediction: {pred_data["predictions"]:.2e}'
+            
+            #Add ground truth if available
+            if 'groundtruth' in pred_data and not pd.isna(pred_data['groundtruth']):
+               title_text += f'\nActual: {pred_data["groundtruth"]:.2e}'
+            
+            if detected_regions:
+               total_region_flux = sum(r['sum_flux'] for r in detected_regions)
+               title_text += f'\nTotal Region Flux: {total_region_flux:.2e} ({len(detected_regions)} regions)'
+
+            axes[0].set_title(title_text)
+            axes[0].set_xlabel('Image X (pixels)')
+            axes[0].set_ylabel('Image Y (pixels)')
+
+            # Add colorbar
+            #cbar1 = plt.colorbar(im1, ax=axes[0])
+            #cbar1.set_label('Flux Contribution')
+
+            # Add grid (512x512 scale)
+            axes[0].set_xticks(np.arange(0, 512, 64), minor=True)
+            axes[0].set_yticks(np.arange(0, 512, 64), minor=True)
+            axes[0].grid(which='minor', color='white', linestyle='-', linewidth=0.5, alpha=0.3)
+            
+        else:
+            # Fallback to original patch-based plot if no AIA data
+            im1 = axes[0].imshow(flux_contrib_display, cmap='hot', interpolation='nearest', origin='lower')
+
+            # Highlight detected regions with colored outlines
+            for i, region in enumerate(detected_regions):
+                # Create contour around the region
+                axes[0].contour(region['mask'].astype(int), levels=[0.5],
+                                colors=[region_colors[i % len(region_colors)]], linewidths=2)
+
+                # Add region label with sum flux
+                axes[0].text(region['label_x'], region['label_y'],
+                             f"R{region['id']}\n{region['sum_flux']:.1e}",
+                             ha='center', va='center', fontsize=8, fontweight='bold',
+                             bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
+
+            # Build title with both prediction and ground truth
+            title_text = f'Flux Contributions with Detected Regions\n{timestamp}\nPrediction: {pred_data["predictions"]:.2e}'
+            
+            # Add ground truth if available
+            if 'groundtruth' in pred_data and not pd.isna(pred_data['groundtruth']):
+                title_text += f'\nActual: {pred_data["groundtruth"]:.2e}'
+            
+            if detected_regions:
+                total_region_flux = sum(r['sum_flux'] for r in detected_regions)
+                title_text += f'\nTotal Region Flux: {total_region_flux:.2e} ({len(detected_regions)} regions)'
+
+            axes[0].set_title(title_text)
+            axes[0].set_xlabel('Patch X')
+            axes[0].set_ylabel('Patch Y')
+
+            # Add colorbar
+            #cbar1 = plt.colorbar(im1, ax=axes[0])
+            #cbar1.set_label('Flux Contribution')
+
+            # Add grid
+            axes[0].set_xticks(np.arange(-0.5, self.grid_size[1], 1), minor=True)
+            axes[0].set_yticks(np.arange(-0.5, self.grid_size[0], 1), minor=True)
+            axes[0].grid(which='minor', color='white', linestyle='-', linewidth=0.5, alpha=0.3)
+
+        plot_idx = 1
+
+        # Plot SXR data if available
+        if sxr_data is not None:
+            # Find flux column (try common names)
+            flux_col = None
+            for col in ['flux', 'sxr_flux', 'xray_flux', 'intensity']:
+                if col in sxr_data.columns:
+                    flux_col = col
+                    break
+            
+            if flux_col is not None:
+                # Get prediction data for the same time period
+                event_time = pd.to_datetime(timestamp)
+                start_time = event_time - pd.Timedelta(hours=sxr_hours)
+                end_time = event_time + pd.Timedelta(hours=sxr_hours)
+                
+                # Filter predictions for the same time period
+                pred_mask = (self.predictions_df['datetime'] >= start_time) & (self.predictions_df['datetime'] <= end_time)
+                pred_data_period = self.predictions_df[pred_mask].copy()
+                
+                # Create twin axes for different scales
+                ax_sxr = axes[plot_idx]
+                ax_pred = ax_sxr.twinx()
+                
+                # Plot SXR data
+                ax_sxr.plot(sxr_data['datetime'], sxr_data[flux_col], 'b-', linewidth=1.5, label='SXR Flux', alpha=0.8)
+                ax_sxr.set_ylabel('SXR Flux', color='blue')
+                ax_sxr.tick_params(axis='y', labelcolor='blue')
+                
+                # Plot prediction data if available
+                if len(pred_data_period) > 0:
+                    ax_pred.plot(pred_data_period['datetime'], pred_data_period['predictions'], 
+                                'r-', linewidth=1.5, label='Model Predictions', alpha=0.8)
+                    ax_pred.set_ylabel('Model Predictions', color='red')
+                    ax_pred.tick_params(axis='y', labelcolor='red')
+                
+                # Mark the event time
+                ax_sxr.axvline(x=event_time, color='green', linestyle='--', linewidth=2, label='Event Time')
+                
+                # Set title and labels
+                ax_sxr.set_title(f'SXR Data & Predictions ±{sxr_hours}h\n{timestamp}')
+                ax_sxr.set_xlabel('Time')
+                
+                # Add legends
+                lines1, labels1 = ax_sxr.get_legend_handles_labels()
+                lines2, labels2 = ax_pred.get_legend_handles_labels()
+                ax_sxr.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+                
+                # Add grid
+                ax_sxr.grid(True, alpha=0.3)
+                
+                # Format x-axis
+                ax_sxr.tick_params(axis='x', rotation=45)
+            else:
+                axes[plot_idx].text(0.5, 0.5, 'SXR data loaded but no flux column found', 
+                                   ha='center', va='center', transform=axes[plot_idx].transAxes)
+                axes[plot_idx].set_title(f'SXR Data ±{sxr_hours}h\n{timestamp}')
 
         # Add legend for detected regions
         if detected_regions:
@@ -579,6 +836,7 @@ def main():
     parser.add_argument('--flux_path', help='Path to flux contributions directory (overrides config)')
     parser.add_argument('--predictions_csv', help='Path to predictions CSV file (overrides config)')
     parser.add_argument('--attention_path', help='Path to attention weights directory (optional)')
+    parser.add_argument('--sxr_path', help='Path to SXR data directory (optional)')
     parser.add_argument('--output_dir', help='Output directory for results (overrides config)')
     parser.add_argument('--start_time', help='Start time for analysis (overrides config)')
     parser.add_argument('--end_time', help='End time for analysis (overrides config)')
@@ -598,6 +856,8 @@ def main():
         analyzer.predictions_df = analyzer.predictions_df.sort_values('datetime')
     if args.attention_path:
         analyzer.attention_path = Path(args.attention_path)
+    if args.sxr_path:
+        analyzer.sxr_path = Path(args.sxr_path)
     if args.start_time and args.end_time:
         analyzer.time_period = {
             'start_time': args.start_time,
@@ -657,13 +917,19 @@ def main():
             top_events = high_prediction_events.head(max_viz).sort_values('prediction', ascending=False)
             print(f"Creating visualizations for top {len(top_events)} events...")
 
+            # Get SXR configuration
+            show_sxr = analyzer.output_config.get('show_sxr', False)
+            sxr_hours = analyzer.output_config.get('sxr_hours', 4)
+            
             for i, (_, event) in enumerate(top_events.iterrows()):
                 output_path = output_dir / f'flare_event_{i + 1}_{event["timestamp"]}.png'
                 analyzer.plot_flux_contribution_heatmap(
                     event['timestamp'],
                     save_path=output_path,
                     show_attention=True,
-                    threshold_percentile=analyzer.flare_config.get('threshold_percentile', 97)
+                    threshold_percentile=analyzer.flare_config.get('threshold_percentile', 97),
+                    show_sxr=show_sxr,
+                    sxr_hours=sxr_hours
                 )
         else:
             print(f"No events found above visualization threshold {viz_threshold:.2e}")
@@ -689,7 +955,9 @@ def main():
                 timestamp,
                 save_path=output_path,
                 show_attention=True,
-                threshold_percentile=analyzer.flare_config.get('threshold_percentile', 97)
+                threshold_percentile=analyzer.flare_config.get('threshold_percentile', 97),
+                show_sxr=show_sxr,
+                sxr_hours=sxr_hours
             )
             print(f"  Saved simultaneous flare visualization: {output_path} ({group_size} events)")
 

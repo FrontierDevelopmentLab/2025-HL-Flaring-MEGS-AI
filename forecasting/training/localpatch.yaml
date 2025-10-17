@@ -1,7 +1,7 @@
 
 #Base directories - change these to switch datasets
-base_data_dir: "/mnt/data/NO-OVERLAP"  # Change this line for different datasets
-base_checkpoint_dir: "/mnt/data/NO-OVERLAP"    # Change this line for different datasets
+base_data_dir: "/mnt/data/PAPER_DATA_A_B"  # Change this line for different datasets
+base_checkpoint_dir: "/mnt/data/PAPER_DATA_A_B"    # Change this line for different datasets
 wavelengths: [94, 131, 171, 193, 211, 304]  # AIA wavelengths in Angstroms
 
 # GPU configuration
@@ -28,7 +28,7 @@ megsai:
 vit_custom:
     embed_dim: 512
     num_channels: 6
-    num_classes: 1
+    num_classes: 2
     patch_size: 16
     num_patches: 1024
     hidden_dim: 512
@@ -65,11 +65,13 @@ data:
     "${base_data_dir}/AIA"
   sxr_dir:
     "${base_data_dir}/SXR"
-  sxr_norm_path:
-    "${base_data_dir}/SXR/normalized_sxr.npy"
+  sxr_norm_paths:
+    a: "${base_data_dir}/SXR/normalized_sxr_a.npy"
+    b: "${base_data_dir}/SXR/normalized_sxr_b.npy"
   checkpoints_dir:
     "${base_checkpoint_dir}/new-checkpoint/"
 
+sxr_channels: ['a', 'b']
 wandb:
   entity: jayantbiradar619-university-of-arizona # Use your exact W&B username
   project: Model Testing
@@ -78,5 +80,5 @@ wandb:
     - aia
     - sxr
     - regression
-  wb_name: vit-local-patch
+  wb_name: vit-local-patch-a-b
   notes: Regression from AIA images (6 channels) to GOES SXR flux

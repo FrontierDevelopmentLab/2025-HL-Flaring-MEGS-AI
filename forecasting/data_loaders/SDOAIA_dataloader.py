@@ -17,7 +17,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 
     def __init__(self, aia_dir, sxr_dir, wavelengths=[94, 131, 171, 193, 211, 304], sxr_transform=None,
                  target_size=(512, 512), cadence=1, reference_time=None, only_prediction=False, oversample=False,
-                 flare_threshold=1e-5, balance_strategy='upsample_minority'):
+                 flare_threshold=1e-5, balance_strategy='upsample_minority', sxr_channels=['a', 'b']):
         self.aia_dir = Path(aia_dir).resolve()
         self.sxr_dir = Path(sxr_dir).resolve()
         self.wavelengths = wavelengths
@@ -30,6 +30,14 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         self.oversample = oversample
         self.flare_threshold = flare_threshold
         self.balance_strategy = balance_strategy  # 'upsample_minority', 'downsample_majority', 'balanced'
+        self.sxr_channels = sxr_channels  # ['a', 'b'] or ['b'] (never ['a'] only)
+        self.sxr_norm = None  # Will be set by DataModule
+        
+        # Validate channel configuration
+        if sxr_channels == ['a']:
+            raise ValueError("Cannot train on SXR-A only. Must include SXR-B or train on SXR-B only.")
+        if 'b' not in sxr_channels:
+            raise ValueError("SXR-B channel must be included in sxr_channels.")
 
         # Check directories
         if not self.aia_dir.is_dir():
@@ -88,8 +96,18 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         for timestamp in samples:
             sxr_path = self.sxr_dir / f"{timestamp}.npy"
             try:
-                sxr_val = np.load(sxr_path)
-                sxr_val = float(np.atleast_1d(sxr_val).flatten()[0])
+                sxr_vals = np.load(sxr_path)
+                
+                # Handle both scalar and array cases for flare classification
+                if sxr_vals.size == 1:
+                    sxr_val = float(np.atleast_1d(sxr_vals).flatten()[0])
+                elif sxr_vals.size == 2:
+                    # Use SXR-B (index 1) for flare classification as it's typically more sensitive
+                    sxr_val = float(sxr_vals[1])
+                else:
+                    # Invalid format, treat as non-flare
+                    non_flare_samples.append(timestamp)
+                    continue
 
                 if sxr_val > self.flare_threshold:
                     flare_samples.append(timestamp)
@@ -177,8 +195,17 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         """Check if a timestamp corresponds to a flare sample"""
         sxr_path = self.sxr_dir / f"{timestamp}.npy"
         try:
-            sxr_val = np.load(sxr_path)
-            sxr_val = float(np.atleast_1d(sxr_val).flatten()[0])
+            sxr_vals = np.load(sxr_path)
+            
+            # Handle both scalar and array cases for flare classification
+            if sxr_vals.size == 1:
+                sxr_val = float(np.atleast_1d(sxr_vals).flatten()[0])
+            elif sxr_vals.size == 2:
+                # Use SXR-B (index 1) for flare classification as it's typically more sensitive
+                sxr_val = float(sxr_vals[1])
+            else:
+                return False
+                
             return sxr_val > self.flare_threshold
         except:
             return False
@@ -207,18 +234,47 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
         # Always output channel-last for model: (H, W, C)
         aia_img = aia_img.permute(1, 2, 0)  # (H, W, 6)
 
-        # Load SXR value
+        # Load SXR values (A/B)
         if not self.only_prediction:
-            sxr_val = np.load(sxr_path)
+            sxr_vals = np.load(sxr_path)
         else:
-            sxr_val = np.array([0])
-        if sxr_val.size != 1:
-            raise ValueError(f"SXR value has size {sxr_val.size}, expected scalar")
-        sxr_val = float(np.atleast_1d(sxr_val).flatten()[0])
+            sxr_vals = np.array([0, 0])  # Default values for prediction mode
+        
+        # Handle both scalar and array cases
+        if sxr_vals.size == 1:
+            # Single value case - duplicate for A/B
+            sxr_val = float(np.atleast_1d(sxr_vals).flatten()[0])
+            sxr_a, sxr_b = sxr_val, sxr_val
+        elif sxr_vals.size == 2:
+            # Array case - [SXR-A, SXR-B]
+            sxr_a = float(sxr_vals[0])
+            sxr_b = float(sxr_vals[1])
+        else:
+            raise ValueError(f"SXR value has size {sxr_vals.size}, expected scalar or [SXR-A, SXR-B]")
+        
+        # Apply normalization based on configuration
         if self.sxr_transform:
-            sxr_val = self.sxr_transform(sxr_val)
+            # Check if we have separate normalization for each channel
+            if hasattr(self, 'sxr_norm') and isinstance(self.sxr_norm, dict):
+                # Separate normalization for each channel
+                sxr_a = (np.log10(sxr_a + 1e-8) - self.sxr_norm['a'][0]) / self.sxr_norm['a'][1]
+                sxr_b = (np.log10(sxr_b + 1e-8) - self.sxr_norm['b'][0]) / self.sxr_norm['b'][1]
+            else:
+                # Single normalization (backward compatibility)
+                sxr_a = self.sxr_transform(sxr_a)
+                sxr_b = self.sxr_transform(sxr_b)
 
-        return aia_img, torch.tensor(sxr_val, dtype=torch.float32)
+        # Return only the requested channels
+        selected_sxr = []
+        if 'a' in self.sxr_channels:
+            selected_sxr.append(sxr_a)
+        if 'b' in self.sxr_channels:
+            selected_sxr.append(sxr_b)
+        
+        if not selected_sxr:
+            raise ValueError(f"No valid SXR channels selected. Available: {self.sxr_channels}")
+
+        return aia_img, torch.tensor(selected_sxr, dtype=torch.float32)
     def __gettimestamp__(self, idx):
         timestamp = self.samples[idx]
         return timestamp
@@ -226,7 +282,7 @@ class AIA_GOESDataset(torch.utils.data.Dataset):
 class AIA_GOESDataModule(LightningDataModule):
     """PyTorch Lightning DataModule for AIA and SXR data."""
 
-    def __init__(self, aia_train_dir, aia_val_dir,aia_test_dir,sxr_train_dir,sxr_val_dir,sxr_test_dir, sxr_norm, batch_size=64, num_workers=4, wavelengths=[94,131,171,193, 211,304], cadence = 1, reference_time = None, only_prediction=False, oversample=False, balance_strategy='upsample_minority'):
+    def __init__(self, aia_train_dir, aia_val_dir,aia_test_dir,sxr_train_dir,sxr_val_dir,sxr_test_dir, sxr_norm, batch_size=64, num_workers=4, wavelengths=[94,131,171,193, 211,304], cadence = 1, reference_time = None, only_prediction=False, oversample=False, balance_strategy='upsample_minority', sxr_channels=['a', 'b']):
         super().__init__()
         self.aia_train_dir = aia_train_dir
         self.aia_val_dir = aia_val_dir
@@ -243,6 +299,7 @@ class AIA_GOESDataModule(LightningDataModule):
         self.only_prediction = only_prediction
         self.oversample = oversample
         self.balance_strategy = balance_strategy
+        self.sxr_channels = sxr_channels
 
 
     def setup(self, stage=None):
@@ -250,7 +307,7 @@ class AIA_GOESDataModule(LightningDataModule):
         self.train_ds = AIA_GOESDataset(
             aia_dir=self.aia_train_dir,
             sxr_dir=self.sxr_train_dir,
-            sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]),
+            sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]) if not isinstance(self.sxr_norm, dict) else None,
             target_size=(512, 512),
             wavelengths= self.wavelengths,
             cadence = 1,
@@ -258,13 +315,16 @@ class AIA_GOESDataModule(LightningDataModule):
             only_prediction = False,
             oversample = self.oversample,
             flare_threshold = 1e-5,
-            balance_strategy = self.balance_strategy
+            balance_strategy = self.balance_strategy,
+            sxr_channels = self.sxr_channels
         )
+        # Set the normalization parameters for the dataset
+        self.train_ds.sxr_norm = self.sxr_norm
 
         self.val_ds = AIA_GOESDataset(
             aia_dir=self.aia_val_dir,
             sxr_dir=self.sxr_val_dir,
-            sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]),
+            sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]) if not isinstance(self.sxr_norm, dict) else None,
             target_size=(512, 512),
             wavelengths=self.wavelengths,
             cadence = 1,
@@ -272,14 +332,17 @@ class AIA_GOESDataModule(LightningDataModule):
             only_prediction = False,
             oversample = False,
             flare_threshold = 1e-5,
-            balance_strategy = 'upsample_minority'
+            balance_strategy = 'upsample_minority',
+            sxr_channels = self.sxr_channels
         )
+        # Set the normalization parameters for the dataset
+        self.val_ds.sxr_norm = self.sxr_norm
 
 
         self.test_ds = AIA_GOESDataset(
             aia_dir=self.aia_test_dir,
             sxr_dir=self.sxr_test_dir,
-            sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]),
+            sxr_transform=T.Lambda(lambda x: (np.log10(x + 1e-8) - self.sxr_norm[0]) / self.sxr_norm[1]) if not isinstance(self.sxr_norm, dict) else None,
             target_size=(512, 512),
             wavelengths=self.wavelengths,
             cadence = 1,
@@ -287,8 +350,11 @@ class AIA_GOESDataModule(LightningDataModule):
             only_prediction = False,
             oversample = False,
             flare_threshold = 1e-5,
-            balance_strategy = 'upsample_minority'
+            balance_strategy = 'upsample_minority',
+            sxr_channels = self.sxr_channels
         )
+        # Set the normalization parameters for the dataset
+        self.test_ds.sxr_norm = self.sxr_norm
 
 
     def train_dataloader(self):

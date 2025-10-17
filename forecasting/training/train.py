@@ -119,7 +119,18 @@ print(f"AIA dir: {config_data['data']['aia_dir']}")
 print(f"SXR dir: {config_data['data']['sxr_dir']}")
 print(f"Checkpoints dir: {config_data['data']['checkpoints_dir']}")
 
-sxr_norm = np.load(config_data['data']['sxr_norm_path'])
+# Load normalization parameters
+if 'sxr_norm_path' in config_data['data']:
+    # Single normalization file (backward compatibility)
+    sxr_norm = np.load(config_data['data']['sxr_norm_path'])
+elif 'sxr_norm_paths' in config_data['data']:
+    # Separate normalization files for each channel
+    sxr_norm = {
+        'a': np.load(config_data['data']['sxr_norm_paths']['a']),
+        'b': np.load(config_data['data']['sxr_norm_paths']['b'])
+    }
+else:
+    raise ValueError("Either 'sxr_norm_path' or 'sxr_norm_paths' must be specified in config")
 
 n = 0
 
@@ -128,6 +139,13 @@ np.random.seed(config_data['megsai']['seed'])
 
 training_wavelengths = config_data['wavelengths']
 
+
+# Validate SXR channel configuration
+sxr_channels = config_data.get('sxr_channels', ['a', 'b'])
+if sxr_channels == ['a']:
+    raise ValueError("Cannot train on SXR-A only. Must include SXR-B or train on SXR-B only.")
+if 'b' not in sxr_channels:
+    raise ValueError("SXR-B channel must be included in sxr_channels.")
 
 # DataModule
 data_loader = AIA_GOESDataModule(
@@ -143,6 +161,7 @@ data_loader = AIA_GOESDataModule(
     wavelengths=training_wavelengths,
     oversample=config_data['oversample'],
     balance_strategy=config_data['balance_strategy'],
+    sxr_channels=sxr_channels,
 )
 data_loader.setup()
 
@@ -223,16 +242,27 @@ pth_callback = PTHCheckpointCallback(
     filename_prefix=config_data['wandb']['wb_name']
 )
 
-def process_batch(batch_data, sxr_norm, c_threshold, m_threshold, x_threshold):
+def process_batch(batch_data, sxr_norm, c_threshold, m_threshold, x_threshold, sxr_channels=['a', 'b']):
     """Process a single batch and return counts for different flare classes."""
-    from forecasting.models.vit_patch_model import unnormalize_sxr
+    from forecasting.models.vit_patch_model_local import unnormalize_sxr
     
     batch, batch_idx = batch_data
-    _, sxr = batch
+    _, sxr = batch  # sxr is [B, num_channels] based on sxr_channels config
     
     # Unnormalize the SXR values
-    sxr_un = unnormalize_sxr(sxr, sxr_norm)
-    sxr_un_flat = sxr_un.view(-1).cpu().numpy()
+    sxr_un = torch.zeros_like(sxr)
+    for i in range(len(sxr_channels)):
+        if isinstance(sxr_norm, dict):
+            # Use separate normalization for each channel
+            sxr_un[:, i] = unnormalize_sxr(sxr[:, i], sxr_norm, channel_idx=i)
+        else:
+            # Use single normalization (backward compatibility)
+            sxr_un[:, i] = unnormalize_sxr(sxr[:, i], sxr_norm)
+    
+    # Use the last channel (typically 'b') for flare classification as it's typically more sensitive
+    # If only one channel, use that one
+    channel_idx = len(sxr_channels) - 1  # Use last channel (typically 'b')
+    sxr_un_flat = sxr_un[:, channel_idx].view(-1).cpu().numpy()
     
     total = len(sxr_un_flat)
     quiet_count = ((sxr_un_flat < c_threshold)).sum()
@@ -249,7 +279,7 @@ def process_batch(batch_data, sxr_norm, c_threshold, m_threshold, x_threshold):
         'batch_idx': batch_idx
     }
 
-def get_base_weights(data_loader, sxr_norm):
+def get_base_weights(data_loader, sxr_norm, sxr_channels=['a', 'b']):
     print("Calculating base weights from DataModule...")
     
     # Thresholds for SXR classes
@@ -257,7 +287,7 @@ def get_base_weights(data_loader, sxr_norm):
     m_threshold = 1e-5
     x_threshold = 1e-4
 
-    from forecasting.models.vit_patch_model import unnormalize_sxr
+    from forecasting.models.vit_patch_model_local import unnormalize_sxr
     
     quiet_count = 0
     c_count = 0
@@ -273,9 +303,19 @@ def get_base_weights(data_loader, sxr_norm):
         if batch_idx % 50 == 0:
             print(f"Processed {batch_idx}/{len(train_loader)} batches...")
             
-        # Unnormalize the SXR batch
-        sxr_un = unnormalize_sxr(sxr_batch, sxr_norm)
-        sxr_un_flat = sxr_un.view(-1).cpu().numpy()
+        # Unnormalize the SXR batch - sxr_batch is [B, num_channels]
+        sxr_un = torch.zeros_like(sxr_batch)
+        for i in range(len(sxr_channels)):
+            if isinstance(sxr_norm, dict):
+                # Use separate normalization for each channel
+                sxr_un[:, i] = unnormalize_sxr(sxr_batch[:, i], sxr_norm, channel_idx=i)
+            else:
+                # Use single normalization (backward compatibility)
+                sxr_un[:, i] = unnormalize_sxr(sxr_batch[:, i], sxr_norm)
+        
+        # Use the last channel (typically 'b') for flare classification as it's typically more sensitive
+        channel_idx = len(sxr_channels) - 1  # Use last channel (typically 'b')
+        sxr_un_flat = sxr_un[:, channel_idx].view(-1).cpu().numpy()
         
         batch_total = len(sxr_un_flat)
         batch_quiet = ((sxr_un_flat < c_threshold)).sum()
@@ -353,8 +393,13 @@ elif config_data['selected_model'] == 'ViTPatch':
     model = ViTPatch(model_kwargs=config_data['vit_custom'], sxr_norm = sxr_norm, base_weights=base_weights)
 
 elif config_data['selected_model'] == 'ViTLocal':
-    base_weights = get_base_weights(data_loader, sxr_norm) if config_data.get('calculate_base_weights', True) else None
-    model = ViTLocal(model_kwargs=config_data['vit_custom'], sxr_norm = sxr_norm, base_weights=base_weights)
+    base_weights = get_base_weights(data_loader, sxr_norm, sxr_channels) if config_data.get('calculate_base_weights', True) else None
+    model = ViTLocal(
+        model_kwargs=config_data['vit_custom'], 
+        sxr_norm=sxr_norm, 
+        base_weights=base_weights,
+        sxr_channels=sxr_channels
+    )
 
 elif config_data['selected_model'] == 'ViTUncertainty':
     base_weights = get_base_weights(data_loader, sxr_norm) if config_data.get('calculate_base_weights', True) else None

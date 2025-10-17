@@ -1,0 +1,81 @@
+# Patch Analysis Configuration Template
+# This template shows all available configuration options for patch_analysis.py
+
+# Base data directory - used as a placeholder for other paths
+base_data_dir: ""
+
+# Required data paths (will have ${base_data_dir} replaced with base_data_dir value)
+flux_path: "/mnt/data/batch_results/patch_new/flux"
+output_path: "/mnt/data/batch_results/patch_new/patch_new_predictions.csv"  # Path to predictions CSV file
+aia_path: "/mnt/data/NO-OVERLAP/AIA/test"  # Path to AIA 94 Angstrom data (optional)
+sxr_path: "/mnt/data/NO-OVERLAP/SXR/test"  # Path to SXR data (optional)
+
+# Analysis configuration
+analysis:
+  # Time period for analysis (optional - if not specified, uses all available data)
+  time_period:
+    start_time: ""  # Format: YYYY-MM-DD HH:MM:SS
+    end_time: ""    # Format: YYYY-MM-DD HH:MM:SS
+  
+  # Flare detection parameters
+  flare_detection:
+    # Threshold percentile for identifying high-contribution patches (0-100)
+    # Higher values = more selective (fewer patches above threshold)
+    threshold_percentile: 99
+    
+    # Minimum number of connected patches to consider as a flare region
+    min_patches: 1
+    
+    # Maximum number of connected patches to consider as a flare region
+    # Helps filter out very large regions that might be noise
+    max_patches: 25
+    
+    # Threshold for detecting simultaneous flares (sum of flux in region)
+    # Regions with sum_flux above this threshold are considered for simultaneous detection
+    simultaneous_flare_threshold: 0.00001
+  
+  # Output and visualization configuration
+  output:
+    # Directory for saving analysis results
+    output_dir: "/mnt/data/flux_analysis/output"
+    
+    # Whether to create visualization plots for detected flare events
+    create_visualizations: true
+    
+    # Maximum number of flare events to create visualizations for
+    max_visualizations: 10
+    
+    # Minimum prediction value threshold for creating visualizations
+    # Only events with prediction >= this value will be visualized
+    visualization_threshold: 0.00001
+    
+    # Whether to create a movie showing flux contributions over time
+    create_movie: false
+    
+    # Frames per second for the movie (if create_movie is true)
+    movie_fps: 2
+    
+    # Whether to show SXR data in visualizations
+    show_sxr: false
+    
+    # Number of hours before and after event to show SXR data
+    sxr_hours: 4
+    
+    # Note: Flux contributions are now overlaid on AIA images instead of shown separately
+    # The 32x32 patch data is automatically resized to 512x512 for proper overlay
+
+# Grid and patch configuration (these can also be set via constructor parameters)
+# grid_size: [32, 32]      # Size of the flux contribution grid (32x32 = 1024 patches)
+# patch_size: 16           # Size of each patch in pixels (16x16 pixels per patch)
+# input_size: 512          # Input image size (512x512 pixels total)
+# Note: 32x32 patches × 16x16 pixels = 512x512 image coverage
+
+# Example usage:
+# python patch_analysis.py --config patch_analysis_config_template.yaml
+#
+# You can also override specific parameters via command line:
+# python patch_analysis.py --config patch_analysis_config_template.yaml \
+#   --start_time "2023-06-01 00:00:00" \
+#   --end_time "2023-06-30 23:59:59" \
+#   --viz_threshold 1e-5 \
+#   --sxr_path "/path/to/sxr/data"

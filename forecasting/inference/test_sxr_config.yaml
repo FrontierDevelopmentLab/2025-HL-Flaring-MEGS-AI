@@ -1,0 +1,30 @@
+# Test configuration for SXR plotting
+base_data_dir: ""
+
+# Required data paths
+flux_path: "/mnt/data/batch_results/patch_new/flux"
+output_path: "/mnt/data/batch_results/patch_new/patch_new_predictions.csv"
+aia_path: "/mnt/data/NO-OVERLAP/AIA"
+sxr_path: "/mnt/data/SXR"  # Test SXR path
+
+# Analysis configuration
+analysis:
+  time_period:
+    start_time: "2024-02-09 00:00:00"
+    end_time: "2024-02-09 23:59:59"
+  
+  flare_detection:
+    threshold_percentile: 99
+    min_patches: 1
+    max_patches: 25
+    simultaneous_flare_threshold: 0.00001
+  
+  output:
+    output_dir: "/mnt/data/flux_analysis/test_sxr"
+    create_visualizations: true
+    max_visualizations: 2
+    visualization_threshold: 0.0
+    create_movie: false
+    movie_fps: 2
+    show_sxr: true  # Enable SXR plotting
+    sxr_hours: 4
