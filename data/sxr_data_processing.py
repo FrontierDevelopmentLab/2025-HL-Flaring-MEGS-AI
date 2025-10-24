@@ -1,5 +1,7 @@
 import argparse
 import logging
+import os
+import json
 from pathlib import Path
 from typing import List, Tuple
 
@@ -7,6 +9,24 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from tqdm import tqdm
+
+
+def load_config():
+    """Load configuration from environment or use defaults."""
+    if 'PIPELINE_CONFIG' in os.environ:
+        try:
+            config = json.loads(os.environ['PIPELINE_CONFIG'])
+            return config
+        except:
+            pass
+    
+    # Default configuration
+    return {
+        'sxr': {
+            'input_dir': '/mnt/data/AUGUST/GOES-timespan',
+            'output_dir': '/mnt/data/AUGUST/combined'
+        }
+    }
 
 
 class SXRDataProcessor:
@@ -22,7 +42,16 @@ class SXRDataProcessor:
         Directory where combined GOES data will be saved.
     """
 
-    def __init__(self, data_dir: str = '/mnt/data/AUGUST/GOES-timespan', output_dir: str = '/mnt/data/AUGUST/combined'):
+    def __init__(self, data_dir: str = None, output_dir: str = None):
+        # Load configuration
+        config = load_config()
+        
+        # Use provided directories or fall back to configuration/defaults
+        if data_dir is None:
+            data_dir = config['sxr']['input_dir']
+        if output_dir is None:
+            output_dir = config['sxr']['output_dir']
+            
         self.data_dir = Path(data_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
@@ -193,10 +222,13 @@ class SXRDataProcessor:
 
 
 if __name__ == '__main__':
+    # Load configuration
+    config = load_config()
+    
     parser = argparse.ArgumentParser(description='Preprocess GOES X-ray data.')
-    parser.add_argument('--data_dir', type=str, default='/mnt/data/AUGUST/GOES-timespan',
+    parser.add_argument('--data_dir', type=str, default=config['sxr']['input_dir'],
                         help='Directory where downloaded GOES data is stored.')
-    parser.add_argument('--output_dir', type=str, default='/mnt/data/AUGUST/combined',
+    parser.add_argument('--output_dir', type=str, default=config['sxr']['output_dir'],
                         help='Directory where combined GOES data will be saved.')
     args = parser.parse_args()
     

@@ -72,7 +72,7 @@ class SDODataset_flaring(StackDataset):
         else:
             paths = get_intersecting_files(data, wavelengths, ext=ext, **kwargs)
         ds_mapping = {94: AIADataset, 131: AIADataset, 171: AIADataset, 193: AIADataset, 211: AIADataset,
-                      304: AIADataset}
+                      304: AIADataset, 335: AIADataset}
         data_sets = [ds_mapping[wl_id](files, wavelength=wl_id, resolution=resolution, ext=ext, allow_errors=allow_errors)
                      for wl_id, files in zip(wavelengths, paths)]
         super().__init__(data_sets, **kwargs)

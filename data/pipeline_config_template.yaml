@@ -8,32 +8,30 @@
 
 base_data_dir: /mnt/data
 euv:
-  input_folder: /mnt/data/AUGUST/SDO-AIA-timespan
-  bad_files_dir: /mnt/data/AUGUST/SDO-AIA_bad
+  input_folder: /mnt/data/SDO335
+  bad_files_dir: /mnt/data/SDO335BAD
   wavelengths:
-  - 94
-  - 131
-  - 171
-  - 193
-  - 211
-  - 304
+  - 335
 iti:
-  input_folder: /mnt/data/AUGUST/SDO-AIA-timespan
-  output_folder: /mnt/data/AUGUST/AIA_ITI
+  input_folder: /mnt/data/SDO335
+  output_folder: /mnt/data/SDO335ITI
   wavelengths:
-  - 94
-  - 131
-  - 171
-  - 193
-  - 211
-  - 304
+  - 335
+sxr:
+  input_dir: na
+  output_dir: na
 alignment:
-  goes_data_dir: /mnt/data/AUGUST/combined
-  aia_processed_dir: /mnt/data/AUGUST/AIA_processed
-  output_sxr_a_dir: /mnt/data/AUGUST/GOES-SXR-A
-  output_sxr_b_dir: /mnt/data/AUGUST/GOES-SXR-B
-  aia_missing_dir: /mnt/data/AUGUST/AIA_ITI_MISSING
+  goes_data_dir: na
+  aia_processed_dir: na
+  output_sxr_a_dir: na
+  output_sxr_b_dir: na
+  aia_missing_dir: na
 processing:
   max_processes: null
   batch_size_multiplier: 4
   min_batch_size: 1
+steps:
+  # List of steps to run. Available steps: euv_cleaning, iti_processing, sxr_processing, align_data
+  # If not specified or empty, all steps will be run
+  # Example: [euv_cleaning, iti_processing] to run only EUV cleaning and ITI processing
+  run_steps: [euv_cleaning, iti_processing]

@@ -2,10 +2,11 @@
 """
 Data Processing Pipeline Orchestrator
 
-This script orchestrates the three main data processing steps:
+This script orchestrates the four main data processing steps:
 1. EUV data cleaning (euv_data_cleaning.py) - removes bad AIA files
 2. ITI data processing (iti_data_processing.py) - processes the good data
-3. Data alignment (align_data.py) - concatenates GOES data and checks for missing data
+3. SXR data processing (sxr_data_processing.py) - processes and combines GOES X-ray data
+4. Data alignment (align_data.py) - concatenates GOES data and checks for missing data
 
 Each step can be skipped if it's already completed.
 
@@ -20,6 +21,7 @@ import sys
 import subprocess
 import time
 import logging
+import json
 from datetime import datetime
 from pathlib import Path
 from pipeline_config import PipelineConfig
@@ -56,6 +58,7 @@ class DataProcessingPipeline:
         self.scripts = {
             'euv_cleaning': self.base_dir / 'euv_data_cleaning.py',
             'iti_processing': self.base_dir / 'iti_data_processing.py',
+            'sxr_processing': self.base_dir / 'sxr_data_processing.py',
             'align_data': self.base_dir / 'align_data.py'
         }
         
@@ -70,6 +73,11 @@ class DataProcessingPipeline:
                 'name': 'ITI Data Processing',
                 'description': 'Process good AIA data using ITI methods',
                 'output_check': self._check_iti_processing_complete
+            },
+            'sxr_processing': {
+                'name': 'SXR Data Processing',
+                'description': 'Process and combine GOES X-ray data from multiple satellites',
+                'output_check': self._check_sxr_processing_complete
             },
             'align_data': {
                 'name': 'Data Alignment',
@@ -99,6 +107,17 @@ class DataProcessingPipeline:
             # Check if there are processed .npy files
             npy_files = list(output_dir.glob('*.npy'))
             return len(npy_files) > 0
+        return False
+    
+    def _check_sxr_processing_complete(self):
+        """
+        Check if SXR data processing is complete by looking for combined GOES files.
+        """
+        output_dir = Path(self.config.get_path('sxr', 'output_dir'))
+        if output_dir.exists():
+            # Check if there are combined GOES CSV files
+            csv_files = list(output_dir.glob('combined_g*_avg1m_*.csv'))
+            return len(csv_files) > 0
         return False
     
     def _check_align_data_complete(self):
@@ -135,8 +154,8 @@ class DataProcessingPipeline:
         # Create environment variables for configuration
         env = os.environ.copy()
         env.update({
-            'PIPELINE_CONFIG': str(self.config.config),
-            'BASE_DATA_DIR': self.config.get_path('base_data_dir', 'base_data_dir')
+            'PIPELINE_CONFIG': json.dumps(self.config.config),
+            'BASE_DATA_DIR': self.config.config['base_data_dir']
         })
         
         start_time = time.time()
@@ -171,25 +190,38 @@ class DataProcessingPipeline:
             logger.error(f"Duration: {duration:.2f} seconds")
             return False
     
-    def run_pipeline(self, force_rerun=False):
+    def run_pipeline(self, force_rerun=False, specific_steps=None):
         """
-        Run the complete data processing pipeline.
+        Run the data processing pipeline.
         
         Args:
             force_rerun: If True, run all steps regardless of completion status
+            specific_steps: List of step names to run. If None, run all steps.
         """
         logger.info("=" * 80)
         logger.info("Starting Data Processing Pipeline")
         logger.info("=" * 80)
         logger.info(f"Base directory: {self.base_dir}")
         logger.info(f"Force rerun: {force_rerun}")
+        if specific_steps:
+            logger.info(f"Running specific steps: {', '.join(specific_steps)}")
+        else:
+            logger.info("Running all steps")
         logger.info("=" * 80)
         
         pipeline_start_time = time.time()
         successful_steps = 0
         failed_steps = 0
         
-        for step_name, step_info in self.steps.items():
+        # Filter steps if specific steps are requested
+        steps_to_run = self.steps
+        if specific_steps:
+            steps_to_run = {k: v for k, v in self.steps.items() if k in specific_steps}
+            if not steps_to_run:
+                logger.error("No valid steps specified. Available steps: " + ", ".join(self.steps.keys()))
+                return False
+        
+        for step_name, step_info in steps_to_run.items():
             logger.info(f"\n--- Step: {step_info['name']} ---")
             
             # Check if step is already complete
@@ -243,6 +275,8 @@ def main():
                        help='Create a YAML configuration template file and exit')
     parser.add_argument('--validate', action='store_true',
                        help='Validate configuration paths and exit')
+    parser.add_argument('--steps', type=str,
+                       help='Comma-separated list of steps to run (e.g., euv_cleaning,iti_processing). Available steps: euv_cleaning, iti_processing, sxr_processing, align_data. Can also be configured in the config file under steps.run_steps')
     
     args = parser.parse_args()
     
@@ -269,11 +303,29 @@ def main():
                 print(f"  - {path}")
         return
     
+    # Parse steps argument - command line takes precedence over config
+    specific_steps = None
+    if args.steps:
+        specific_steps = [step.strip() for step in args.steps.split(',')]
+        # Validate step names
+        valid_steps = ['euv_cleaning', 'iti_processing', 'sxr_processing', 'align_data']
+        invalid_steps = [step for step in specific_steps if step not in valid_steps]
+        if invalid_steps:
+            logger.error(f"Invalid step names: {', '.join(invalid_steps)}")
+            logger.error(f"Valid steps are: {', '.join(valid_steps)}")
+            sys.exit(1)
+    else:
+        # Get steps from configuration
+        config_steps = config.get_steps()
+        if config_steps:
+            specific_steps = config_steps
+            logger.info(f"Using steps from configuration: {', '.join(specific_steps)}")
+    
     # Create pipeline instance
     pipeline = DataProcessingPipeline(args.base_dir, config)
     
-    # Validate paths before running
-    is_valid, missing_paths = config.validate_paths()
+    # Validate paths before running (only for the steps that will be run)
+    is_valid, missing_paths = config.validate_paths(specific_steps)
     if not is_valid:
         logger.error("Configuration validation failed. Missing required paths:")
         for path in missing_paths:
@@ -281,11 +333,11 @@ def main():
         logger.error("Use --validate to check configuration")
         sys.exit(1)
     
-    # Create necessary directories
-    config.create_directories()
+    # Create necessary directories (only for the steps that will be run)
+    config.create_directories(specific_steps)
     
     # Run the pipeline
-    success = pipeline.run_pipeline(force_rerun=args.force)
+    success = pipeline.run_pipeline(force_rerun=args.force, specific_steps=specific_steps)
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)

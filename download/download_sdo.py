@@ -56,7 +56,7 @@ class SDODownloader:
             url = 'http://jsoc.stanford.edu' + segment
             
             # Retry download with exponential backoff
-            max_retries = 3
+            max_retries = 10
             for attempt in range(max_retries):
                 try:
                     # Create a custom opener with timeout
@@ -139,7 +139,7 @@ class SDODownloader:
             p.map(self.download, queue)
         
         # Add a small delay to be respectful to the server
-        time.sleep(.1)
+        time.sleep(.01)
         logging.info('Finished: %s' % id)
 
     def fetchDataFallback(self, date):
@@ -209,7 +209,7 @@ class SDODownloader:
             p.map(self.download, queue)
 
         # Add a small delay to be respectful to the server
-        time.sleep(.1)
+        time.sleep(.01)
         logging.info('Finished: %s' % id)
 
 
@@ -217,36 +217,75 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download SDO data from JSOC with quality check and fallback')
     parser.add_argument('--download_dir', type=str, help='path to the download directory.')
     parser.add_argument('--email', type=str, help='registered email address for JSOC.')
-    parser.add_argument('--start_date', type=str, help='start date in format YYYY-MM-DD.')
-    parser.add_argument('--end_date', type=str, help='end date in format YYYY-MM-DD.', required=False,
-                        default=str(datetime.now()).split(' ')[0])
+    parser.add_argument('--start_date', type=str, help='start date in format YYYY-MM-DD HH:MM:SS.')
+    parser.add_argument('--end_date', type=str, help='end date in format YYYY-MM-DD HH:MM:SS.', required=False,
+                        default="2025-10-15 00:00:00")
     parser.add_argument('--cadence', type=int, help='cadence in minutes.', required=False, default=60)
-
+    parser.add_argument('--wavelengths', type=list, help='wavelengths to download.', required=False, default=['335'])
+    parser.add_argument('--times_csv', type=str, help='path to the times csv file.', required=False, default=None)
+    parser.add_argument('--reverse', action='store_true', help='reverse the order of the times csv file.', required=False, default=False)
     args = parser.parse_args()
     download_dir = args.download_dir
     start_date = args.start_date
     end_date = args.end_date
     cadence = args.cadence
-
-    [os.makedirs(os.path.join(download_dir, str(c)), exist_ok=True) for c in [94, 131, 171, 193, 211, 304]]
-    downloader = SDODownloader(base_path=download_dir, email=args.email)
+    wavelengths = args.wavelengths
+    times_csv = args.times_csv
+    reverse = args.reverse
+    [os.makedirs(os.path.join(download_dir, str(c)), exist_ok=True) for c in wavelengths]
+    downloader = SDODownloader(base_path=download_dir, email=args.email, wavelengths=wavelengths,n_workers=8)
     start_date_datetime = datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
     #end_date = datetime.now()
     end_date_datetime = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
 
 
     #Skip over dates that already exist in the download directory
-    for d in [start_date_datetime + i * timedelta(minutes=1) for i in
+    if times_csv is None:
+        for d in [start_date_datetime + i * timedelta(minutes=1) for i in
               range((end_date_datetime - start_date_datetime) // timedelta(minutes=1))]:
-        #make sure the file exists in all wavelengths directories
-        for wl in [94, 131, 171, 193, 211, 304]:
-            if not os.path.exists(os.path.join(
-                download_dir, 
-                str(wl), 
-                f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}.fits"
-            )):
+            #make sure the file exists in all wavelengths directories
+            for wl in wavelengths:
+                if not os.path.exists(os.path.join(
+                    download_dir, 
+                    str(wl), 
+                    f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}.fits"
+                )):
+                    break
+            else:
+                logging.info(f"Skipping {d.isoformat()} because it already exists in the download directory")
+                continue
+            downloader.downloadDate(d)
+    else:
+        times_df = pd.read_csv(times_csv)
+        times_df['timestamp'] = pd.to_datetime(times_df['timestamp'])
+        if args.reverse:
+            times_df = times_df.sort_values('timestamp', ascending=False)
+        else:
+            times_df = times_df.sort_values('timestamp')
+        from tqdm import tqdm
+        def is_time_complete(ts):
+            # Ensure path exists for all wavelengths
+            for wl in wavelengths:
+                if not os.path.exists(os.path.join(
+                    download_dir,
+                    str(wl),
+                    f"{ts.year:04d}-{ts.month:02d}-{ts.day:02d}T{ts.hour:02d}:{ts.minute:02d}:{ts.second:02d}.fits"
+                )):
+                    return False
+            return True
+
+        timestamps = list(times_df['timestamp'])
+        start_idx = 0
+        for i, ts in enumerate(timestamps):
+            if not is_time_complete(ts):
+                start_idx = i
                 break
         else:
-            logging.info(f"Skipping {d.isoformat()} because it already exists in the download directory")
-            continue
-        downloader.downloadDate(d)
+            logging.info("All timestamps in CSV are already complete across wavelengths. Nothing to do.")
+            start_idx = len(timestamps)
+
+        for d in tqdm(timestamps[start_idx:], desc='Downloading SDO files'):
+            if is_time_complete(d):
+                logging.info(f"Skipping {d.isoformat()} because it already exists in the download directory")
+                continue
+            downloader.downloadDate(d)
